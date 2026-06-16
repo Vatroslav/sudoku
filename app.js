@@ -288,7 +288,10 @@
         grid.className = "notes";
         for (let n = 1; n <= 9; n++) {
           const span = document.createElement("span");
-          span.textContent = state.notes[i].includes(n) ? n : "";
+          if (state.notes[i].includes(n)) {
+            span.textContent = n;
+            if (selVal !== 0 && n === selVal) span.classList.add("note-match");
+          }
           grid.appendChild(span);
         }
         cell.appendChild(grid);

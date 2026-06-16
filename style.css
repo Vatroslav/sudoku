@@ -143,6 +143,10 @@ main {
   color: var(--note);
   line-height: 1;
 }
+.notes span.note-match {
+  color: var(--accent);
+  font-weight: 700;
+}
 
 /* Controls */
 .controls { display: flex; flex-direction: column; gap: 12px; }
