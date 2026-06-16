@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b1b22" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="style.css" />
+  <title>Sudoku</title>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="status">
+        <span class="status-item" id="difficulty-label">Srednje</span>
+        <span class="status-sep">·</span>
+        <span class="status-item">Greške: <span id="mistakes">0</span></span>
+        <span class="status-sep">·</span>
+        <span class="status-item" id="timer">00:00</span>
+      </div>
+      <button class="icon-btn" id="new-btn" aria-label="Nova igra">Nova</button>
+    </header>
+
+    <main>
+      <div class="board-wrap">
+        <div id="board" class="board" role="grid" aria-label="Sudoku ploča"></div>
+        <div id="win-overlay" class="win-overlay hidden">
+          <div class="win-card">
+            <div class="win-title">Riješeno!</div>
+            <div class="win-sub" id="win-stats"></div>
+            <button class="primary-btn" id="win-new-btn">Nova igra</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="action-row">
+          <button class="action-btn" id="undo-btn" aria-label="Poništi">
+            <span class="action-icon">↶</span><span class="action-label">Poništi</span>
+          </button>
+          <button class="action-btn" id="erase-btn" aria-label="Obriši">
+            <span class="action-icon">⌫</span><span class="action-label">Obriši</span>
+          </button>
+          <button class="action-btn" id="notes-btn" aria-label="Bilješke">
+            <span class="action-icon">✎</span><span class="action-label">Bilješke</span>
+            <span class="notes-state" id="notes-state">Off</span>
+          </button>
+          <button class="action-btn" id="hint-btn" aria-label="Pomoć">
+            <span class="action-icon">💡</span><span class="action-label">Pomoć</span>
+          </button>
+        </div>
+        <div class="numpad" id="numpad"></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="menu-overlay" class="menu-overlay hidden">
+    <div class="menu-card">
+      <div class="menu-title">Nova igra</div>
+      <div class="menu-diff" id="menu-diff">
+        <button class="diff-btn" data-diff="easy">Lako</button>
+        <button class="diff-btn" data-diff="medium">Srednje</button>
+        <button class="diff-btn" data-diff="hard">Teško</button>
+        <button class="diff-btn" data-diff="expert">Ekspert</button>
+      </div>
+      <button class="ghost-btn" id="menu-cancel">Odustani</button>
+    </div>
+  </div>
+
+  <script src="sudoku.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
