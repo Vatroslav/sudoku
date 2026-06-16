@@ -1,5 +1,5 @@
-/* Service worker - cache-first za offline rad. */
-const CACHE = "sudoku-v2";
+/* Service worker - network-first (svjež sadržaj kad si online, cache offline). */
+const CACHE = "sudoku-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,10 +28,10 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   e.respondWith(
-    caches.match(e.request).then((cached) => cached || fetch(e.request).then((resp) => {
+    fetch(e.request).then((resp) => {
       const copy = resp.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
       return resp;
-    }).catch(() => cached))
+    }).catch(() => caches.match(e.request))
   );
 });
