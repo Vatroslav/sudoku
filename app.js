@@ -12,17 +12,15 @@
   //   solution: [81],
   //   values: [81] (trenutni unosi igrača, 0 prazno),
   //   notes: [81] od Set-ova (kao polje brojeva u JSON-u),
-  //   difficulty, mistakes, elapsed (sek), selected (idx|null),
+  //   difficulty, mistakes, selected (idx|null),
   //   notesMode (bool), solved (bool)
   // }
 
-  let timerId = null;
   let history = []; // za undo
 
   // --- DOM ---
   const boardEl = document.getElementById("board");
   const numpadEl = document.getElementById("numpad");
-  const timerEl = document.getElementById("timer");
   const mistakesEl = document.getElementById("mistakes");
   const diffLabelEl = document.getElementById("difficulty-label");
   const notesStateEl = document.getElementById("notes-state");
@@ -70,7 +68,6 @@
       notes: Array.from({ length: 81 }, () => []),
       difficulty,
       mistakes: 0,
-      elapsed: 0,
       selected: null,
       notesMode: false,
       solved: false,
@@ -78,7 +75,6 @@
     history = [];
     save();
     render();
-    startTimer();
   }
 
   // --- Spremanje / učitavanje ---
@@ -221,31 +217,9 @@
       if (state.values[i] !== state.solution[i]) return;
     }
     state.solved = true;
-    stopTimer();
     save();
-    winStats.textContent = `${DIFF_LABELS[state.difficulty]} · ${formatTime(state.elapsed)} · greške: ${state.mistakes}`;
+    winStats.textContent = `${DIFF_LABELS[state.difficulty]} · greške: ${state.mistakes}`;
     winOverlay.classList.remove("hidden");
-  }
-
-  // --- Timer ---
-  function startTimer() {
-    stopTimer();
-    if (!state || state.solved) return;
-    timerId = setInterval(() => {
-      state.elapsed++;
-      timerEl.textContent = formatTime(state.elapsed);
-      if (state.elapsed % 5 === 0) save();
-    }, 1000);
-  }
-
-  function stopTimer() {
-    if (timerId) { clearInterval(timerId); timerId = null; }
-  }
-
-  function formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
   // --- Render ---
@@ -253,7 +227,6 @@
     if (!state) return;
     diffLabelEl.textContent = DIFF_LABELS[state.difficulty] || "";
     mistakesEl.textContent = state.mistakes;
-    timerEl.textContent = formatTime(state.elapsed);
     notesStateEl.textContent = state.notesMode ? "On" : "Off";
     document.getElementById("notes-btn").classList.toggle("active", state.notesMode);
 
@@ -372,8 +345,7 @@
     document.addEventListener("keydown", onKey);
     // Spremi kad app ode u pozadinu
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) { save(); stopTimer(); }
-      else if (state && !state.solved) { startTimer(); }
+      if (document.hidden) save();
     });
   }
 
@@ -385,10 +357,8 @@
     if (load() && !allSolved()) {
       render();
       if (state.solved) {
-        winStats.textContent = `${DIFF_LABELS[state.difficulty]} · ${formatTime(state.elapsed)} · greške: ${state.mistakes}`;
+        winStats.textContent = `${DIFF_LABELS[state.difficulty]} · greške: ${state.mistakes}`;
         winOverlay.classList.remove("hidden");
-      } else {
-        startTimer();
       }
     } else {
       newGame("medium");

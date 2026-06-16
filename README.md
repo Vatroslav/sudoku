@@ -5,7 +5,7 @@ Offline Sudoku PWA - radi u browseru, instalira se na telefon kao app. Bez serve
 ## Značajke
 - Generator slagalica s 4 težine (Lako / Srednje / Teško / Ekspert), uvijek jedinstveno rješenje
 - Bilješke (pencil marks), undo, brisanje, pomoć (hint)
-- Brojanje grešaka, timer, highlight reda/stupca/kvadrata i istih brojeva
+- Brojanje grešaka, highlight reda/stupca/kvadrata i istih brojeva
 - Auto-spremanje - nastavi gdje si stao (localStorage)
 - Tamna tema, mobile-first, touch-friendly
 
