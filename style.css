@@ -189,17 +189,19 @@ main {
 
 /* Numpad */
 .numpad {
-  display: grid;
-  grid-template-columns: repeat(9, 1fr);
-  gap: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
 }
 .num-btn {
+  flex: 0 0 calc(20% - 8px);
   background: var(--surface);
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--accent);
-  font-size: clamp(20px, 6vw, 28px);
-  padding: 12px 0 6px;
+  font-size: clamp(26px, 9vw, 38px);
+  padding: 16px 0 8px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -207,7 +209,7 @@ main {
   font-weight: 500;
 }
 .num-btn:active { background: var(--board-bg); }
-.num-count { font-size: 10px; color: var(--muted); height: 12px; }
+.num-count { font-size: 11px; color: var(--muted); height: 13px; }
 .num-btn.depleted { opacity: 0.4; color: var(--depleted); }
 
 /* Overlays */
