@@ -2,8 +2,8 @@
 (() => {
   "use strict";
 
-  const STORAGE_KEY = "sudoku-game-v1";
-  const DIFF_LABELS = { easy: "Lako", medium: "Srednje", hard: "Teško", expert: "Ekspert" };
+  const STORAGE_KEY = "sudoku-game-v2";
+  const DIFF_LABELS = { normal: "Normalno", hard: "Teško", expert: "Ekspert" };
 
   // --- Stanje ---
   let state = null;
@@ -23,10 +23,12 @@
   const numpadEl = document.getElementById("numpad");
   const mistakesEl = document.getElementById("mistakes");
   const diffLabelEl = document.getElementById("difficulty-label");
+  const techniqueHintEl = document.getElementById("technique-hint");
   const notesStateEl = document.getElementById("notes-state");
   const winOverlay = document.getElementById("win-overlay");
   const winStats = document.getElementById("win-stats");
   const menuOverlay = document.getElementById("menu-overlay");
+  const loadingOverlay = document.getElementById("loading-overlay");
 
   // --- Inicijalizacija ploče (jednom kreiramo 81 ćeliju) ---
   const cells = [];
@@ -60,21 +62,27 @@
 
   // --- Nova igra ---
   function newGame(difficulty) {
-    const { puzzle, solution } = Sudoku.generate(difficulty);
-    state = {
-      puzzle,
-      solution,
-      values: puzzle.slice(),
-      notes: Array.from({ length: 81 }, () => []),
-      difficulty,
-      mistakes: 0,
-      selected: null,
-      notesMode: false,
-      solved: false,
-    };
-    history = [];
-    save();
-    render();
+    loadingOverlay.classList.remove("hidden");
+    // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
+    setTimeout(() => {
+      const { puzzle, solution, techniques } = Sudoku.generate(difficulty);
+      state = {
+        puzzle,
+        solution,
+        values: puzzle.slice(),
+        notes: Array.from({ length: 81 }, () => []),
+        difficulty,
+        techniques: techniques || [],
+        mistakes: 0,
+        selected: null,
+        notesMode: false,
+        solved: false,
+      };
+      history = [];
+      save();
+      render();
+      loadingOverlay.classList.add("hidden");
+    }, 30);
   }
 
   // --- Spremanje / učitavanje ---
@@ -218,14 +226,26 @@
     }
     state.solved = true;
     save();
-    winStats.textContent = `${DIFF_LABELS[state.difficulty]} · greške: ${state.mistakes}`;
+    winStats.textContent = winStatsText();
     winOverlay.classList.remove("hidden");
+  }
+
+  function winStatsText() {
+    let t = `${DIFF_LABELS[state.difficulty]} · greške: ${state.mistakes}`;
+    if (state.techniques && state.techniques.length) t += ` · ${state.techniques.join(", ")}`;
+    return t;
   }
 
   // --- Render ---
   function render() {
     if (!state) return;
     diffLabelEl.textContent = DIFF_LABELS[state.difficulty] || "";
+    if (state.techniques && state.techniques.length) {
+      techniqueHintEl.textContent = state.techniques.join(", ");
+      techniqueHintEl.classList.remove("hidden");
+    } else {
+      techniqueHintEl.classList.add("hidden");
+    }
     mistakesEl.textContent = state.mistakes;
     notesStateEl.textContent = state.notesMode ? "On" : "Off";
     document.getElementById("notes-btn").classList.toggle("active", state.notesMode);
@@ -357,11 +377,11 @@
     if (load() && !allSolved()) {
       render();
       if (state.solved) {
-        winStats.textContent = `${DIFF_LABELS[state.difficulty]} · greške: ${state.mistakes}`;
+        winStats.textContent = winStatsText();
         winOverlay.classList.remove("hidden");
       }
     } else {
-      newGame("medium");
+      newGame("normal");
     }
   }
 

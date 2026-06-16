@@ -16,7 +16,8 @@
   <div id="app">
     <header class="topbar">
       <div class="status">
-        <span class="status-item" id="difficulty-label">Srednje</span>
+        <span class="status-item" id="difficulty-label">Normalno</span>
+        <span class="status-chip hidden" id="technique-hint"></span>
         <span class="status-sep">·</span>
         <span class="status-item">Greške: <span id="mistakes">0</span></span>
       </div>
@@ -60,15 +61,22 @@
     <div class="menu-card">
       <div class="menu-title">Nova igra</div>
       <div class="menu-diff" id="menu-diff">
-        <button class="diff-btn" data-diff="easy">Lako</button>
-        <button class="diff-btn" data-diff="medium">Srednje</button>
+        <button class="diff-btn" data-diff="normal">Normalno</button>
         <button class="diff-btn" data-diff="hard">Teško</button>
-        <button class="diff-btn" data-diff="expert">Ekspert</button>
+        <button class="diff-btn" data-diff="expert">Ekspert<span class="diff-note">traži naprednu tehniku</span></button>
       </div>
       <button class="ghost-btn" id="menu-cancel">Odustani</button>
     </div>
   </div>
 
+  <div id="loading-overlay" class="menu-overlay hidden">
+    <div class="loading-card">
+      <div class="spinner"></div>
+      <div class="loading-text">Generiram…</div>
+    </div>
+  </div>
+
+  <script src="solver.js"></script>
   <script src="sudoku.js"></script>
   <script src="app.js"></script>
   <script>

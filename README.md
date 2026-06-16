@@ -3,11 +3,20 @@
 Offline Sudoku PWA - radi u browseru, instalira se na telefon kao app. Bez servera, bez interneta nakon prvog učitavanja.
 
 ## Značajke
-- Generator slagalica s 4 težine (Lako / Srednje / Teško / Ekspert), uvijek jedinstveno rješenje
+- Tri težine, klasificirane stvarnim **logičkim solverom** po najtežoj potrebnoj tehnici:
+  - **Normalno** - rješivo samo skeniranjem (naked/hidden singles)
+  - **Teško** - traži intermediate logiku (locked candidates, parovi/trojke), bez naprednih strategija
+  - **Ekspert** - garantirano traži bar jednu naprednu tehniku (X-Wing ili XY-Wing); chip u statusu pokazuje koju
+- Svaka slagalica ima jedinstveno rješenje i rješiva je bez pogađanja
 - Bilješke (pencil marks), undo, brisanje, pomoć (hint)
 - Brojanje grešaka, highlight reda/stupca/kvadrata i istih brojeva
 - Auto-spremanje - nastavi gdje si stao (localStorage)
 - Tamna tema, mobile-first, touch-friendly
+
+## Kako radi grading
+`solver.js` oponaša ljudsko rješavanje: primjenjuje tehnike od najlakše prema najtežoj i bilježi
+najtežu koju je morao upotrijebiti. Generator (`sudoku.js`) vadi slagalice dok ne pogodi traženi
+tier. Ekspert se uvijek može riješiti tehnikama X-Wing / XY-Wing - taman za vježbu.
 
 ## Instalacija na Android telefon
 

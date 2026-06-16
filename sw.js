@@ -1,9 +1,10 @@
 /* Service worker - cache-first za offline rad. */
-const CACHE = "sudoku-v1";
+const CACHE = "sudoku-v2";
 const ASSETS = [
   "./",
   "./index.html",
   "./style.css",
+  "./solver.js",
   "./sudoku.js",
   "./app.js",
   "./manifest.webmanifest",
