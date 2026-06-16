@@ -12,7 +12,7 @@
   //   solution: [81],
   //   values: [81] (trenutni unosi igrača, 0 prazno),
   //   notes: [81] od Set-ova (kao polje brojeva u JSON-u),
-  //   difficulty, mistakes, selected (idx|null),
+  //   difficulty, selected (idx|null),
   //   notesMode (bool), solved (bool)
   // }
 
@@ -21,7 +21,6 @@
   // --- DOM ---
   const boardEl = document.getElementById("board");
   const numpadEl = document.getElementById("numpad");
-  const mistakesEl = document.getElementById("mistakes");
   const diffLabelEl = document.getElementById("difficulty-label");
   const techniqueHintEl = document.getElementById("technique-hint");
   const notesStateEl = document.getElementById("notes-state");
@@ -73,7 +72,6 @@
         notes: Array.from({ length: 81 }, () => []),
         difficulty,
         techniques: techniques || [],
-        mistakes: 0,
         selected: null,
         notesMode: false,
         solved: false,
@@ -136,9 +134,7 @@
       } else {
         state.values[idx] = n;
         state.notes[idx] = [];
-        if (n !== state.solution[idx]) {
-          state.mistakes++;
-        } else {
+        if (n === state.solution[idx]) {
           // ukloni ovaj broj iz bilješki u istom redu/stupcu/kvadratu
           clearNotesAround(idx, n);
         }
@@ -203,7 +199,6 @@
     history.push({
       values: state.values.slice(),
       notes: state.notes.map((a) => a.slice()),
-      mistakes: state.mistakes,
     });
     if (history.length > 100) history.shift();
   }
@@ -213,7 +208,6 @@
     const prev = history.pop();
     state.values = prev.values;
     state.notes = prev.notes;
-    state.mistakes = prev.mistakes;
     save();
     render();
   }
@@ -231,7 +225,7 @@
   }
 
   function winStatsText() {
-    let t = `${DIFF_LABELS[state.difficulty]} · greške: ${state.mistakes}`;
+    let t = DIFF_LABELS[state.difficulty];
     if (state.techniques && state.techniques.length) t += ` · ${state.techniques.join(", ")}`;
     return t;
   }
@@ -246,7 +240,6 @@
     } else {
       techniqueHintEl.classList.add("hidden");
     }
-    mistakesEl.textContent = state.mistakes;
     notesStateEl.textContent = state.notesMode ? "On" : "Off";
     document.getElementById("notes-btn").classList.toggle("active", state.notesMode);
 
