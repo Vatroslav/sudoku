@@ -185,7 +185,6 @@
 
   // --- Pomoć: objasni sljedeći potez ---
   function cellName(idx) { return `redak ${Math.floor(idx / 9) + 1}, stupac ${(idx % 9) + 1}`; }
-  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
   function showHint(text) {
     hintTextEl.textContent = text;
@@ -217,34 +216,39 @@
       return;
     }
 
-    const res = Solver.explainNext(state.values);
+    const res = Solver.explainNext(state.values, state.notes, state.solution);
     if (!res || res.done) { clearHint(); showHint("Sve je već riješeno."); return; }
     if (res.contradiction) { clearHint(); showHint("Ploča je u kontradikciji - provjeri unose."); return; }
     if (!res.reason) { clearHint(); showHint("Nema čistog logičkog poteza odavde."); return; }
 
-    const reason = res.reason;
-    const sig = state.values.join(",");
+    const reason = res.reason, a = res.action;
+    const sig = state.values.join(",") + "|" + state.notes.map((n) => n.join("")).join(",");
     // Drugi tap na istoj ploči eskalira nagovještaj u rješenje.
     hintUi.step = (hintUi.sig === sig && hintUi.step === 1) ? 2 : 1;
     hintUi.sig = sig;
+    hintUi.focus = reason.focus.slice();
 
     if (hintUi.step === 1) {
-      hintUi.focus = reason.focus.slice();
       hintUi.targets = [];
       showHint(`Sljedeći potez: ${reason.technique}. Tapni Pomoć opet za rješenje.`);
-    } else {
-      hintUi.focus = reason.focus.slice();
-      const p = res.placement;
-      if (p) {
-        hintUi.targets = [p.target];
-        state.selected = p.target;
-        const lead = reason.type === "placement" ? "Upiši" : "Time na kraju možeš upisati";
-        showHint(`${cap(reason.note)}. ${lead} ${p.value} u ${cellName(p.target)}.`);
-      } else {
-        hintUi.targets = (reason.targets || []).slice();
-        const rv = (reason.removeVals || []).join(", ");
-        showHint(`${cap(reason.note)}. Makni bilješku ${rv} iz istaknutih polja.`);
-      }
+      render();
+      return;
+    }
+
+    // Korak 2: puno objašnjenje tehnike + njena IZRAVNA akcija.
+    if (a.kind === "place") {
+      hintUi.targets = [a.target];
+      state.selected = a.target;
+      showHint(`${reason.technique}: ${reason.note}. Upiši ${a.value} u ${cellName(a.target)}.`);
+    } else if (a.kind === "eliminate-then-place") {
+      hintUi.focus = reason.focus.concat(a.targets);
+      hintUi.targets = [a.place.target];
+      state.selected = a.place.target;
+      const where = a.place.unitName ? `u ${a.place.unitName} ` : "";
+      showHint(`${reason.technique}: ${reason.note}, pa ${where}broj ${a.place.value} može još samo u jedno polje. Upiši ${a.place.value} u ${cellName(a.place.target)}.`);
+    } else { // eliminate
+      hintUi.targets = a.targets.slice();
+      showHint(`${reason.technique}: ${reason.note}. Makni bilješku ${a.removeVals.join(", ")} iz istaknutih polja.`);
     }
     render();
   }
@@ -297,7 +301,7 @@
     if (!state) return;
     diffLabelEl.textContent = DIFF_LABELS[state.difficulty] || "";
     if (state.techniques && state.techniques.length) {
-      techniqueHintEl.textContent = state.techniques.join(", ");
+      techniqueHintEl.textContent = "Najteža: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
     } else {
       techniqueHintEl.classList.add("hidden");

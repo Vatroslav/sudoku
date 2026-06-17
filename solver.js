@@ -251,6 +251,7 @@ const Solver = (() => {
   for (let r = 0; r < 9; r++) namedUnits.push({ cells: rows[r], name: `retku ${r + 1}` });
   for (let c = 0; c < 9; c++) namedUnits.push({ cells: cols[c], name: `stupcu ${c + 1}` });
   for (let b = 0; b < 9; b++) namedUnits.push({ cells: boxes[b], name: `kvadratu ${BOX_NAMES[b]}` });
+  const cellName = (idx) => `retku ${Math.floor(idx / 9) + 1}, stupcu ${(idx % 9) + 1}`;
 
   function hNakedSingle(cand) {
     for (let idx = 0; idx < 81; idx++) {
@@ -462,7 +463,8 @@ const Solver = (() => {
             if (elim.length) return {
               technique: "XY-Wing", tier: T_ADVANCED, type: "elimination",
               removeVals: [z], targets: elim, base: [p, a, b], focus: [p, a, b].concat(elim),
-              note: `XY-Wing: zglob i dva kraka prisiljavaju da broj ${z} ispadne iz polja koja oba kraka "vide"`,
+              pivot: p, pincers: [a, b], shared: z,
+              note: `zglob u ${cellName(p)} je ${x} ili ${y}, a kraci u ${cellName(a)} i u ${cellName(b)} oba sadrže ${z}; jedan od krakova je sigurno ${z}, pa ${z} ispada iz svakog polja koje vidi oba kraka`,
             };
           }
         }
@@ -473,34 +475,86 @@ const Solver = (() => {
 
   const H_FINDERS = [hNakedSingle, hHiddenSingle, hLocked, hNakedPair, hHiddenPair, hNakedTriple, hXWing, hXYWing];
 
-  function firstStep(cand) {
-    for (const f of H_FINDERS) { const r = f(cand); if (r) return r; }
+  // Kandidati svjesni igračevih bilješki: krećemo od onoga što proizlazi iz
+  // upisanih brojeva, pa SUŽAVAMO na bilješke ondje gdje ih igrač ima. Nikad ne
+  // dodajemo kandidat kojeg upisani brojevi ne dopuštaju (obrana od krivih
+  // bilješki), a već odrađene pencilmark-eliminacije se time ne ponavljaju.
+  function candidatesFor(values, notes) {
+    const cand = computeCandidates(values);
+    if (!notes) return cand;
+    for (let i = 0; i < 81; i++) {
+      if (!cand[i] || !notes[i] || notes[i].length === 0) continue;
+      const narrowed = new Set(notes[i].filter((v) => cand[i].has(v)));
+      if (narrowed.size > 0) cand[i] = narrowed; // prazan presjek = kontradiktorne bilješke -> zadrži računati skup
+    }
+    return cand;
+  }
+
+  function unitsTouching(cells) {
+    const set = new Set(cells);
+    return namedUnits.filter((u) => u.cells.some((i) => set.has(i)));
+  }
+
+  // Vodi li dano stanje kandidata ODMAH (u jedinicama koje je eliminacija
+  // dirnula) do jedinstvenog upisa? Vraća { target, value, unitName } ili null.
+  function immediateSingle(cand, changed) {
+    for (const i of changed) {
+      if (cand[i] && cand[i].size === 1) return { target: i, value: [...cand[i]][0], unitName: null };
+    }
+    for (const u of unitsTouching(changed)) {
+      for (let v = 1; v <= 9; v++) {
+        const spots = u.cells.filter((i) => cand[i] && cand[i].has(v));
+        if (spots.length === 1) return { target: spots[0], value: v, unitName: u.name };
+      }
+    }
     return null;
   }
 
-  // Vrati objašnjenje sljedećeg poteza za trenutno stanje ploče (values: givens + unosi).
-  //   { reason, placement, hardest } | { contradiction } | { done }
-  // reason     = prva (najlakša) primjenjiva tehnika - "zašto".
-  // placement  = sljedeće polje koje se može upisati { target, value } - "akcija".
-  // Pretpostavlja da su svi uneseni brojevi točni (pozivatelj prvo provjeri greške).
-  function explainNext(values) {
-    const grid = values.slice();
-    const cand = computeCandidates(grid);
-    for (let i = 0; i < 81; i++) if (grid[i] === 0 && cand[i].size === 0) return { contradiction: true };
-    if (!grid.includes(0)) return { done: true };
-    let reason = null, placement = null, hardest = 0, guard = 0;
-    while (grid.includes(0) && guard++ < 300) {
-      const r = firstStep(cand);
-      if (!r) break;
-      if (!reason) reason = r;
-      hardest = Math.max(hardest, r.tier);
+  // Prvi atomski korak: par (tehnika, akcija) gdje je akcija IZRAVNA i jedina
+  // posljedica te tehnike. Upis se nadovezuje na eliminaciju samo kad je
+  // NEPOSREDNA posljedica iste tehnike. solution (ako je dano) je sigurnosni
+  // filtar - nikad ne predloži potez koji proturječi stvarnom rješenju.
+  function findStep(cand, solution) {
+    for (const f of H_FINDERS) {
+      const r = f(cand);
+      if (!r) continue;
+
       if (r.type === "placement") {
-        placement = { target: r.target, value: r.value, technique: r.technique };
-        break;
+        if (solution && r.value !== solution[r.target]) continue;
+        return { reason: r, action: { kind: "place", target: r.target, value: r.value } };
       }
-      for (const idx of r.targets) for (const v of r.removeVals) cand[idx].delete(v);
+
+      // (A) Zadrži samo ciljeve gdje kandidat STVARNO još postoji - inače je
+      //     taj korak već odrađen i ne smije se prikazati kao sljedeći potez.
+      const targets = r.targets.filter((i) => r.removeVals.some((v) => cand[i] && cand[i].has(v)));
+      if (targets.length === 0) continue;
+      if (solution && targets.some((i) => r.removeVals.includes(solution[i]))) continue; // ne briši pravi kandidat
+
+      // (C) Vodi li OVA eliminacija odmah do jedinstvenog upisa?
+      const after = cand.map((s) => (s ? new Set(s) : s));
+      for (const i of targets) for (const v of r.removeVals) after[i].delete(v);
+      const single = immediateSingle(after, targets);
+      if (single && (!solution || single.value === solution[single.target])) {
+        return { reason: r, action: { kind: "eliminate-then-place", targets, removeVals: r.removeVals, place: single } };
+      }
+      return { reason: r, action: { kind: "eliminate", targets, removeVals: r.removeVals } };
     }
-    return { reason, placement, hardest };
+    return null;
+  }
+
+  // Objašnjenje sljedećeg poteza za trenutno stanje.
+  //   values   = givens + igračevi unosi (0 = prazno)
+  //   notes    = igračeve bilješke po polju (polje brojeva), za preskakanje već odrađenog
+  //   solution = puno rješenje, sigurnosni filtar (opcionalno)
+  // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
+  // action.kind: "place" | "eliminate" | "eliminate-then-place".
+  function explainNext(values, notes, solution) {
+    const raw = computeCandidates(values);
+    for (let i = 0; i < 81; i++) if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
+    if (!values.includes(0)) return { done: true };
+    // Prvo na stanju svjesnom bilješki (preskoči već odrađeno); ako bilješke
+    // ništa ne daju (krive/nepotpune), padni na čisto računate kandidate.
+    return findStep(candidatesFor(values, notes), solution) || findStep(raw, solution) || { reason: null };
   }
 
   const STEPS = [
@@ -539,3 +593,5 @@ const Solver = (() => {
 
   return { solveAndGrade, explainNext, T_SINGLE, T_INTER, T_ADVANCED };
 })();
+
+if (typeof module !== "undefined" && module.exports) module.exports = Solver;
