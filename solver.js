@@ -238,6 +238,271 @@ const Solver = (() => {
     return false;
   }
 
+  // ===== Hint: objašnjenje sljedećeg poteza =====
+  // Zasebne "find" funkcije koje vraćaju opis poteza (ne mutiraju ulaz).
+  // Namjerno odvojene od gornjih bool-tehnika da grading ostane netaknut.
+
+  const BOX_NAMES = [
+    "gore lijevo", "gore u sredini", "gore desno",
+    "u sredini lijevo", "u sredini", "u sredini desno",
+    "dolje lijevo", "dolje u sredini", "dolje desno",
+  ];
+  const namedUnits = [];
+  for (let r = 0; r < 9; r++) namedUnits.push({ cells: rows[r], name: `retku ${r + 1}` });
+  for (let c = 0; c < 9; c++) namedUnits.push({ cells: cols[c], name: `stupcu ${c + 1}` });
+  for (let b = 0; b < 9; b++) namedUnits.push({ cells: boxes[b], name: `kvadratu ${BOX_NAMES[b]}` });
+
+  function hNakedSingle(cand) {
+    for (let idx = 0; idx < 81; idx++) {
+      if (cand[idx] && cand[idx].size === 1) {
+        return {
+          technique: "Goli jedinac", tier: T_SINGLE, type: "placement",
+          value: [...cand[idx]][0], target: idx, focus: [idx],
+          note: "to polje ima samo jedan mogući broj",
+        };
+      }
+    }
+    return null;
+  }
+
+  function hHiddenSingle(cand) {
+    for (const u of namedUnits) {
+      for (let v = 1; v <= 9; v++) {
+        let spot = -1, count = 0;
+        for (const idx of u.cells) {
+          if (cand[idx] && cand[idx].has(v)) { count++; spot = idx; if (count > 1) break; }
+        }
+        if (count === 1) {
+          return {
+            technique: "Skriveni jedinac", tier: T_SINGLE, type: "placement",
+            value: v, target: spot, focus: u.cells.slice(),
+            note: `u ${u.name} broj ${v} stane samo u jedno polje`,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function hLocked(cand) {
+    for (let b = 0; b < 9; b++) {
+      const box = boxes[b];
+      for (let v = 1; v <= 9; v++) {
+        const cs = box.filter((i) => cand[i] && cand[i].has(v));
+        if (cs.length < 2) continue;
+        const r0 = Math.floor(cs[0] / 9), c0 = cs[0] % 9;
+        if (cs.every((i) => Math.floor(i / 9) === r0)) {
+          const elim = rows[r0].filter((i) => !box.includes(i) && cand[i] && cand[i].has(v));
+          if (elim.length) return {
+            technique: "Zaključani kandidati", tier: T_INTER, type: "elimination",
+            removeVals: [v], targets: elim, base: cs, focus: cs.concat(elim),
+            note: `u kvadratu ${BOX_NAMES[b]} broj ${v} može stajati samo u retku ${r0 + 1}, pa se briše iz ostatka tog retka`,
+          };
+        }
+        if (cs.every((i) => i % 9 === c0)) {
+          const elim = cols[c0].filter((i) => !box.includes(i) && cand[i] && cand[i].has(v));
+          if (elim.length) return {
+            technique: "Zaključani kandidati", tier: T_INTER, type: "elimination",
+            removeVals: [v], targets: elim, base: cs, focus: cs.concat(elim),
+            note: `u kvadratu ${BOX_NAMES[b]} broj ${v} može stajati samo u stupcu ${c0 + 1}, pa se briše iz ostatka tog stupca`,
+          };
+        }
+      }
+    }
+    for (const line of [...rows, ...cols]) {
+      for (let v = 1; v <= 9; v++) {
+        const cs = line.filter((i) => cand[i] && cand[i].has(v));
+        if (cs.length < 2) continue;
+        const b0 = boxOf(cs[0]);
+        if (cs.every((i) => boxOf(i) === b0)) {
+          const elim = boxes[b0].filter((i) => !line.includes(i) && cand[i] && cand[i].has(v));
+          if (elim.length) return {
+            technique: "Zaključani kandidati", tier: T_INTER, type: "elimination",
+            removeVals: [v], targets: elim, base: cs, focus: cs.concat(elim),
+            note: `broj ${v} u toj liniji leži samo unutar kvadrata ${BOX_NAMES[b0]}, pa se briše iz ostatka tog kvadrata`,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function hNakedPair(cand) {
+    for (const u of namedUnits) {
+      const twos = u.cells.filter((i) => cand[i] && cand[i].size === 2);
+      for (let i = 0; i < twos.length; i++) for (let j = i + 1; j < twos.length; j++) {
+        const a = cand[twos[i]], b = cand[twos[j]];
+        if ([...a].every((x) => b.has(x))) {
+          const vals = [...a];
+          const elim = u.cells.filter((idx) =>
+            idx !== twos[i] && idx !== twos[j] && cand[idx] && vals.some((v) => cand[idx].has(v)));
+          if (elim.length) return {
+            technique: "Goli par", tier: T_INTER, type: "elimination",
+            removeVals: vals, targets: elim, base: [twos[i], twos[j]], focus: [twos[i], twos[j]].concat(elim),
+            note: `dva polja u ${u.name} dijele samo brojeve ${vals[0]} i ${vals[1]}, pa ti brojevi ispadaju iz ostalih polja te jedinice`,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function hHiddenPair(cand) {
+    for (const u of namedUnits) {
+      const pos = {};
+      for (let v = 1; v <= 9; v++) pos[v] = u.cells.filter((i) => cand[i] && cand[i].has(v));
+      for (let v1 = 1; v1 <= 9; v1++) {
+        if (pos[v1].length !== 2) continue;
+        for (let v2 = v1 + 1; v2 <= 9; v2++) {
+          if (pos[v2].length !== 2) continue;
+          if (pos[v1][0] === pos[v2][0] && pos[v1][1] === pos[v2][1]) {
+            const pair = pos[v1];
+            const elim = pair.filter((idx) => [...cand[idx]].some((v) => v !== v1 && v !== v2));
+            if (elim.length) {
+              const removeVals = [];
+              for (const idx of elim) for (const v of cand[idx]) {
+                if (v !== v1 && v !== v2 && !removeVals.includes(v)) removeVals.push(v);
+              }
+              return {
+                technique: "Skriveni par", tier: T_INTER, type: "elimination",
+                removeVals, targets: elim, base: pair, focus: pair.slice(),
+                note: `brojevi ${v1} i ${v2} u ${u.name} stanu samo u ta dva polja, pa iz njih ispadaju svi ostali brojevi`,
+              };
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  function hNakedTriple(cand) {
+    for (const u of namedUnits) {
+      const cells = u.cells.filter((i) => cand[i] && cand[i].size >= 2 && cand[i].size <= 3);
+      const n = cells.length;
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) {
+        const union = new Set([...cand[cells[i]], ...cand[cells[j]], ...cand[cells[k]]]);
+        if (union.size === 3) {
+          const trip = [cells[i], cells[j], cells[k]];
+          const vals = [...union];
+          const elim = u.cells.filter((idx) => !trip.includes(idx) && cand[idx] && vals.some((v) => cand[idx].has(v)));
+          if (elim.length) return {
+            technique: "Gola trojka", tier: T_INTER, type: "elimination",
+            removeVals: vals, targets: elim, base: trip, focus: trip.concat(elim),
+            note: `tri polja u ${u.name} zajedno koriste samo brojeve ${vals.join(", ")}, pa ti brojevi ispadaju iz ostalih polja te jedinice`,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function hXWing(cand) {
+    for (let v = 1; v <= 9; v++) {
+      const rowPos = [];
+      for (let r = 0; r < 9; r++) {
+        const cs = [];
+        for (let c = 0; c < 9; c++) { const idx = r * 9 + c; if (cand[idx] && cand[idx].has(v)) cs.push(c); }
+        if (cs.length === 2) rowPos.push({ r, cs });
+      }
+      for (let i = 0; i < rowPos.length; i++) for (let j = i + 1; j < rowPos.length; j++) {
+        if (rowPos[i].cs[0] === rowPos[j].cs[0] && rowPos[i].cs[1] === rowPos[j].cs[1]) {
+          const [c1, c2] = rowPos[i].cs, r1 = rowPos[i].r, r2 = rowPos[j].r;
+          const base = [r1 * 9 + c1, r1 * 9 + c2, r2 * 9 + c1, r2 * 9 + c2];
+          const elim = [];
+          for (let r = 0; r < 9; r++) { if (r === r1 || r === r2) continue; for (const c of [c1, c2]) { const idx = r * 9 + c; if (cand[idx] && cand[idx].has(v)) elim.push(idx); } }
+          if (elim.length) return {
+            technique: "X-Wing", tier: T_ADVANCED, type: "elimination",
+            removeVals: [v], targets: elim, base, focus: base.concat(elim),
+            note: `broj ${v} tvori X-Wing u stupcima ${c1 + 1} i ${c2 + 1} (retci ${r1 + 1} i ${r2 + 1}), pa ispada iz tih stupaca igdje drugdje`,
+          };
+        }
+      }
+      const colP = [];
+      for (let c = 0; c < 9; c++) {
+        const rs = [];
+        for (let r = 0; r < 9; r++) { const idx = r * 9 + c; if (cand[idx] && cand[idx].has(v)) rs.push(r); }
+        if (rs.length === 2) colP.push({ c, rs });
+      }
+      for (let i = 0; i < colP.length; i++) for (let j = i + 1; j < colP.length; j++) {
+        if (colP[i].rs[0] === colP[j].rs[0] && colP[i].rs[1] === colP[j].rs[1]) {
+          const [r1, r2] = colP[i].rs, c1 = colP[i].c, c2 = colP[j].c;
+          const base = [r1 * 9 + c1, r1 * 9 + c2, r2 * 9 + c1, r2 * 9 + c2];
+          const elim = [];
+          for (let c = 0; c < 9; c++) { if (c === c1 || c === c2) continue; for (const r of [r1, r2]) { const idx = r * 9 + c; if (cand[idx] && cand[idx].has(v)) elim.push(idx); } }
+          if (elim.length) return {
+            technique: "X-Wing", tier: T_ADVANCED, type: "elimination",
+            removeVals: [v], targets: elim, base, focus: base.concat(elim),
+            note: `broj ${v} tvori X-Wing u retcima ${r1 + 1} i ${r2 + 1} (stupci ${c1 + 1} i ${c2 + 1}), pa ispada iz tih redaka igdje drugdje`,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  function hXYWing(cand) {
+    const bivalue = [];
+    for (let idx = 0; idx < 81; idx++) if (cand[idx] && cand[idx].size === 2) bivalue.push(idx);
+    for (const p of bivalue) {
+      const [x, y] = [...cand[p]];
+      const pincers = bivalue.filter((q) => q !== p && peers[p].has(q));
+      for (const a of pincers) {
+        if (!cand[a].has(x)) continue;
+        const z = [...cand[a]].find((v) => v !== x);
+        if (z === undefined || z === y) continue;
+        for (const b of pincers) {
+          if (b === a) continue;
+          if (cand[b].size === 2 && cand[b].has(y) && cand[b].has(z) && !cand[b].has(x)) {
+            const elim = [];
+            for (let idx = 0; idx < 81; idx++) {
+              if (idx === a || idx === b || idx === p) continue;
+              if (cand[idx] && cand[idx].has(z) && peers[a].has(idx) && peers[b].has(idx)) elim.push(idx);
+            }
+            if (elim.length) return {
+              technique: "XY-Wing", tier: T_ADVANCED, type: "elimination",
+              removeVals: [z], targets: elim, base: [p, a, b], focus: [p, a, b].concat(elim),
+              note: `XY-Wing: zglob i dva kraka prisiljavaju da broj ${z} ispadne iz polja koja oba kraka "vide"`,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  const H_FINDERS = [hNakedSingle, hHiddenSingle, hLocked, hNakedPair, hHiddenPair, hNakedTriple, hXWing, hXYWing];
+
+  function firstStep(cand) {
+    for (const f of H_FINDERS) { const r = f(cand); if (r) return r; }
+    return null;
+  }
+
+  // Vrati objašnjenje sljedećeg poteza za trenutno stanje ploče (values: givens + unosi).
+  //   { reason, placement, hardest } | { contradiction } | { done }
+  // reason     = prva (najlakša) primjenjiva tehnika - "zašto".
+  // placement  = sljedeće polje koje se može upisati { target, value } - "akcija".
+  // Pretpostavlja da su svi uneseni brojevi točni (pozivatelj prvo provjeri greške).
+  function explainNext(values) {
+    const grid = values.slice();
+    const cand = computeCandidates(grid);
+    for (let i = 0; i < 81; i++) if (grid[i] === 0 && cand[i].size === 0) return { contradiction: true };
+    if (!grid.includes(0)) return { done: true };
+    let reason = null, placement = null, hardest = 0, guard = 0;
+    while (grid.includes(0) && guard++ < 300) {
+      const r = firstStep(cand);
+      if (!r) break;
+      if (!reason) reason = r;
+      hardest = Math.max(hardest, r.tier);
+      if (r.type === "placement") {
+        placement = { target: r.target, value: r.value, technique: r.technique };
+        break;
+      }
+      for (const idx of r.targets) for (const v of r.removeVals) cand[idx].delete(v);
+    }
+    return { reason, placement, hardest };
+  }
+
   const STEPS = [
     [nakedSingle, T_SINGLE, "Naked Single"],
     [hiddenSingle, T_SINGLE, "Hidden Single"],
@@ -272,5 +537,5 @@ const Solver = (() => {
     return { solved: true, tier: maxTier, techniques: [...advUsed], grid };
   }
 
-  return { solveAndGrade, T_SINGLE, T_INTER, T_ADVANCED };
+  return { solveAndGrade, explainNext, T_SINGLE, T_INTER, T_ADVANCED };
 })();

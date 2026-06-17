@@ -16,6 +16,7 @@
   --text: #e8e8ef;
   --muted: #8a8a99;
   --depleted: #44444f;
+  --hint: #ffce54;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -88,6 +89,29 @@ main {
   gap: 14px;
 }
 
+/* Traka pomoći */
+.hint-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 12px 4px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--hint);
+  border-radius: 10px;
+}
+.hint-text { flex: 1; font-size: 13px; line-height: 1.4; color: var(--text); }
+.hint-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
 /* Board */
 .board-wrap { position: relative; }
 .board {
@@ -125,6 +149,14 @@ main {
 .cell.peer { background: var(--cell-peer); }
 .cell.same { background: var(--cell-same); }
 .cell.selected { background: var(--cell-sel); }
+
+/* Highlight pomoći */
+.cell.hint-focus { background: rgba(255, 206, 84, 0.16); }
+.cell.hint-target {
+  background: rgba(255, 206, 84, 0.30);
+  outline: 2px solid var(--hint);
+  outline-offset: -2px;
+}
 
 /* Bilješke */
 .notes {

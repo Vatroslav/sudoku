@@ -8,8 +8,9 @@ Offline Sudoku PWA - radi u browseru, instalira se na telefon kao app. Bez serve
   - **Teško** - traži intermediate logiku (locked candidates, parovi/trojke), bez naprednih strategija
   - **Ekspert** - garantirano traži bar jednu naprednu tehniku (X-Wing ili XY-Wing); chip u statusu pokazuje koju
 - Svaka slagalica ima jedinstveno rješenje i rješiva je bez pogađanja
-- Bilješke (pencil marks), undo, brisanje, pomoć (hint)
-- Brojanje grešaka, highlight reda/stupca/kvadrata i istih brojeva
+- Bilješke (pencil marks), undo, brisanje
+- **Pomoć** - objašnjava sljedeći logički potez korak po korak: prvi tap nagovijesti tehniku i regiju, drugi otkrije točno polje i broj; upozorava na pogrešne unose
+- Highlight reda/stupca/kvadrata, istih brojeva i pogrešnih unosa (crveno)
 - Auto-spremanje - nastavi gdje si stao (localStorage)
 - Tamna tema, mobile-first, touch-friendly
 

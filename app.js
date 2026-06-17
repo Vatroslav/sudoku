@@ -28,6 +28,11 @@
   const winStats = document.getElementById("win-stats");
   const menuOverlay = document.getElementById("menu-overlay");
   const loadingOverlay = document.getElementById("loading-overlay");
+  const hintBanner = document.getElementById("hint-banner");
+  const hintTextEl = document.getElementById("hint-text");
+
+  // Efemerno stanje pomoći (ne sprema se): step 1 = nagovještaj, 2 = rješenje.
+  let hintUi = { step: 0, sig: "", focus: [], targets: [] };
 
   // --- Inicijalizacija ploče (jednom kreiramo 81 ćeliju) ---
   const cells = [];
@@ -77,6 +82,7 @@
         solved: false,
       };
       history = [];
+      clearHint();
       save();
       render();
       loadingOverlay.classList.add("hidden");
@@ -118,6 +124,7 @@
     const idx = state.selected;
     if (state.puzzle[idx] !== 0) return; // given, ne dira se
 
+    clearHint();
     pushHistory();
 
     if (state.notesMode) {
@@ -168,6 +175,7 @@
     const idx = state.selected;
     if (state.puzzle[idx] !== 0) return;
     if (state.values[idx] === 0 && state.notes[idx].length === 0) return;
+    clearHint();
     pushHistory();
     state.values[idx] = 0;
     state.notes[idx] = [];
@@ -175,17 +183,70 @@
     render();
   }
 
+  // --- Pomoć: objasni sljedeći potez ---
+  function cellName(idx) { return `redak ${Math.floor(idx / 9) + 1}, stupac ${(idx % 9) + 1}`; }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function showHint(text) {
+    hintTextEl.textContent = text;
+    hintBanner.classList.remove("hidden");
+  }
+
+  function clearHint() {
+    hintUi.step = 0;
+    hintUi.sig = "";
+    hintUi.focus = [];
+    hintUi.targets = [];
+    hintBanner.classList.add("hidden");
+  }
+
   function hint() {
-    if (!state || state.solved || state.selected === null) return;
-    const idx = state.selected;
-    if (state.puzzle[idx] !== 0 || state.values[idx] === state.solution[idx]) return;
-    pushHistory();
-    state.values[idx] = state.solution[idx];
-    state.notes[idx] = [];
-    clearNotesAround(idx, state.solution[idx]);
-    save();
+    if (!state || state.solved) return;
+
+    // 1) Krivi unosi prvo - logika na pogrešnoj ploči je besmislena.
+    const wrong = [];
+    for (let i = 0; i < 81; i++) {
+      if (state.puzzle[i] === 0 && state.values[i] !== 0 && state.values[i] !== state.solution[i]) wrong.push(i);
+    }
+    if (wrong.length) {
+      hintUi.step = 0;
+      hintUi.focus = [];
+      hintUi.targets = wrong;
+      showHint(`Imaš ${wrong.length} ${wrong.length === 1 ? "pogrešno polje" : "pogrešnih polja"} (crveno). Ispravi to prije nego potražiš sljedeći potez.`);
+      render();
+      return;
+    }
+
+    const res = Solver.explainNext(state.values);
+    if (!res || res.done) { clearHint(); showHint("Sve je već riješeno."); return; }
+    if (res.contradiction) { clearHint(); showHint("Ploča je u kontradikciji - provjeri unose."); return; }
+    if (!res.reason) { clearHint(); showHint("Nema čistog logičkog poteza odavde."); return; }
+
+    const reason = res.reason;
+    const sig = state.values.join(",");
+    // Drugi tap na istoj ploči eskalira nagovještaj u rješenje.
+    hintUi.step = (hintUi.sig === sig && hintUi.step === 1) ? 2 : 1;
+    hintUi.sig = sig;
+
+    if (hintUi.step === 1) {
+      hintUi.focus = reason.focus.slice();
+      hintUi.targets = [];
+      showHint(`Sljedeći potez: ${reason.technique}. Tapni Pomoć opet za rješenje.`);
+    } else {
+      hintUi.focus = reason.focus.slice();
+      const p = res.placement;
+      if (p) {
+        hintUi.targets = [p.target];
+        state.selected = p.target;
+        const lead = reason.type === "placement" ? "Upiši" : "Time na kraju možeš upisati";
+        showHint(`${cap(reason.note)}. ${lead} ${p.value} u ${cellName(p.target)}.`);
+      } else {
+        hintUi.targets = (reason.targets || []).slice();
+        const rv = (reason.removeVals || []).join(", ");
+        showHint(`${cap(reason.note)}. Makni bilješku ${rv} iz istaknutih polja.`);
+      }
+    }
     render();
-    checkWin();
   }
 
   function toggleNotes() {
@@ -205,6 +266,7 @@
 
   function undo() {
     if (!state || history.length === 0) return;
+    clearHint();
     const prev = history.pop();
     state.values = prev.values;
     state.notes = prev.notes;
@@ -293,6 +355,10 @@
       }
     }
 
+    // Highlight pomoći (žuto): regija/uzorak slabije, ciljno polje jače.
+    for (const i of hintUi.focus) cells[i].classList.add("hint-focus");
+    for (const i of hintUi.targets) cells[i].classList.add("hint-target");
+
     updateNumCounts();
   }
 
@@ -344,6 +410,7 @@
     document.getElementById("erase-btn").addEventListener("click", erase);
     document.getElementById("notes-btn").addEventListener("click", toggleNotes);
     document.getElementById("hint-btn").addEventListener("click", hint);
+    document.getElementById("hint-close").addEventListener("click", () => { clearHint(); render(); });
     document.getElementById("win-new-btn").addEventListener("click", () => {
       winOverlay.classList.add("hidden");
       openMenu();
