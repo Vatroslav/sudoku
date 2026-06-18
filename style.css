@@ -157,6 +157,11 @@ main {
   outline: 2px solid var(--hint);
   outline-offset: -2px;
 }
+/* Pencil marks moraju ostati čitljivi na žutoj hint pozadini */
+.cell.hint-focus .notes span,
+.cell.hint-target .notes span { color: var(--text); }
+.cell.hint-focus .notes span.note-match,
+.cell.hint-target .notes span.note-match { color: var(--accent); }
 
 /* Bilješke */
 .notes {
