@@ -10,6 +10,7 @@ const ASSETS = [
   "./solver.js",
   "./sudoku.js",
   "./app.js",
+  "./package.json",
   "./manifest.webmanifest",
   "./icons/icon-192.png",
   "./icons/icon-512.png",

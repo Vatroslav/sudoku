@@ -576,11 +576,25 @@
     });
   }
 
+  // Verzija se čita iz package.json (jedini izvor istine, isti koji enforcea
+  // version guard) - prikaz nikad ne odluta od stvarne verzije.
+  function showVersion() {
+    const el = document.getElementById("app-version");
+    if (!el) return;
+    fetch("./package.json")
+      .then((r) => r.json())
+      .then((p) => {
+        if (p && p.version) el.textContent = "v" + p.version;
+      })
+      .catch(() => {});
+  }
+
   // --- Start ---
   function init() {
     buildBoard();
     buildNumpad();
     bind();
+    showVersion();
     if (load() && !allSolved()) {
       render();
       if (state.solved) {

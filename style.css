@@ -56,6 +56,18 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px 10px;
+  position: relative;
+}
+/* Verzija igre - centrirana u topbaru neovisno o širini lijeve/desne strane */
+.app-version {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  pointer-events: none;
 }
 .status {
   font-size: 14px;
