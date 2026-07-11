@@ -5,7 +5,6 @@
   --line: #34343f;
   --line-strong: #5a5a6b;
   --cell: #1f1f27;
-  --cell-diag: #232b3a;
   --cell-peer: #262631;
   --cell-sel: #2f4a6b;
   --cell-same: #3a3550;
@@ -14,6 +13,7 @@
   --wrong: #ff6b6b;
   --note: #8a8a99;
   --accent: #6db3ff;
+  --diag-line: rgba(109, 179, 255, 0.4);
   --text: #e8e8ef;
   --muted: #8a8a99;
   --depleted: #44444f;
@@ -191,6 +191,21 @@ main {
     0 1px 0 0 var(--line-strong);
 }
 
+/* Dijagonale (X-Sudoku): dvije crte preko ploče, overlay iznad ćelija ali
+   izvan pointer toka. Ne diraju pozadinu pa koegzistiraju sa selekcijom/hint. */
+.diag-lines {
+  position: absolute;
+  inset: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  pointer-events: none;
+}
+.diag-lines line {
+  stroke: var(--diag-line);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 .cell.given {
   color: var(--given);
   font-weight: 600;
@@ -200,11 +215,6 @@ main {
 }
 .cell.wrong {
   color: var(--wrong);
-}
-
-/* Dijagonale (X-Sudoku). Ide prije peer/selected/same/hint da ih oni nadjačaju. */
-.cell.diag {
-  background: var(--cell-diag);
 }
 
 .cell.peer {
