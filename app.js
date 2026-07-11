@@ -213,13 +213,14 @@
     if (!cellEl || !boardEl.contains(cellEl)) return;
     const idx = Number(cellEl.dataset.idx);
 
-    // Van notes moda: klik = samo selekcija (kao prije).
-    if (!state.notesMode) {
-      selectCell(idx);
-      return;
-    }
-    // Nema odabranog kista ili je ćelija popunjena: samo selektiraj.
-    if (state.activeNote === null || !isPaintable(idx)) {
+    // Kist se maže samo u notes modu, s odabranim brojem, na praznoj ćeliji.
+    // Inače povlačenje pomiče selekciju (drag = select) - radi i mišem i dodirom.
+    const brushing = state.notesMode && state.activeNote !== null && isPaintable(idx);
+    if (!brushing) {
+      e.preventDefault();
+      drag.active = true;
+      drag.mode = "select";
+      drag.painted = null;
       selectCell(idx);
       return;
     }
@@ -240,12 +241,17 @@
   function onBoardPointerMove(e) {
     if (!drag.active) return;
     e.preventDefault();
-    // Touch implicitno "hvata" pointer na početnu ćeliju, pa ciljnu ćeliju
-    // tražimo preko elementFromPoint (radi i s mišem i s dodirom).
+    // Ciljnu ćeliju tražimo preko elementFromPoint (radi i s mišem i s dodirom;
+    // touch implicitno "hvata" pointer na početnu ćeliju).
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const cellEl = el && el.closest && el.closest(".cell");
     if (!cellEl || !boardEl.contains(cellEl)) return;
-    applyBrush(Number(cellEl.dataset.idx));
+    const idx = Number(cellEl.dataset.idx);
+    if (drag.mode === "select") {
+      if (state.selected !== idx) selectCell(idx);
+    } else {
+      applyBrush(idx);
+    }
   }
 
   function onBoardPointerUp() {
