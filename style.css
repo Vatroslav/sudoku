@@ -19,9 +19,13 @@
   --hint: #ffce54;
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   background: var(--bg);
@@ -53,10 +57,21 @@ body {
   justify-content: space-between;
   padding: 14px 16px 10px;
 }
-.status { font-size: 14px; color: var(--muted); }
-.status-item { color: var(--text); }
-#difficulty-label { color: var(--accent); font-weight: 600; }
-.status-sep { margin: 0 6px; color: var(--line-strong); }
+.status {
+  font-size: 14px;
+  color: var(--muted);
+}
+.status-item {
+  color: var(--text);
+}
+#difficulty-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+.status-sep {
+  margin: 0 6px;
+  color: var(--line-strong);
+}
 .status-chip {
   display: inline-block;
   margin-left: 6px;
@@ -78,7 +93,9 @@ body {
   font-weight: 600;
   cursor: pointer;
 }
-.icon-btn:active { background: var(--board-bg); }
+.icon-btn:active {
+  background: var(--board-bg);
+}
 
 main {
   flex: 1;
@@ -101,7 +118,12 @@ main {
   border-left: 3px solid var(--hint);
   border-radius: 10px;
 }
-.hint-text { flex: 1; font-size: 13px; line-height: 1.4; color: var(--text); }
+.hint-text {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+}
 .hint-close {
   background: none;
   border: none;
@@ -113,7 +135,9 @@ main {
 }
 
 /* Board */
-.board-wrap { position: relative; }
+.board-wrap {
+  position: relative;
+}
 .board {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
@@ -138,30 +162,59 @@ main {
   position: relative;
   user-select: none;
 }
-.cell.br { margin-right: 1px; box-shadow: 1px 0 0 0 var(--line-strong); }
-.cell.bb { margin-bottom: 1px; box-shadow: 0 1px 0 0 var(--line-strong); }
-.cell.br.bb { box-shadow: 1px 0 0 0 var(--line-strong), 0 1px 0 0 var(--line-strong); }
+.cell.br {
+  margin-right: 1px;
+  box-shadow: 1px 0 0 0 var(--line-strong);
+}
+.cell.bb {
+  margin-bottom: 1px;
+  box-shadow: 0 1px 0 0 var(--line-strong);
+}
+.cell.br.bb {
+  box-shadow:
+    1px 0 0 0 var(--line-strong),
+    0 1px 0 0 var(--line-strong);
+}
 
-.cell.given { color: var(--given); font-weight: 600; }
-.cell.user { color: var(--user); }
-.cell.wrong { color: var(--wrong); }
+.cell.given {
+  color: var(--given);
+  font-weight: 600;
+}
+.cell.user {
+  color: var(--user);
+}
+.cell.wrong {
+  color: var(--wrong);
+}
 
-.cell.peer { background: var(--cell-peer); }
-.cell.same { background: var(--cell-same); }
-.cell.selected { background: var(--cell-sel); }
+.cell.peer {
+  background: var(--cell-peer);
+}
+.cell.same {
+  background: var(--cell-same);
+}
+.cell.selected {
+  background: var(--cell-sel);
+}
 
 /* Highlight pomoći */
-.cell.hint-focus { background: rgba(255, 206, 84, 0.16); }
+.cell.hint-focus {
+  background: rgba(255, 206, 84, 0.16);
+}
 .cell.hint-target {
-  background: rgba(255, 206, 84, 0.30);
+  background: rgba(255, 206, 84, 0.3);
   outline: 2px solid var(--hint);
   outline-offset: -2px;
 }
 /* Pencil marks moraju ostati čitljivi na žutoj hint pozadini */
 .cell.hint-focus .notes span,
-.cell.hint-target .notes span { color: var(--text); }
+.cell.hint-target .notes span {
+  color: var(--text);
+}
 .cell.hint-focus .notes span.note-match,
-.cell.hint-target .notes span.note-match { color: var(--accent); }
+.cell.hint-target .notes span.note-match {
+  color: var(--accent);
+}
 
 /* Bilješke */
 .notes {
@@ -186,8 +239,16 @@ main {
 }
 
 /* Controls */
-.controls { display: flex; flex-direction: column; gap: 12px; }
-.action-row { display: flex; justify-content: space-between; gap: 8px; }
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.action-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
 .action-btn {
   flex: 1;
   background: transparent;
@@ -212,9 +273,16 @@ main {
   justify-content: center;
   color: var(--text);
 }
-.action-btn:active .action-icon { background: var(--board-bg); }
-.action-label { font-size: 11px; }
-.action-btn.active .action-icon { background: var(--accent); color: #14141a; }
+.action-btn:active .action-icon {
+  background: var(--board-bg);
+}
+.action-label {
+  font-size: 11px;
+}
+.action-btn.active .action-icon {
+  background: var(--accent);
+  color: #14141a;
+}
 .notes-state {
   position: absolute;
   top: -2px;
@@ -226,7 +294,10 @@ main {
   border-radius: 6px;
   padding: 1px 5px;
 }
-.action-btn.active .notes-state { background: var(--accent); color: #14141a; }
+.action-btn.active .notes-state {
+  background: var(--accent);
+  color: #14141a;
+}
 
 /* Numpad */
 .numpad {
@@ -249,13 +320,25 @@ main {
   align-items: center;
   font-weight: 500;
 }
-.num-btn:active { background: var(--board-bg); }
-.num-count { font-size: 11px; color: var(--muted); height: 13px; }
-.num-btn.depleted { opacity: 0.4; color: var(--depleted); }
+.num-btn:active {
+  background: var(--board-bg);
+}
+.num-count {
+  font-size: 11px;
+  color: var(--muted);
+  height: 13px;
+}
+.num-btn.depleted {
+  opacity: 0.4;
+  color: var(--depleted);
+}
 
 /* Overlays */
-.hidden { display: none !important; }
-.win-overlay, .menu-overlay {
+.hidden {
+  display: none !important;
+}
+.win-overlay,
+.menu-overlay {
   position: absolute;
   inset: 0;
   background: rgba(10, 10, 14, 0.7);
@@ -268,7 +351,8 @@ main {
   position: fixed;
   backdrop-filter: blur(2px);
 }
-.win-card, .menu-card {
+.win-card,
+.menu-card {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -277,10 +361,27 @@ main {
   max-width: 320px;
   text-align: center;
 }
-.win-title { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
-.win-sub { color: var(--muted); margin-bottom: 20px; font-size: 14px; }
-.menu-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
-.menu-diff { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.win-title {
+  font-size: 26px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.win-sub {
+  color: var(--muted);
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+.menu-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.menu-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
 .diff-btn {
   background: var(--board-bg);
   border: 1px solid var(--line);
@@ -290,7 +391,9 @@ main {
   font-size: 16px;
   cursor: pointer;
 }
-.diff-btn:active { background: var(--cell-sel); }
+.diff-btn:active {
+  background: var(--cell-sel);
+}
 .diff-note {
   display: block;
   font-size: 11px;
@@ -317,8 +420,15 @@ main {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-text { color: var(--muted); font-size: 14px; }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.loading-text {
+  color: var(--muted);
+  font-size: 14px;
+}
 .primary-btn {
   background: var(--accent);
   border: none;

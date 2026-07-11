@@ -94,7 +94,9 @@
     if (!state) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) { /* ignoriraj */ }
+    } catch (e) {
+      /* ignoriraj */
+    }
   }
 
   function load() {
@@ -184,7 +186,9 @@
   }
 
   // --- Pomoć: objasni sljedeći potez ---
-  function cellName(idx) { return `redak ${Math.floor(idx / 9) + 1}, stupac ${(idx % 9) + 1}`; }
+  function cellName(idx) {
+    return `redak ${Math.floor(idx / 9) + 1}, stupac ${(idx % 9) + 1}`;
+  }
 
   function showHint(text) {
     hintTextEl.textContent = text;
@@ -205,26 +209,42 @@
     // 1) Krivi unosi prvo - logika na pogrešnoj ploči je besmislena.
     const wrong = [];
     for (let i = 0; i < 81; i++) {
-      if (state.puzzle[i] === 0 && state.values[i] !== 0 && state.values[i] !== state.solution[i]) wrong.push(i);
+      if (state.puzzle[i] === 0 && state.values[i] !== 0 && state.values[i] !== state.solution[i])
+        wrong.push(i);
     }
     if (wrong.length) {
       hintUi.step = 0;
       hintUi.focus = [];
       hintUi.targets = wrong;
-      showHint(`Imaš ${wrong.length} ${wrong.length === 1 ? "pogrešno polje" : "pogrešnih polja"} (crveno). Ispravi to prije nego potražiš sljedeći potez.`);
+      showHint(
+        `Imaš ${wrong.length} ${wrong.length === 1 ? "pogrešno polje" : "pogrešnih polja"} (crveno). Ispravi to prije nego potražiš sljedeći potez.`
+      );
       render();
       return;
     }
 
     const res = Solver.explainNext(state.values, state.notes, state.solution);
-    if (!res || res.done) { clearHint(); showHint("Sve je već riješeno."); return; }
-    if (res.contradiction) { clearHint(); showHint("Ploča je u kontradikciji - provjeri unose."); return; }
-    if (!res.reason) { clearHint(); showHint("Nema čistog logičkog poteza odavde."); return; }
+    if (!res || res.done) {
+      clearHint();
+      showHint("Sve je već riješeno.");
+      return;
+    }
+    if (res.contradiction) {
+      clearHint();
+      showHint("Ploča je u kontradikciji - provjeri unose.");
+      return;
+    }
+    if (!res.reason) {
+      clearHint();
+      showHint("Nema čistog logičkog poteza odavde.");
+      return;
+    }
 
-    const reason = res.reason, a = res.action;
+    const reason = res.reason,
+      a = res.action;
     const sig = state.values.join(",") + "|" + state.notes.map((n) => n.join("")).join(",");
     // Drugi tap na istoj ploči eskalira nagovještaj u rješenje.
-    hintUi.step = (hintUi.sig === sig && hintUi.step === 1) ? 2 : 1;
+    hintUi.step = hintUi.sig === sig && hintUi.step === 1 ? 2 : 1;
     hintUi.sig = sig;
     hintUi.focus = reason.focus.slice();
 
@@ -245,10 +265,15 @@
       hintUi.targets = [a.place.target];
       state.selected = a.place.target;
       const where = a.place.unitName ? `u ${a.place.unitName} ` : "";
-      showHint(`${reason.technique}: ${reason.note}, pa ${where}broj ${a.place.value} može još samo u jedno polje. Upiši ${a.place.value} u ${cellName(a.place.target)}.`);
-    } else { // eliminate
+      showHint(
+        `${reason.technique}: ${reason.note}, pa ${where}broj ${a.place.value} može još samo u jedno polje. Upiši ${a.place.value} u ${cellName(a.place.target)}.`
+      );
+    } else {
+      // eliminate
       hintUi.targets = a.targets.slice();
-      showHint(`${reason.technique}: ${reason.note}. Makni bilješku ${a.removeVals.join(", ")} iz istaknutih polja.`);
+      showHint(
+        `${reason.technique}: ${reason.note}. Makni bilješku ${a.removeVals.join(", ")} iz istaknutih polja.`
+      );
     }
     render();
   }
@@ -310,7 +335,7 @@
     document.getElementById("notes-btn").classList.toggle("active", state.notesMode);
 
     const sel = state.selected;
-    const selVal = sel !== null ? (state.values[sel] || 0) : 0;
+    const selVal = sel !== null ? state.values[sel] || 0 : 0;
     const selRow = sel !== null ? Math.floor(sel / 9) : -1;
     const selCol = sel !== null ? sel % 9 : -1;
     const selBox = sel !== null ? Math.floor(selRow / 3) * 3 + Math.floor(selCol / 3) : -1;
@@ -387,10 +412,22 @@
   // --- Tipkovnica (desktop test) ---
   function onKey(e) {
     if (!state) return;
-    if (e.key >= "1" && e.key <= "9") { inputNumber(parseInt(e.key, 10)); return; }
-    if (e.key === "Backspace" || e.key === "Delete") { erase(); return; }
-    if (e.key === "n" || e.key === "N") { toggleNotes(); return; }
-    if (e.key === "z" && (e.ctrlKey || e.metaKey)) { undo(); return; }
+    if (e.key >= "1" && e.key <= "9") {
+      inputNumber(parseInt(e.key, 10));
+      return;
+    }
+    if (e.key === "Backspace" || e.key === "Delete") {
+      erase();
+      return;
+    }
+    if (e.key === "n" || e.key === "N") {
+      toggleNotes();
+      return;
+    }
+    if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+      undo();
+      return;
+    }
     if (state.selected === null) return;
     let idx = state.selected;
     if (e.key === "ArrowUp" && idx >= 9) idx -= 9;
@@ -403,8 +440,12 @@
   }
 
   // --- Menu ---
-  function openMenu() { menuOverlay.classList.remove("hidden"); }
-  function closeMenu() { menuOverlay.classList.add("hidden"); }
+  function openMenu() {
+    menuOverlay.classList.remove("hidden");
+  }
+  function closeMenu() {
+    menuOverlay.classList.add("hidden");
+  }
 
   // --- Event vezivanje ---
   function bind() {
@@ -414,7 +455,10 @@
     document.getElementById("erase-btn").addEventListener("click", erase);
     document.getElementById("notes-btn").addEventListener("click", toggleNotes);
     document.getElementById("hint-btn").addEventListener("click", hint);
-    document.getElementById("hint-close").addEventListener("click", () => { clearHint(); render(); });
+    document.getElementById("hint-close").addEventListener("click", () => {
+      clearHint();
+      render();
+    });
     document.getElementById("win-new-btn").addEventListener("click", () => {
       winOverlay.classList.add("hidden");
       openMenu();
@@ -452,7 +496,9 @@
     }
   }
 
-  function allSolved() { return false; }
+  function allSolved() {
+    return false;
+  }
 
   init();
 })();

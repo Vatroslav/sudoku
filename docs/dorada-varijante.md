@@ -39,11 +39,11 @@ Constraint = {
 
 ## Klasifikacija varijanti (određuje redoslijed dodavanja)
 
-| Tip | Varijante | Kako se dodaje |
-|---|---|---|
-| **Regijske** (samo prošire units/peers) | X-dijagonale, Hyper/Windoku, Jigsaw, Antiknight, Antiking | `units()` / `peersFor()`; generator gotovo bez izmjena |
-| **Derivacijske** (oznaka izvedena iz rješenja) | Kropki, XV, Even/odd, Parity | `deriveClues(solution)` + render + `prune` |
-| **Geometrija-first + relacijske** (najteže) | Thermo, Palindrome, Clone, Killer | `setup()` generira geometriju, `isValid` djelomična provjera, generacija mora dati jedinstveno rješenje |
+| Tip                                            | Varijante                                                 | Kako se dodaje                                                                                          |
+| ---------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Regijske** (samo prošire units/peers)        | X-dijagonale, Hyper/Windoku, Jigsaw, Antiknight, Antiking | `units()` / `peersFor()`; generator gotovo bez izmjena                                                  |
+| **Derivacijske** (oznaka izvedena iz rješenja) | Kropki, XV, Even/odd, Parity                              | `deriveClues(solution)` + render + `prune`                                                              |
+| **Geometrija-first + relacijske** (najteže)    | Thermo, Palindrome, Clone, Killer                         | `setup()` generira geometriju, `isValid` djelomična provjera, generacija mora dati jedinstveno rješenje |
 
 ## Postupne faze
 

@@ -13,8 +13,10 @@ const Sudoku = (() => {
   }
 
   function isValid(board, idx, val) {
-    const row = Math.floor(idx / 9), col = idx % 9;
-    const boxRow = Math.floor(row / 3) * 3, boxCol = Math.floor(col / 3) * 3;
+    const row = Math.floor(idx / 9),
+      col = idx % 9;
+    const boxRow = Math.floor(row / 3) * 3,
+      boxCol = Math.floor(col / 3) * 3;
     for (let i = 0; i < 9; i++) {
       if (board[row * 9 + i] === val) return false;
       if (board[i * 9 + col] === val) return false;
@@ -45,14 +47,16 @@ const Sudoku = (() => {
   // Broji rješenja (staje na 'limit'). MRV: bira praznu ćeliju s najmanje
   // kandidata -> drastično brže od first-empty backtrackinga.
   function countSolutions(board, limit) {
-    let bestIdx = -1, bestCands = null;
+    let bestIdx = -1,
+      bestCands = null;
     for (let idx = 0; idx < 81; idx++) {
       if (board[idx] !== 0) continue;
       const cands = [];
       for (let v = 1; v <= 9; v++) if (isValid(board, idx, v)) cands.push(v);
       if (cands.length === 0) return 0;
       if (bestCands === null || cands.length < bestCands.length) {
-        bestIdx = idx; bestCands = cands;
+        bestIdx = idx;
+        bestCands = cands;
         if (cands.length === 1) break;
       }
     }
@@ -99,7 +103,7 @@ const Sudoku = (() => {
       const solution = generateSolution();
       const puzzle = dig(solution, target);
       const res = Solver.solveAndGrade(puzzle);
-      if (!res.solved) continue;                          // traži tehniku koju nemamo -> preskoči
+      if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti
 
       if (res.tier === reqTier) {
@@ -110,7 +114,13 @@ const Sudoku = (() => {
       }
     }
 
-    if (best) return { puzzle: best.puzzle, solution: best.solution, difficulty, techniques: best.techniques };
+    if (best)
+      return {
+        puzzle: best.puzzle,
+        solution: best.solution,
+        difficulty,
+        techniques: best.techniques,
+      };
     // Krajnji fallback - bilo što rješivo
     const solution = generateSolution();
     return { puzzle: dig(solution, target), solution, difficulty, techniques: [] };
