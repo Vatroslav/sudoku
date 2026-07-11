@@ -2,9 +2,9 @@
    Primjenjuje tehnike od najlakše prema najtežoj i ocjenjuje slagalicu
    po NAJTEŽOJ tehnici koju je morao upotrijebiti.
 
-   Tier 1 = singles (skeniranje)        -> Normalno
+   Tier 1 = singles (skeniranje)             -> Normalno
    Tier 2 = locked candidates, parovi/trojke -> Teško
-   Tier 3 = X-Wing, XY-Wing (napredno)  -> Ekspert  */
+   Tier 3 = X-Wing, XY-Wing (napredno)       -> iznad Teško, ne generira se  */
 
 const Solver = (() => {
   "use strict";
@@ -26,17 +26,33 @@ const Solver = (() => {
     cols[c].push(idx);
     boxes[b].push(idx);
   }
-  const allUnits = [...rows, ...cols, ...boxes];
-  const peers = [];
-  for (let idx = 0; idx < 81; idx++) {
-    const r = Math.floor(idx / 9),
-      c = idx % 9;
-    const b = Math.floor(r / 3) * 3 + Math.floor(c / 3);
-    const p = new Set();
-    for (const u of [rows[r], cols[c], boxes[b]]) for (const x of u) if (x !== idx) p.add(x);
-    peers.push(p);
-  }
   const boxOf = (idx) => Math.floor(Math.floor(idx / 9) / 3) * 3 + Math.floor((idx % 9) / 3);
+
+  // Dvije dijagonale (X-Sudoku): glavna r===c, sporedna r+c===8.
+  const diagMain = [],
+    diagAnti = [];
+  for (let i = 0; i < 9; i++) {
+    diagMain.push(i * 9 + i);
+    diagAnti.push(i * 9 + (8 - i));
+  }
+
+  // Peerovi iz proizvoljnog skupa jedinica (svaka ćelija vidi ostale u istoj jedinici).
+  const baseUnits = [...rows, ...cols, ...boxes];
+  function buildPeers(units) {
+    const p = [];
+    for (let i = 0; i < 81; i++) p.push(new Set());
+    for (const u of units) for (const a of u) for (const b of u) if (a !== b) p[a].add(b);
+    return p;
+  }
+  // Kontekst jedinica/peerova po varijanti. Klasik = redovi/stupci/kvadrati;
+  // X uz to dodaje dvije dijagonale. Grading i pomoć rade nad AKTIVNIM kontekstom.
+  const xUnits = [...baseUnits, diagMain, diagAnti];
+  const unitCtx = {
+    classic: { allUnits: baseUnits, peers: buildPeers(baseUnits) },
+    x: { allUnits: xUnits, peers: buildPeers(xUnits) },
+  };
+  let allUnits = unitCtx.classic.allUnits;
+  let peers = unitCtx.classic.peers;
 
   const T_SINGLE = 1,
     T_INTER = 2,
@@ -316,11 +332,29 @@ const Solver = (() => {
     "bottom-center",
     "bottom-right",
   ];
-  const namedUnits = [];
-  for (let r = 0; r < 9; r++) namedUnits.push({ cells: rows[r], name: `row ${r + 1}` });
-  for (let c = 0; c < 9; c++) namedUnits.push({ cells: cols[c], name: `column ${c + 1}` });
-  for (let b = 0; b < 9; b++) namedUnits.push({ cells: boxes[b], name: `box ${BOX_NAMES[b]}` });
+  const namedBase = [];
+  for (let r = 0; r < 9; r++) namedBase.push({ cells: rows[r], name: `row ${r + 1}` });
+  for (let c = 0; c < 9; c++) namedBase.push({ cells: cols[c], name: `column ${c + 1}` });
+  for (let b = 0; b < 9; b++) namedBase.push({ cells: boxes[b], name: `box ${BOX_NAMES[b]}` });
+  const namedCtx = {
+    classic: namedBase,
+    x: [
+      ...namedBase,
+      { cells: diagMain, name: "main diagonal" },
+      { cells: diagAnti, name: "anti-diagonal" },
+    ],
+  };
+  let namedUnits = namedCtx.classic;
   const cellName = (idx) => `row ${Math.floor(idx / 9) + 1}, column ${(idx % 9) + 1}`;
+
+  // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Nepoznata
+  // varijanta => klasik (unatražna kompatibilnost sa spremljenim igrama).
+  function useVariant(v) {
+    const key = v === "x" ? "x" : "classic";
+    allUnits = unitCtx[key].allUnits;
+    peers = unitCtx[key].peers;
+    namedUnits = namedCtx[key];
+  }
 
   function hNakedSingle(cand) {
     for (let idx = 0; idx < 81; idx++) {
@@ -741,7 +775,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution) {
+  function explainNext(values, notes, solution, variant) {
+    useVariant(variant);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -766,7 +801,8 @@ const Solver = (() => {
   ];
 
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
-  function solveAndGrade(puzzle) {
+  function solveAndGrade(puzzle, variant) {
+    useVariant(variant);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;

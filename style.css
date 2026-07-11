@@ -5,6 +5,7 @@
   --line: #34343f;
   --line-strong: #5a5a6b;
   --cell: #1f1f27;
+  --cell-diag: #232b3a;
   --cell-peer: #262631;
   --cell-sel: #2f4a6b;
   --cell-same: #3a3550;
@@ -199,6 +200,11 @@ main {
 }
 .cell.wrong {
   color: var(--wrong);
+}
+
+/* Dijagonale (X-Sudoku). Ide prije peer/selected/same/hint da ih oni nadjačaju. */
+.cell.diag {
+  background: var(--cell-diag);
 }
 
 .cell.peer {
@@ -396,6 +402,35 @@ main {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 16px;
+}
+.menu-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-align: left;
+  margin-bottom: 6px;
+}
+.menu-variant {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.variant-btn {
+  flex: 1;
+  background: var(--board-bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.variant-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--cell-sel);
 }
 .menu-diff {
   display: flex;

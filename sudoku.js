@@ -12,7 +12,7 @@ const Sudoku = (() => {
     return arr;
   }
 
-  function isValid(board, idx, val) {
+  function isValid(board, idx, val, variant) {
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -22,37 +22,42 @@ const Sudoku = (() => {
       if (board[i * 9 + col] === val) return false;
       if (board[(boxRow + Math.floor(i / 3)) * 9 + (boxCol + (i % 3))] === val) return false;
     }
+    if (variant === "x") {
+      if (row === col) for (let i = 0; i < 9; i++) if (board[i * 9 + i] === val) return false;
+      if (row + col === 8)
+        for (let i = 0; i < 9; i++) if (board[i * 9 + (8 - i)] === val) return false;
+    }
     return true;
   }
 
-  function fillBoard(board) {
+  function fillBoard(board, variant) {
     const idx = board.indexOf(0);
     if (idx === -1) return true;
     for (const val of shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9])) {
-      if (isValid(board, idx, val)) {
+      if (isValid(board, idx, val, variant)) {
         board[idx] = val;
-        if (fillBoard(board)) return true;
+        if (fillBoard(board, variant)) return true;
         board[idx] = 0;
       }
     }
     return false;
   }
 
-  function generateSolution() {
+  function generateSolution(variant) {
     const board = new Array(81).fill(0);
-    fillBoard(board);
+    fillBoard(board, variant);
     return board;
   }
 
   // Broji rješenja (staje na 'limit'). MRV: bira praznu ćeliju s najmanje
   // kandidata -> drastično brže od first-empty backtrackinga.
-  function countSolutions(board, limit) {
+  function countSolutions(board, limit, variant) {
     let bestIdx = -1,
       bestCands = null;
     for (let idx = 0; idx < 81; idx++) {
       if (board[idx] !== 0) continue;
       const cands = [];
-      for (let v = 1; v <= 9; v++) if (isValid(board, idx, v)) cands.push(v);
+      for (let v = 1; v <= 9; v++) if (isValid(board, idx, v, variant)) cands.push(v);
       if (cands.length === 0) return 0;
       if (bestCands === null || cands.length < bestCands.length) {
         bestIdx = idx;
@@ -64,7 +69,7 @@ const Sudoku = (() => {
     let count = 0;
     for (const v of bestCands) {
       board[bestIdx] = v;
-      count += countSolutions(board, limit);
+      count += countSolutions(board, limit, variant);
       board[bestIdx] = 0;
       if (count >= limit) return count;
     }
@@ -73,7 +78,7 @@ const Sudoku = (() => {
 
   // Briše ćelije (bez simetrije, za maksimalan izazov) dok čuva jedinstveno
   // rješenje, do otprilike 'target' zadanih ćelija.
-  function dig(solution, target) {
+  function dig(solution, target, variant) {
     const puzzle = solution.slice();
     let givens = 81;
     for (const idx of shuffle([...Array(81).keys()])) {
@@ -81,7 +86,7 @@ const Sudoku = (() => {
       if (puzzle[idx] === 0) continue;
       const backup = puzzle[idx];
       puzzle[idx] = 0;
-      if (countSolutions(puzzle.slice(), 2) !== 1) puzzle[idx] = backup;
+      if (countSolutions(puzzle.slice(), 2, variant) !== 1) puzzle[idx] = backup;
       else givens--;
     }
     return puzzle;
@@ -93,21 +98,23 @@ const Sudoku = (() => {
 
   // Generira slagalicu tražene težine. Ako u zadanom broju pokušaja ne nađe
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).
-  function generate(difficulty) {
+  // variant: "classic" (default) ili "x" (X-Sudoku, dvije dijagonale 1-9).
+  function generate(difficulty, variant) {
+    variant = variant === "x" ? "x" : "classic";
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
     const target = TARGET[difficulty] || 34;
     const attempts = MAX_ATTEMPTS[difficulty] || 150;
     let best = null;
 
     for (let a = 0; a < attempts; a++) {
-      const solution = generateSolution();
-      const puzzle = dig(solution, target);
-      const res = Solver.solveAndGrade(puzzle);
+      const solution = generateSolution(variant);
+      const puzzle = dig(solution, target, variant);
+      const res = Solver.solveAndGrade(puzzle, variant);
       if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti
 
       if (res.tier === reqTier) {
-        return { puzzle, solution, difficulty, techniques: res.techniques };
+        return { puzzle, solution, difficulty, variant, techniques: res.techniques };
       }
       if (!best || Math.abs(res.tier - reqTier) < Math.abs(best.tier - reqTier)) {
         best = { puzzle, solution, difficulty, techniques: res.techniques, tier: res.tier };
@@ -119,11 +126,18 @@ const Sudoku = (() => {
         puzzle: best.puzzle,
         solution: best.solution,
         difficulty,
+        variant,
         techniques: best.techniques,
       };
     // Krajnji fallback - bilo što rješivo
-    const solution = generateSolution();
-    return { puzzle: dig(solution, target), solution, difficulty, techniques: [] };
+    const solution = generateSolution(variant);
+    return {
+      puzzle: dig(solution, target, variant),
+      solution,
+      difficulty,
+      variant,
+      techniques: [],
+    };
   }
 
   return { generate, isValid };

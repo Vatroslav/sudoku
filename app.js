@@ -4,6 +4,14 @@
 
   const STORAGE_KEY = "sudoku-game-v2";
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
+  const VARIANT_LABELS = { classic: "", x: "Diagonal" };
+
+  // Dijagonale za X-Sudoku (glavna r===c, sporedna r+c===8).
+  const onMainDiag = (i) => Math.floor(i / 9) === i % 9;
+  const onAntiDiag = (i) => Math.floor(i / 9) + (i % 9) === 8;
+
+  // Varijanta trenutno odabrana u meniju (dok se ne pokrene nova igra).
+  let menuVariant = "classic";
 
   // --- Stanje ---
   let state = null;
@@ -12,7 +20,7 @@
   //   solution: [81],
   //   values: [81] (trenutni unosi igrača, 0 prazno),
   //   notes: [81] od Set-ova (kao polje brojeva u JSON-u),
-  //   difficulty, selected (idx|null),
+  //   difficulty, variant ("classic"|"x"), selected (idx|null),
   //   notesMode (bool), solved (bool)
   // }
 
@@ -66,17 +74,19 @@
   }
 
   // --- Nova igra ---
-  function newGame(difficulty) {
+  function newGame(difficulty, variant) {
+    variant = variant === "x" ? "x" : "classic";
     loadingOverlay.classList.remove("hidden");
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques } = Sudoku.generate(difficulty);
+      const { puzzle, solution, techniques } = Sudoku.generate(difficulty, variant);
       state = {
         puzzle,
         solution,
         values: puzzle.slice(),
         notes: Array.from({ length: 81 }, () => []),
         difficulty,
+        variant,
         techniques: techniques || [],
         selected: null,
         multi: [],
@@ -112,6 +122,7 @@
       if (!state.notes) state.notes = Array.from({ length: 81 }, () => []);
       if (state.activeNote === undefined) state.activeNote = null;
       if (!state.multi) state.multi = [];
+      if (state.variant !== "x") state.variant = "classic";
       return true;
     } catch (e) {
       return false;
@@ -232,6 +243,10 @@
       targets.add(row * 9 + i);
       targets.add(i * 9 + col);
       targets.add((boxRow + Math.floor(i / 3)) * 9 + (boxCol + (i % 3)));
+    }
+    if (state.variant === "x") {
+      if (onMainDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + i);
+      if (onAntiDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + (8 - i));
     }
     for (const t of targets) {
       const p = state.notes[t].indexOf(n);
@@ -397,7 +412,7 @@
       return;
     }
 
-    const res = Solver.explainNext(state.values, state.notes, state.solution);
+    const res = Solver.explainNext(state.values, state.notes, state.solution, state.variant);
     if (!res || res.done) {
       clearHint();
       showHint("Everything is already solved.");
@@ -491,8 +506,14 @@
     winOverlay.classList.remove("hidden");
   }
 
+  function statusLabel() {
+    const vl = VARIANT_LABELS[state.variant] || "";
+    const dl = DIFF_LABELS[state.difficulty] || "";
+    return vl ? `${vl} · ${dl}` : dl;
+  }
+
   function winStatsText() {
-    let t = DIFF_LABELS[state.difficulty];
+    let t = statusLabel();
     if (state.techniques && state.techniques.length) t += ` · ${state.techniques.join(", ")}`;
     return t;
   }
@@ -500,7 +521,8 @@
   // --- Render ---
   function render() {
     if (!state) return;
-    diffLabelEl.textContent = DIFF_LABELS[state.difficulty] || "";
+    diffLabelEl.textContent = statusLabel();
+    const xMode = state.variant === "x";
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -528,15 +550,20 @@
       const row = Math.floor(i / 9);
       if (col % 3 === 2 && col !== 8) cell.classList.add("br");
       if (row % 3 === 2 && row !== 8) cell.classList.add("bb");
+      // Dijagonalna polja (X-Sudoku) dobiju blagi ton da se pravilo vidi.
+      if (xMode && (onMainDiag(i) || onAntiDiag(i))) cell.classList.add("diag");
 
       // Highlight odabranih ćelija (grupa ili sidro)
       if (selSet.has(i)) cell.classList.add("selected");
       // Peer/isti-broj samo kod jednostrukog odabira (kod grupe bi bilo prešaroliko)
       if (sel !== null && !groupSel) {
         const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
-        if (row === selRow || col === selCol || box === selBox) {
-          cell.classList.add("peer");
+        let isPeer = row === selRow || col === selCol || box === selBox;
+        if (xMode) {
+          if (onMainDiag(sel) && onMainDiag(i)) isPeer = true;
+          if (onAntiDiag(sel) && onAntiDiag(i)) isPeer = true;
         }
+        if (isPeer) cell.classList.add("peer");
         if (selVal !== 0 && v === selVal) cell.classList.add("same");
       }
 
@@ -620,7 +647,14 @@
   }
 
   // --- Menu ---
+  function syncVariantButtons() {
+    document.querySelectorAll(".variant-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.variant === menuVariant);
+    });
+  }
   function openMenu() {
+    if (state && state.variant) menuVariant = state.variant;
+    syncVariantButtons();
     menuOverlay.classList.remove("hidden");
   }
   function closeMenu() {
@@ -643,11 +677,17 @@
       winOverlay.classList.add("hidden");
       openMenu();
     });
+    document.querySelectorAll(".variant-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        menuVariant = btn.dataset.variant === "x" ? "x" : "classic";
+        syncVariantButtons();
+      });
+    });
     document.querySelectorAll(".diff-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         closeMenu();
         winOverlay.classList.add("hidden");
-        newGame(btn.dataset.diff);
+        newGame(btn.dataset.diff, menuVariant);
       });
     });
     menuOverlay.addEventListener("click", (e) => {
