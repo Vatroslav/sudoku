@@ -17,8 +17,8 @@
   // }
 
   let history = []; // za undo
-  // Stanje povlačenja kandidata (pencil brush)
-  let drag = { active: false, mode: "add", painted: null };
+  // Stanje povlačenja (pencil brush ili grupna selekcija)
+  let drag = { active: false, mode: "add", painted: null, anchor: -1 };
 
   // --- DOM ---
   const boardEl = document.getElementById("board");
@@ -79,6 +79,7 @@
         difficulty,
         techniques: techniques || [],
         selected: null,
+        multi: [],
         notesMode: false,
         activeNote: null,
         solved: false,
@@ -110,49 +111,105 @@
       state = s;
       if (!state.notes) state.notes = Array.from({ length: 81 }, () => []);
       if (state.activeNote === undefined) state.activeNote = null;
+      if (!state.multi) state.multi = [];
       return true;
     } catch (e) {
       return false;
     }
   }
 
-  // --- Odabir ćelije ---
-  function selectCell(idx) {
-    if (!state || state.solved) return;
-    state.selected = idx;
+  // --- Odabir ćelije(a) ---
+  // state.selected = sidro (jedna ćelija; tipkovnica/pomoć/highlight).
+  // state.multi = grupa (2+ ćelija); prazno kad je odabir jednostruk.
+  function setSelection(list, anchor) {
+    const uniq = [...new Set(list)].filter((i) => i >= 0 && i < 81);
+    state.multi = uniq.length > 1 ? uniq : [];
+    state.selected = uniq.length
+      ? anchor != null && uniq.includes(anchor)
+        ? anchor
+        : uniq[uniq.length - 1]
+      : null;
     render();
   }
 
-  // --- Unos broja ---
-  function inputNumber(n) {
-    if (!state || state.solved || state.selected === null) return;
-    const idx = state.selected;
-    if (state.puzzle[idx] !== 0) return; // given, ne dira se
+  function selectCell(idx) {
+    if (!state || state.solved) return;
+    setSelection([idx], idx);
+  }
 
-    clearHint();
-    pushHistory();
+  // Sve trenutno odabrane ćelije (grupa, ili sidro, ili prazno).
+  function selectedCells() {
+    if (state.multi && state.multi.length) return state.multi;
+    return state.selected !== null ? [state.selected] : [];
+  }
 
+  function toggleInSelection(idx) {
+    const cur = selectedCells().slice();
+    const pos = cur.indexOf(idx);
+    if (pos === -1) cur.push(idx);
+    else cur.splice(pos, 1);
+    setSelection(cur, idx);
+  }
+
+  function rectBetween(a, b) {
+    const rlo = Math.min(Math.floor(a / 9), Math.floor(b / 9));
+    const rhi = Math.max(Math.floor(a / 9), Math.floor(b / 9));
+    const clo = Math.min(a % 9, b % 9);
+    const chi = Math.max(a % 9, b % 9);
+    const out = [];
+    for (let r = rlo; r <= rhi; r++) for (let c = clo; c <= chi; c++) out.push(r * 9 + c);
+    return out;
+  }
+
+  // Upiši/toggle broj u jednu ćeliju (bez save/render - poziva grupni ili
+  // jednostruki unos). Vraća true ako je nešto promijenjeno.
+  function applyNumber(idx, n) {
+    if (state.puzzle[idx] !== 0) return false; // given, ne dira se
     if (state.notesMode) {
-      // toggle bilješke
       const notes = state.notes[idx];
       const pos = notes.indexOf(n);
       if (pos === -1) notes.push(n);
       else notes.splice(pos, 1);
       state.values[idx] = 0;
-    } else {
-      if (state.values[idx] === n) {
-        // ponovni klik istog broja briše
-        state.values[idx] = 0;
-      } else {
-        state.values[idx] = n;
-        state.notes[idx] = [];
-        if (n === state.solution[idx]) {
-          // ukloni ovaj broj iz bilješki u istom redu/stupcu/kvadratu
-          clearNotesAround(idx, n);
-        }
-      }
+      return true;
+    }
+    if (state.values[idx] === n) {
+      state.values[idx] = 0; // ponovni isti broj briše
+      return true;
+    }
+    state.values[idx] = n;
+    state.notes[idx] = [];
+    if (n === state.solution[idx]) clearNotesAround(idx, n);
+    return true;
+  }
+
+  // --- Unos broja ---
+  function inputNumber(n) {
+    if (!state || state.solved) return;
+    const targets = selectedCells();
+    if (!targets.length) return;
+
+    if (targets.length === 1) {
+      // Jednostruk odabir zadržava toggle-off ponašanje.
+      if (state.puzzle[targets[0]] !== 0) return;
+      clearHint();
+      pushHistory();
+      applyNumber(targets[0], n);
+      save();
+      render();
+      checkWin();
+      return;
     }
 
+    // Grupa: u normalnom modu upiši n u sve PRAZNE odabrane (ne gazi upisane);
+    // u notes modu toggle kandidat u svim ne-given ćelijama.
+    const toChange = targets.filter(
+      (i) => state.puzzle[i] === 0 && (state.notesMode || state.values[i] === 0)
+    );
+    if (!toChange.length) return;
+    clearHint();
+    pushHistory();
+    for (const idx of toChange) applyNumber(idx, n);
     save();
     render();
     checkWin();
@@ -176,14 +233,17 @@
   }
 
   function erase() {
-    if (!state || state.solved || state.selected === null) return;
-    const idx = state.selected;
-    if (state.puzzle[idx] !== 0) return;
-    if (state.values[idx] === 0 && state.notes[idx].length === 0) return;
+    if (!state || state.solved) return;
+    const toClear = selectedCells().filter(
+      (i) => state.puzzle[i] === 0 && (state.values[i] !== 0 || state.notes[i].length > 0)
+    );
+    if (!toClear.length) return;
     clearHint();
     pushHistory();
-    state.values[idx] = 0;
-    state.notes[idx] = [];
+    for (const idx of toClear) {
+      state.values[idx] = 0;
+      state.notes[idx] = [];
+    }
     save();
     render();
   }
@@ -218,10 +278,23 @@
     const brushing = state.notesMode && state.activeNote !== null && isPaintable(idx);
     if (!brushing) {
       e.preventDefault();
+      // Ctrl/Cmd klik: dodaj/makni pojedinačnu ćeliju iz grupe (bez povlačenja).
+      if (e.ctrlKey || e.metaKey) {
+        toggleInSelection(idx);
+        return;
+      }
+      // Shift klik: pravokutnik od sidra do ove ćelije.
+      if (e.shiftKey && state.selected !== null) {
+        setSelection(rectBetween(state.selected, idx), state.selected);
+        return;
+      }
+      // Obični pritisak: kreni novu grupnu drag-selekciju (povlačenjem raste).
+      clearHint();
       drag.active = true;
       drag.mode = "select";
-      drag.painted = null;
-      selectCell(idx);
+      drag.anchor = idx;
+      drag.painted = new Set([idx]);
+      setSelection([idx], idx);
       return;
     }
 
@@ -235,6 +308,7 @@
     drag.mode = state.notes[idx].includes(state.activeNote) ? "remove" : "add";
     drag.painted = new Set();
     state.selected = idx;
+    state.multi = [];
     applyBrush(idx);
   }
 
@@ -248,7 +322,10 @@
     if (!cellEl || !boardEl.contains(cellEl)) return;
     const idx = Number(cellEl.dataset.idx);
     if (drag.mode === "select") {
-      if (state.selected !== idx) selectCell(idx);
+      if (!drag.painted.has(idx)) {
+        drag.painted.add(idx);
+        setSelection([...drag.painted], drag.anchor);
+      }
     } else {
       applyBrush(idx);
     }
@@ -349,11 +426,13 @@
     if (a.kind === "place") {
       hintUi.targets = [a.target];
       state.selected = a.target;
+      state.multi = [];
       showHint(`${reason.technique}: ${reason.note}. Upiši ${a.value} u ${cellName(a.target)}.`);
     } else if (a.kind === "eliminate-then-place") {
       hintUi.focus = reason.focus.concat(a.targets);
       hintUi.targets = [a.place.target];
       state.selected = a.place.target;
+      state.multi = [];
       const where = a.place.unitName ? `u ${a.place.unitName} ` : "";
       showHint(
         `${reason.technique}: ${reason.note}, pa ${where}broj ${a.place.value} može još samo u jedno polje. Upiši ${a.place.value} u ${cellName(a.place.target)}.`
@@ -425,6 +504,9 @@
     document.getElementById("notes-btn").classList.toggle("active", state.notesMode);
 
     const sel = state.selected;
+    const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
+    const selSet = new Set(selList);
+    const groupSel = selList.length > 1;
     const selVal = sel !== null ? state.values[sel] || 0 : 0;
     const selRow = sel !== null ? Math.floor(sel / 9) : -1;
     const selCol = sel !== null ? sel % 9 : -1;
@@ -440,14 +522,14 @@
       if (col % 3 === 2 && col !== 8) cell.classList.add("br");
       if (row % 3 === 2 && row !== 8) cell.classList.add("bb");
 
-      // Highlight: red/stupac/kvadrat odabrane
-      if (sel !== null) {
+      // Highlight odabranih ćelija (grupa ili sidro)
+      if (selSet.has(i)) cell.classList.add("selected");
+      // Peer/isti-broj samo kod jednostrukog odabira (kod grupe bi bilo prešaroliko)
+      if (sel !== null && !groupSel) {
         const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
         if (row === selRow || col === selCol || box === selBox) {
           cell.classList.add("peer");
         }
-        if (i === sel) cell.classList.add("selected");
-        // isti broj
         if (selVal !== 0 && v === selVal) cell.classList.add("same");
       }
 
