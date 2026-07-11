@@ -1,5 +1,11 @@
 # Dorada: pencil drag (brush unos kandidata)
 
+> **Status: implementirano (v1.1.0).** Odstupanje od plana: umjesto "drag samo dodaje",
+> smjer poteza određuje početna ćelija - ako već ima taj kandidat, cijeli potez briše,
+> inače dodaje. Time je sačuvano brisanje pojedinačne bilješke (jedan tap = toggle), a
+> potez i dalje ne miješa dodavanje i brisanje. U notes modu numpad bira "kist"
+> (`state.activeNote`); van notes moda klik i dalje samo selektira.
+
 ## Cilj
 
 Trenutno se pencil brojevi (bilješke/kandidati) unose "selektiraj ćeliju → uključi Bilješke → klikni broj na numpadu". Želim moći **povući preko više ćelija** i u svaku upisati isti pencil broj (kao kist). Posebno korisno na mobitelu.

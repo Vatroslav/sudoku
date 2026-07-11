@@ -149,6 +149,8 @@ main {
   border-radius: 8px;
   overflow: hidden;
   gap: 1px;
+  /* Povlačenje po ploči ne skrola stranicu (pencil brush) */
+  touch-action: none;
 }
 .cell {
   background: var(--cell);
@@ -331,6 +333,13 @@ main {
 .num-btn.depleted {
   opacity: 0.4;
   color: var(--depleted);
+}
+/* Odabrani "kist" u notes modu (broj koji povlačenje maže) */
+.num-btn.brush-active {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--cell-sel);
+  color: var(--text);
 }
 
 /* Overlays */

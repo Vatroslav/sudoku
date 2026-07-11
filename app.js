@@ -17,6 +17,8 @@
   // }
 
   let history = []; // za undo
+  // Stanje povlačenja kandidata (pencil brush)
+  let drag = { active: false, mode: "add", painted: null };
 
   // --- DOM ---
   const boardEl = document.getElementById("board");
@@ -47,7 +49,6 @@
       if (col % 3 === 2 && col !== 8) cell.classList.add("br");
       if (row % 3 === 2 && row !== 8) cell.classList.add("bb");
       cell.dataset.idx = i;
-      cell.addEventListener("click", () => selectCell(i));
       boardEl.appendChild(cell);
       cells.push(cell);
     }
@@ -59,7 +60,7 @@
       const btn = document.createElement("button");
       btn.className = "num-btn";
       btn.innerHTML = `<span class="num">${n}</span><span class="num-count" data-n="${n}"></span>`;
-      btn.addEventListener("click", () => inputNumber(n));
+      btn.addEventListener("click", () => onNumpad(n));
       numpadEl.appendChild(btn);
     }
   }
@@ -79,6 +80,7 @@
         techniques: techniques || [],
         selected: null,
         notesMode: false,
+        activeNote: null,
         solved: false,
       };
       history = [];
@@ -107,6 +109,7 @@
       if (!s.puzzle || !s.solution || !s.values) return false;
       state = s;
       if (!state.notes) state.notes = Array.from({ length: 81 }, () => []);
+      if (state.activeNote === undefined) state.activeNote = null;
       return true;
     } catch (e) {
       return false;
@@ -182,6 +185,87 @@
     state.values[idx] = 0;
     state.notes[idx] = [];
     save();
+    render();
+  }
+
+  // --- Numpad (klik) ---
+  function onNumpad(n) {
+    // U notes modu numpad bira "kist" (broj koji se maže); inače unosi vrijednost.
+    if (state && state.notesMode) setActiveNote(n);
+    else inputNumber(n);
+  }
+
+  function setActiveNote(n) {
+    if (!state) return;
+    state.activeNote = state.activeNote === n ? null : n;
+    render();
+  }
+
+  // --- Pencil brush (povlačenje kandidata) ---
+  // Bilješke prima samo prazna ne-given ćelija.
+  function isPaintable(idx) {
+    return state.puzzle[idx] === 0 && state.values[idx] === 0;
+  }
+
+  function onBoardPointerDown(e) {
+    if (!state || state.solved) return;
+    const cellEl = e.target.closest && e.target.closest(".cell");
+    if (!cellEl || !boardEl.contains(cellEl)) return;
+    const idx = Number(cellEl.dataset.idx);
+
+    // Van notes moda: klik = samo selekcija (kao prije).
+    if (!state.notesMode) {
+      selectCell(idx);
+      return;
+    }
+    // Nema odabranog kista ili je ćelija popunjena: samo selektiraj.
+    if (state.activeNote === null || !isPaintable(idx)) {
+      selectCell(idx);
+      return;
+    }
+
+    // Smjer poteza određuje početna ćelija: ima li već tu bilješku -> potez briše,
+    // inače potez dodaje. Tako jedan potez ne miješa dodavanje i brisanje
+    // (povlačenjem ne gaziš ono što si maloprije upisao).
+    e.preventDefault();
+    clearHint();
+    pushHistory();
+    drag.active = true;
+    drag.mode = state.notes[idx].includes(state.activeNote) ? "remove" : "add";
+    drag.painted = new Set();
+    state.selected = idx;
+    applyBrush(idx);
+  }
+
+  function onBoardPointerMove(e) {
+    if (!drag.active) return;
+    e.preventDefault();
+    // Touch implicitno "hvata" pointer na početnu ćeliju, pa ciljnu ćeliju
+    // tražimo preko elementFromPoint (radi i s mišem i s dodirom).
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const cellEl = el && el.closest && el.closest(".cell");
+    if (!cellEl || !boardEl.contains(cellEl)) return;
+    applyBrush(Number(cellEl.dataset.idx));
+  }
+
+  function onBoardPointerUp() {
+    if (!drag.active) return;
+    drag.active = false;
+    drag.painted = null;
+    save();
+    render();
+  }
+
+  function applyBrush(idx) {
+    if (!drag.active || drag.painted.has(idx) || !isPaintable(idx)) return;
+    drag.painted.add(idx);
+    const notes = state.notes[idx];
+    const pos = notes.indexOf(state.activeNote);
+    if (drag.mode === "add") {
+      if (pos === -1) notes.push(state.activeNote);
+    } else if (pos !== -1) {
+      notes.splice(pos, 1);
+    }
     render();
   }
 
@@ -405,6 +489,7 @@
         el.textContent = left > 0 ? left : "";
         const btn = el.closest(".num-btn");
         btn.classList.toggle("depleted", left <= 0);
+        btn.classList.toggle("brush-active", state.notesMode && state.activeNote === n);
       }
     }
   }
@@ -474,6 +559,11 @@
       if (e.target === menuOverlay) closeMenu();
     });
     document.addEventListener("keydown", onKey);
+    // Pencil brush: pointerdown na ploči, move/up globalno (drag može izaći van ćelije)
+    boardEl.addEventListener("pointerdown", onBoardPointerDown);
+    window.addEventListener("pointermove", onBoardPointerMove);
+    window.addEventListener("pointerup", onBoardPointerUp);
+    window.addEventListener("pointercancel", onBoardPointerUp);
     // Spremi kad app ode u pozadinu
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) save();
