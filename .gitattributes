@@ -1,0 +1,3 @@
+# Normaliziraj sve tekstualne datoteke na LF (poklapa se s Prettierom).
+# Sprječava CRLF↔LF churn na Windowsu (core.autocrlf=true).
+* text=auto eol=lf
