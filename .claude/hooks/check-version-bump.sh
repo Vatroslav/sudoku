@@ -40,6 +40,18 @@ for i, t in enumerate(toks):
         msg = t[2:]; break
     if t.startswith('--message='):
         msg = t[len('--message='):]; break
+    if t in ('-F', '--file') and i + 1 < len(toks) and toks[i + 1] != '-':
+        try:
+            msg = open(toks[i + 1], encoding='utf-8', errors='replace').read()
+        except Exception:
+            msg = ''
+        break
+    if t.startswith('--file=') and t[len('--file='):] != '-':
+        try:
+            msg = open(t[len('--file='):], encoding='utf-8', errors='replace').read()
+        except Exception:
+            msg = ''
+        break
 print(msg)
 " 2>/dev/null)
 
@@ -54,9 +66,15 @@ BREAKING=0
 printf '%s' "$HEADER" | grep -qE '^[a-zA-Z]+(\([^)]*\))?!:' && BREAKING=1
 printf '%s' "$MSG" | grep -q 'BREAKING CHANGE' && BREAKING=1
 
-# Je li version linija stvarno promijenjena u version fileu (ne samo staged)
+# Je li version linija promijenjena. Staged uvijek broji. Unstaged broji SAMO
+# ako je package.json u inline "git add" istoj komandi - jer se PreToolUse hook
+# pokrece PRIJE staginga (kombinacija: git add package.json && git commit ...),
+# a bez gejta bi "viseca" nestageana izmjena verzije dala lazni pozitiv.
 BUMPED=0
 git diff --cached -U0 -- package.json 2>/dev/null | grep -qE '^\+[[:space:]]*"version"' && BUMPED=1
+if [ "$BUMPED" != "1" ] && echo "$ADD_PART" | grep -q 'package\.json'; then
+    git diff -U0 -- package.json 2>/dev/null | grep -qE '^\+[[:space:]]*"version"' && BUMPED=1
+fi
 
 # Breaking uvijek trazi bump (major)
 if [ "$BREAKING" = "1" ] && [ "$BUMPED" != "1" ]; then

@@ -20,4 +20,5 @@ Vanilla JS PWA (bez build sustava). Source u rootu: `index.html`, `app.js`,
 - **Conventional commit prefiks je obavezan kad se dira source** - hook iz njega cita namjeru (treba li bump).
 - Tag tek kad verzija dode do korisnika (itch/prod deploy). Do tada verzija raste bez tagova; tag = broj koji je tad ziv + GitHub release.
 - Hook (`.claude/hooks/check-version-bump.sh`) blokira: (1) diranje sourcea bez deklariranog tipa, (2) feat/fix/perf/breaking bez bumpa.
+- Hook čita tip iz `-m` ili `-F <file>` (NE iz `-F -`/stdin heredoc - koristi `-m`). Kombinirani `git add package.json && git commit -m ...` radi ako je `package.json` u istoj add listi (hook gleda i nestageani diff).
 - `sw.js` `CACHE = "sudoku-vN"` je interni naziv cachea, NE verzija aplikacije - ne treba ga dizati (service worker ide `cache: "reload"`).
