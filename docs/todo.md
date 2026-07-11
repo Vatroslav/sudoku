@@ -1,0 +1,40 @@
+# TODO
+
+Otvoreni plan za Sudoku. Arhitektura i redoslijed dodavanja varijanti opisani su u
+[dorada-varijante.md](dorada-varijante.md) (klasifikacija: regijske → derivacijske →
+geometrija-first). Trenutno su varijante složene kao lagani `variant` string-switch
+(`"classic"|"x"`) kroz `sudoku.js` (`isValid`) i `solver.js` (`unitCtx`/`namedCtx`), ne
+kroz puni Constraint registry - kad broj varijanti naraste, procijeniti isplati li se
+Faza 0 refaktor iz doca.
+
+## Varijante
+
+Regijske (samo prošire units/peers - najjeftinije):
+
+- [x] X-Sudoku (dvije dijagonale 1-9)
+- [ ] Hyper / Windoku (4 dodatna 3×3 prozora kao units)
+- [ ] Antiknight (isti broj zabranjen na skoku konja - dodatni peers)
+- [ ] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers)
+- [ ] Jigsaw (9 nepravilnih regija umjesto kvadrata - `setup` geometrije + render)
+
+Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
+
+- [ ] Even/Odd (ćelija označena kao parna/neparna)
+- [ ] Parity (ograničenje parnosti - srodno Even/Odd, procijeniti spajanje)
+- [ ] Kropki (crne/bijele točke između susjeda: omjer 2 / razlika 1)
+- [ ] XV (X = zbroj 10, V = zbroj 5 između susjeda)
+
+Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,
+generacija mora dati jedinstveno rješenje):
+
+- [ ] Thermo (vrijednosti rastu duž termometra)
+- [ ] Palindrome (linija čita isto u oba smjera)
+- [ ] Clone (dvije regije dijele isti raspored)
+- [ ] Killer (kavezi sa zadanim zbrojem - traži vlastiti generator geometrije, zadnji)
+
+## Značajke
+
+- [ ] Bojanje ćelija - ručno bojanje/označavanje ćelija bojama (pomoć pri rješavanju,
+      npr. praćenje lanaca/parova). Perzistirati po ćeliji u state + localStorage kao
+      `notes`; ponuditi brush-unos poput pencil draga
+      ([dorada-pencil-drag.md](dorada-pencil-drag.md)).
