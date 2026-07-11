@@ -38,7 +38,6 @@
   const winStats = document.getElementById("win-stats");
   const menuOverlay = document.getElementById("menu-overlay");
   const loadingOverlay = document.getElementById("loading-overlay");
-  const diagLinesEl = document.getElementById("diag-lines");
   const hintBanner = document.getElementById("hint-banner");
   const hintTextEl = document.getElementById("hint-text");
 
@@ -524,7 +523,6 @@
     if (!state) return;
     diffLabelEl.textContent = statusLabel();
     const xMode = state.variant === "x";
-    if (diagLinesEl) diagLinesEl.classList.toggle("hidden", !xMode);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -552,6 +550,12 @@
       const row = Math.floor(i / 9);
       if (col % 3 === 2 && col !== 8) cell.classList.add("br");
       if (row % 3 === 2 && row !== 8) cell.classList.add("bb");
+      // Dijagonalna crta (X-Sudoku) crta se u POZADINI ćelije pa upisani broj
+      // (tekst) uvijek ostaje iznad nje.
+      if (xMode) {
+        if (onMainDiag(i)) cell.classList.add("diag-main");
+        if (onAntiDiag(i)) cell.classList.add("diag-anti");
+      }
 
       // Highlight odabranih ćelija (grupa ili sidro)
       if (selSet.has(i)) cell.classList.add("selected");

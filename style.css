@@ -166,7 +166,7 @@ main {
   touch-action: none;
 }
 .cell {
-  background: var(--cell);
+  background-color: var(--cell);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -191,19 +191,43 @@ main {
     0 1px 0 0 var(--line-strong);
 }
 
-/* Dijagonale (X-Sudoku): dvije crte preko ploče, overlay iznad ćelija ali
-   izvan pointer toka. Ne diraju pozadinu pa koegzistiraju sa selekcijom/hint. */
-.diag-lines {
-  position: absolute;
-  inset: 3px;
-  width: calc(100% - 6px);
-  height: calc(100% - 6px);
-  pointer-events: none;
+/* Dijagonale (X-Sudoku): crta se boja u POZADINI ćelije (background-image), pa
+   je upisani broj (tekst) uvijek iznad. Zato svi highlighti dolje koriste
+   background-COLOR - "background" shorthand bi obrisao ovu crtu. */
+.cell.diag-main {
+  background-image: linear-gradient(
+    to top right,
+    transparent calc(50% - 1px),
+    var(--diag-line) calc(50% - 1px),
+    var(--diag-line) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
 }
-.diag-lines line {
-  stroke: var(--diag-line);
-  stroke-width: 2;
-  stroke-linecap: round;
+.cell.diag-anti {
+  background-image: linear-gradient(
+    to top left,
+    transparent calc(50% - 1px),
+    var(--diag-line) calc(50% - 1px),
+    var(--diag-line) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
+.cell.diag-main.diag-anti {
+  background-image:
+    linear-gradient(
+      to top right,
+      transparent calc(50% - 1px),
+      var(--diag-line) calc(50% - 1px),
+      var(--diag-line) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    linear-gradient(
+      to top left,
+      transparent calc(50% - 1px),
+      var(--diag-line) calc(50% - 1px),
+      var(--diag-line) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    );
 }
 
 .cell.given {
@@ -218,21 +242,21 @@ main {
 }
 
 .cell.peer {
-  background: var(--cell-peer);
+  background-color: var(--cell-peer);
 }
 .cell.same {
-  background: var(--cell-same);
+  background-color: var(--cell-same);
 }
 .cell.selected {
-  background: var(--cell-sel);
+  background-color: var(--cell-sel);
 }
 
 /* Highlight pomoći */
 .cell.hint-focus {
-  background: rgba(255, 206, 84, 0.16);
+  background-color: rgba(255, 206, 84, 0.16);
 }
 .cell.hint-target {
-  background: rgba(255, 206, 84, 0.3);
+  background-color: rgba(255, 206, 84, 0.3);
   outline: 2px solid var(--hint);
   outline-offset: -2px;
 }
