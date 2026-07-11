@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="hr">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -19,44 +19,44 @@
     <div id="app">
       <header class="topbar">
         <div class="status">
-          <span class="status-item" id="difficulty-label">Normalno</span>
+          <span class="status-item" id="difficulty-label">Normal</span>
           <span class="status-chip hidden" id="technique-hint"></span>
         </div>
         <span class="app-version" id="app-version"></span>
-        <button class="icon-btn" id="new-btn" aria-label="Nova igra">Nova</button>
+        <button class="icon-btn" id="new-btn" aria-label="New game">New</button>
       </header>
 
       <div id="hint-banner" class="hint-banner hidden">
         <span class="hint-text" id="hint-text"></span>
-        <button class="hint-close" id="hint-close" aria-label="Zatvori">×</button>
+        <button class="hint-close" id="hint-close" aria-label="Close">×</button>
       </div>
 
       <main>
         <div class="board-wrap">
-          <div id="board" class="board" role="grid" aria-label="Sudoku ploča"></div>
+          <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
           <div id="win-overlay" class="win-overlay hidden">
             <div class="win-card">
-              <div class="win-title">Riješeno!</div>
+              <div class="win-title">Solved!</div>
               <div class="win-sub" id="win-stats"></div>
-              <button class="primary-btn" id="win-new-btn">Nova igra</button>
+              <button class="primary-btn" id="win-new-btn">New game</button>
             </div>
           </div>
         </div>
 
         <div class="controls">
           <div class="action-row">
-            <button class="action-btn" id="undo-btn" aria-label="Poništi">
-              <span class="action-icon">↶</span><span class="action-label">Poništi</span>
+            <button class="action-btn" id="undo-btn" aria-label="Undo">
+              <span class="action-icon">↶</span><span class="action-label">Undo</span>
             </button>
-            <button class="action-btn" id="erase-btn" aria-label="Obriši">
-              <span class="action-icon">⌫</span><span class="action-label">Obriši</span>
+            <button class="action-btn" id="erase-btn" aria-label="Erase">
+              <span class="action-icon">⌫</span><span class="action-label">Erase</span>
             </button>
-            <button class="action-btn" id="notes-btn" aria-label="Bilješke">
-              <span class="action-icon">✎</span><span class="action-label">Bilješke</span>
+            <button class="action-btn" id="notes-btn" aria-label="Notes">
+              <span class="action-icon">✎</span><span class="action-label">Notes</span>
               <span class="notes-state" id="notes-state">Off</span>
             </button>
-            <button class="action-btn" id="hint-btn" aria-label="Pomoć">
-              <span class="action-icon">💡</span><span class="action-label">Pomoć</span>
+            <button class="action-btn" id="hint-btn" aria-label="Hint">
+              <span class="action-icon">💡</span><span class="action-label">Hint</span>
             </button>
           </div>
           <div class="numpad" id="numpad"></div>
@@ -66,22 +66,22 @@
 
     <div id="menu-overlay" class="menu-overlay hidden">
       <div class="menu-card">
-        <div class="menu-title">Nova igra</div>
+        <div class="menu-title">New game</div>
         <div class="menu-diff" id="menu-diff">
-          <button class="diff-btn" data-diff="normal">Normalno</button>
-          <button class="diff-btn" data-diff="hard">Teško</button>
+          <button class="diff-btn" data-diff="normal">Normal</button>
+          <button class="diff-btn" data-diff="hard">Hard</button>
           <button class="diff-btn" data-diff="expert">
-            Ekspert<span class="diff-note">traži naprednu tehniku</span>
+            Expert<span class="diff-note">requires an advanced technique</span>
           </button>
         </div>
-        <button class="ghost-btn" id="menu-cancel">Odustani</button>
+        <button class="ghost-btn" id="menu-cancel">Cancel</button>
       </div>
     </div>
 
     <div id="loading-overlay" class="menu-overlay hidden">
       <div class="loading-card">
         <div class="spinner"></div>
-        <div class="loading-text">Generiram…</div>
+        <div class="loading-text">Generating…</div>
       </div>
     </div>
 

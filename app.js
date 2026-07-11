@@ -3,7 +3,7 @@
   "use strict";
 
   const STORAGE_KEY = "sudoku-game-v2";
-  const DIFF_LABELS = { normal: "Normalno", hard: "Teško", expert: "Ekspert" };
+  const DIFF_LABELS = { normal: "Normal", hard: "Hard", expert: "Expert" };
 
   // --- Stanje ---
   let state = null;
@@ -201,18 +201,25 @@
       return;
     }
 
-    // Grupa: u normalnom modu upiši n u sve PRAZNE odabrane (ne gazi upisane);
-    // u notes modu toggle kandidat u svim ne-given ćelijama.
-    const toChange = targets.filter(
-      (i) => state.puzzle[i] === 0 && (state.notesMode || state.values[i] === 0)
-    );
-    if (!toChange.length) return;
+    // Grupa (2+): broj UVIJEK radi pencil marks (kandidate), neovisno o notes
+    // modu. Grupni toggle: ako sve prazne odabrane već imaju n -> makni iz svih,
+    // inače dodaj u sve gdje ga nema. Pencil marks idu samo na prazne ćelije.
+    const editable = targets.filter((i) => state.puzzle[i] === 0 && state.values[i] === 0);
+    if (!editable.length) return;
+    const allHave = editable.every((i) => state.notes[i].includes(n));
     clearHint();
     pushHistory();
-    for (const idx of toChange) applyNumber(idx, n);
+    for (const idx of editable) {
+      const notes = state.notes[idx];
+      const pos = notes.indexOf(n);
+      if (allHave) {
+        if (pos !== -1) notes.splice(pos, 1);
+      } else if (pos === -1) {
+        notes.push(n);
+      }
+    }
     save();
     render();
-    checkWin();
   }
 
   function clearNotesAround(idx, n) {
@@ -354,7 +361,7 @@
 
   // --- Pomoć: objasni sljedeći potez ---
   function cellName(idx) {
-    return `redak ${Math.floor(idx / 9) + 1}, stupac ${(idx % 9) + 1}`;
+    return `row ${Math.floor(idx / 9) + 1}, column ${(idx % 9) + 1}`;
   }
 
   function showHint(text) {
@@ -384,7 +391,7 @@
       hintUi.focus = [];
       hintUi.targets = wrong;
       showHint(
-        `Imaš ${wrong.length} ${wrong.length === 1 ? "pogrešno polje" : "pogrešnih polja"} (crveno). Ispravi to prije nego potražiš sljedeći potez.`
+        `You have ${wrong.length} ${wrong.length === 1 ? "wrong cell" : "wrong cells"} (red). Fix that before looking for the next move.`
       );
       render();
       return;
@@ -393,17 +400,17 @@
     const res = Solver.explainNext(state.values, state.notes, state.solution);
     if (!res || res.done) {
       clearHint();
-      showHint("Sve je već riješeno.");
+      showHint("Everything is already solved.");
       return;
     }
     if (res.contradiction) {
       clearHint();
-      showHint("Ploča je u kontradikciji - provjeri unose.");
+      showHint("The board is in contradiction - check your entries.");
       return;
     }
     if (!res.reason) {
       clearHint();
-      showHint("Nema čistog logičkog poteza odavde.");
+      showHint("No clean logical move from here.");
       return;
     }
 
@@ -417,7 +424,7 @@
 
     if (hintUi.step === 1) {
       hintUi.targets = [];
-      showHint(`Sljedeći potez: ${reason.technique}. Tapni Pomoć opet za rješenje.`);
+      showHint(`Next move: ${reason.technique}. Tap Hint again for the solution.`);
       render();
       return;
     }
@@ -427,21 +434,21 @@
       hintUi.targets = [a.target];
       state.selected = a.target;
       state.multi = [];
-      showHint(`${reason.technique}: ${reason.note}. Upiši ${a.value} u ${cellName(a.target)}.`);
+      showHint(`${reason.technique}: ${reason.note}. Enter ${a.value} in ${cellName(a.target)}.`);
     } else if (a.kind === "eliminate-then-place") {
       hintUi.focus = reason.focus.concat(a.targets);
       hintUi.targets = [a.place.target];
       state.selected = a.place.target;
       state.multi = [];
-      const where = a.place.unitName ? `u ${a.place.unitName} ` : "";
+      const where = a.place.unitName ? `in ${a.place.unitName} ` : "";
       showHint(
-        `${reason.technique}: ${reason.note}, pa ${where}broj ${a.place.value} može još samo u jedno polje. Upiši ${a.place.value} u ${cellName(a.place.target)}.`
+        `${reason.technique}: ${reason.note}, so ${where}the number ${a.place.value} can go in only one more cell. Enter ${a.place.value} in ${cellName(a.place.target)}.`
       );
     } else {
       // eliminate
       hintUi.targets = a.targets.slice();
       showHint(
-        `${reason.technique}: ${reason.note}. Makni bilješku ${a.removeVals.join(", ")} iz istaknutih polja.`
+        `${reason.technique}: ${reason.note}. Remove the note ${a.removeVals.join(", ")} from the highlighted cells.`
       );
     }
     render();
@@ -495,7 +502,7 @@
     if (!state) return;
     diffLabelEl.textContent = DIFF_LABELS[state.difficulty] || "";
     if (state.techniques && state.techniques.length) {
-      techniqueHintEl.textContent = "Najteža: " + state.techniques.join(", ");
+      techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
     } else {
       techniqueHintEl.classList.add("hidden");

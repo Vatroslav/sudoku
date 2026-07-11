@@ -1,7 +1,7 @@
 {
   "name": "Sudoku",
   "short_name": "Sudoku",
-  "description": "Offline Sudoku igra",
+  "description": "Offline Sudoku game",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

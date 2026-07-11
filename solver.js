@@ -306,34 +306,33 @@ const Solver = (() => {
   // Namjerno odvojene od gornjih bool-tehnika da grading ostane netaknut.
 
   const BOX_NAMES = [
-    "gore lijevo",
-    "gore u sredini",
-    "gore desno",
-    "u sredini lijevo",
-    "u sredini",
-    "u sredini desno",
-    "dolje lijevo",
-    "dolje u sredini",
-    "dolje desno",
+    "top-left",
+    "top-center",
+    "top-right",
+    "center-left",
+    "center",
+    "center-right",
+    "bottom-left",
+    "bottom-center",
+    "bottom-right",
   ];
   const namedUnits = [];
-  for (let r = 0; r < 9; r++) namedUnits.push({ cells: rows[r], name: `retku ${r + 1}` });
-  for (let c = 0; c < 9; c++) namedUnits.push({ cells: cols[c], name: `stupcu ${c + 1}` });
-  for (let b = 0; b < 9; b++)
-    namedUnits.push({ cells: boxes[b], name: `kvadratu ${BOX_NAMES[b]}` });
-  const cellName = (idx) => `retku ${Math.floor(idx / 9) + 1}, stupcu ${(idx % 9) + 1}`;
+  for (let r = 0; r < 9; r++) namedUnits.push({ cells: rows[r], name: `row ${r + 1}` });
+  for (let c = 0; c < 9; c++) namedUnits.push({ cells: cols[c], name: `column ${c + 1}` });
+  for (let b = 0; b < 9; b++) namedUnits.push({ cells: boxes[b], name: `box ${BOX_NAMES[b]}` });
+  const cellName = (idx) => `row ${Math.floor(idx / 9) + 1}, column ${(idx % 9) + 1}`;
 
   function hNakedSingle(cand) {
     for (let idx = 0; idx < 81; idx++) {
       if (cand[idx] && cand[idx].size === 1) {
         return {
-          technique: "Goli jedinac",
+          technique: "Naked Single",
           tier: T_SINGLE,
           type: "placement",
           value: [...cand[idx]][0],
           target: idx,
           focus: [idx],
-          note: "to polje ima samo jedan mogući broj",
+          note: "this cell has only one possible number",
         };
       }
     }
@@ -354,13 +353,13 @@ const Solver = (() => {
         }
         if (count === 1) {
           return {
-            technique: "Skriveni jedinac",
+            technique: "Hidden Single",
             tier: T_SINGLE,
             type: "placement",
             value: v,
             target: spot,
             focus: u.cells.slice(),
-            note: `u ${u.name} broj ${v} stane samo u jedno polje`,
+            note: `in ${u.name} the number ${v} fits in only one cell`,
           };
         }
       }
@@ -380,28 +379,28 @@ const Solver = (() => {
           const elim = rows[r0].filter((i) => !box.includes(i) && cand[i] && cand[i].has(v));
           if (elim.length)
             return {
-              technique: "Zaključani kandidati",
+              technique: "Locked Candidates",
               tier: T_INTER,
               type: "elimination",
               removeVals: [v],
               targets: elim,
               base: cs,
               focus: cs.concat(elim),
-              note: `u kvadratu ${BOX_NAMES[b]} broj ${v} može stajati samo u retku ${r0 + 1}, pa se briše iz ostatka tog retka`,
+              note: `in box ${BOX_NAMES[b]} the number ${v} can only be in row ${r0 + 1}, so it is removed from the rest of that row`,
             };
         }
         if (cs.every((i) => i % 9 === c0)) {
           const elim = cols[c0].filter((i) => !box.includes(i) && cand[i] && cand[i].has(v));
           if (elim.length)
             return {
-              technique: "Zaključani kandidati",
+              technique: "Locked Candidates",
               tier: T_INTER,
               type: "elimination",
               removeVals: [v],
               targets: elim,
               base: cs,
               focus: cs.concat(elim),
-              note: `u kvadratu ${BOX_NAMES[b]} broj ${v} može stajati samo u stupcu ${c0 + 1}, pa se briše iz ostatka tog stupca`,
+              note: `in box ${BOX_NAMES[b]} the number ${v} can only be in column ${c0 + 1}, so it is removed from the rest of that column`,
             };
         }
       }
@@ -415,14 +414,14 @@ const Solver = (() => {
           const elim = boxes[b0].filter((i) => !line.includes(i) && cand[i] && cand[i].has(v));
           if (elim.length)
             return {
-              technique: "Zaključani kandidati",
+              technique: "Locked Candidates",
               tier: T_INTER,
               type: "elimination",
               removeVals: [v],
               targets: elim,
               base: cs,
               focus: cs.concat(elim),
-              note: `broj ${v} u toj liniji leži samo unutar kvadrata ${BOX_NAMES[b0]}, pa se briše iz ostatka tog kvadrata`,
+              note: `the number ${v} in that line lies only within box ${BOX_NAMES[b0]}, so it is removed from the rest of that box`,
             };
         }
       }
@@ -448,14 +447,14 @@ const Solver = (() => {
             );
             if (elim.length)
               return {
-                technique: "Goli par",
+                technique: "Naked Pair",
                 tier: T_INTER,
                 type: "elimination",
                 removeVals: vals,
                 targets: elim,
                 base: [twos[i], twos[j]],
                 focus: [twos[i], twos[j]].concat(elim),
-                note: `dva polja u ${u.name} dijele samo brojeve ${vals[0]} i ${vals[1]}, pa ti brojevi ispadaju iz ostalih polja te jedinice`,
+                note: `two cells in ${u.name} share only the numbers ${vals[0]} and ${vals[1]}, so those numbers are eliminated from the other cells of that unit`,
               };
           }
         }
@@ -481,14 +480,14 @@ const Solver = (() => {
                   if (v !== v1 && v !== v2 && !removeVals.includes(v)) removeVals.push(v);
                 }
               return {
-                technique: "Skriveni par",
+                technique: "Hidden Pair",
                 tier: T_INTER,
                 type: "elimination",
                 removeVals,
                 targets: elim,
                 base: pair,
                 focus: pair.slice(),
-                note: `brojevi ${v1} i ${v2} u ${u.name} stanu samo u ta dva polja, pa iz njih ispadaju svi ostali brojevi`,
+                note: `the numbers ${v1} and ${v2} in ${u.name} fit only in those two cells, so all other numbers are eliminated from them`,
               };
             }
           }
@@ -514,14 +513,14 @@ const Solver = (() => {
               );
               if (elim.length)
                 return {
-                  technique: "Gola trojka",
+                  technique: "Naked Triple",
                   tier: T_INTER,
                   type: "elimination",
                   removeVals: vals,
                   targets: elim,
                   base: trip,
                   focus: trip.concat(elim),
-                  note: `tri polja u ${u.name} zajedno koriste samo brojeve ${vals.join(", ")}, pa ti brojevi ispadaju iz ostalih polja te jedinice`,
+                  note: `three cells in ${u.name} together use only the numbers ${vals.join(", ")}, so those numbers are eliminated from the other cells of that unit`,
                 };
             }
           }
@@ -564,7 +563,7 @@ const Solver = (() => {
                 targets: elim,
                 base,
                 focus: base.concat(elim),
-                note: `broj ${v} tvori X-Wing u stupcima ${c1 + 1} i ${c2 + 1} (retci ${r1 + 1} i ${r2 + 1}), pa ispada iz tih stupaca igdje drugdje`,
+                note: `the number ${v} forms an X-Wing in columns ${c1 + 1} and ${c2 + 1} (rows ${r1 + 1} and ${r2 + 1}), so it is eliminated from those columns everywhere else`,
               };
           }
         }
@@ -601,7 +600,7 @@ const Solver = (() => {
                 targets: elim,
                 base,
                 focus: base.concat(elim),
-                note: `broj ${v} tvori X-Wing u retcima ${r1 + 1} i ${r2 + 1} (stupci ${c1 + 1} i ${c2 + 1}), pa ispada iz tih redaka igdje drugdje`,
+                note: `the number ${v} forms an X-Wing in rows ${r1 + 1} and ${r2 + 1} (columns ${c1 + 1} and ${c2 + 1}), so it is eliminated from those rows everywhere else`,
               };
           }
         }
@@ -640,7 +639,7 @@ const Solver = (() => {
                 pivot: p,
                 pincers: [a, b],
                 shared: z,
-                note: `zglob u ${cellName(p)} je ${x} ili ${y}, a kraci u ${cellName(a)} i u ${cellName(b)} oba sadrže ${z}; jedan od krakova je sigurno ${z}, pa ${z} ispada iz svakog polja koje vidi oba kraka`,
+                note: `the pivot in ${cellName(p)} is ${x} or ${y}, and the wings in ${cellName(a)} and ${cellName(b)} both contain ${z}; one of the wings is definitely ${z}, so ${z} is eliminated from every cell that sees both wings`,
               };
           }
         }
