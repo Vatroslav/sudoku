@@ -87,9 +87,9 @@ const Sudoku = (() => {
     return puzzle;
   }
 
-  const TARGET = { normal: 34, hard: 28, expert: 23 };
-  const REQ_TIER = { normal: Solver.T_SINGLE, hard: Solver.T_INTER, expert: Solver.T_ADVANCED };
-  const MAX_ATTEMPTS = { normal: 120, hard: 200, expert: 400 };
+  const TARGET = { normal: 34, hard: 28 };
+  const REQ_TIER = { normal: Solver.T_SINGLE, hard: Solver.T_INTER };
+  const MAX_ATTEMPTS = { normal: 120, hard: 200 };
 
   // Generira slagalicu tražene težine. Ako u zadanom broju pokušaja ne nađe
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).

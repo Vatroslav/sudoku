@@ -3,7 +3,7 @@
   "use strict";
 
   const STORAGE_KEY = "sudoku-game-v2";
-  const DIFF_LABELS = { normal: "Normal", hard: "Hard", expert: "Expert" };
+  const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
 
   // --- Stanje ---
   let state = null;
