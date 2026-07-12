@@ -245,6 +245,9 @@ main {
   z-index: -1;
   pointer-events: none;
   background: var(--cc);
+  /* Boje u --cc su neprozirne; prozirnost daje ovaj jedan sloj, pa preklop kod
+     4 kvadranta ne udvostručuje alphu (nema tamne crte na spoju). */
+  opacity: 0.5;
 }
 
 .cell.given {

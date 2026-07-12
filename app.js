@@ -21,7 +21,6 @@
     "167, 129, 244", // 8 ljubičasta
     "236, 110, 190", // 9 roza
   ];
-  const BOARD_ALPHA = 0.5;
   const SWATCH_ALPHA = 0.9;
   const MAX_COLORS = 4; // najviše boja po ćeliji
 
@@ -44,27 +43,28 @@
 
   // CSS background za obojenu ćeliju, jednaki omjeri po broju boja:
   //   1 = puna ispuna, 2 = dva stupca, 3 = Y (tri 120° sektora), 4 = 2×2 kvadrata.
+  // Boje su NEPROZIRNE; prozirnost daje jedna `opacity` na ::after sloju (CSS).
+  // Zato preklop kod kvadranata ne udvostručuje alphu (nema tamne crte na spoju),
+  // a sitni preklop ujedno sprječava tanku prazninu.
   function colorBackground(cols) {
     const parts = cols.slice().sort((a, b) => a - b);
-    const rgba = (c) => `rgba(${PALETTE[c]}, ${BOARD_ALPHA})`;
+    const rgb = (c) => `rgb(${PALETTE[c]})`;
     const n = parts.length;
-    if (n === 1) return rgba(parts[0]);
+    if (n === 1) return rgb(parts[0]);
     if (n === 2) {
-      return `linear-gradient(to right, ${rgba(parts[0])} 0 50%, ${rgba(parts[1])} 50% 100%)`;
+      return `linear-gradient(to right, ${rgb(parts[0])} 0 50%, ${rgb(parts[1])} 50% 100%)`;
     }
     if (n === 3) {
       // Y: granice na -60°/60°/180° (dvije ruke prema gornjim kutovima, noga dolje).
       // Sektori: gornji, donji-desni, donji-lijevi.
       return (
-        `conic-gradient(from -60deg, ${rgba(parts[0])} 0deg 120deg, ` +
-        `${rgba(parts[1])} 120deg 240deg, ${rgba(parts[2])} 240deg 360deg)`
+        `conic-gradient(from -60deg, ${rgb(parts[0])} 0deg 120deg, ` +
+        `${rgb(parts[1])} 120deg 240deg, ${rgb(parts[2])} 240deg 360deg)`
       );
     }
-    // n === 4: četiri kvadranta (2×2). Svaki je zaseban sloj boje u svom kutu;
-    // sitni preklop (50% + 0.5px) sprječava tanku prazninu na spoju.
+    // n === 4: četiri kvadranta (2×2), svaki zaseban sloj boje u svom kutu.
     const sz = "calc(50% + 0.5px)";
-    const quad = (c, pos) =>
-      `linear-gradient(${rgba(c)}, ${rgba(c)}) ${pos} / ${sz} ${sz} no-repeat`;
+    const quad = (c, pos) => `linear-gradient(${rgb(c)}, ${rgb(c)}) ${pos} / ${sz} ${sz} no-repeat`;
     return [
       quad(parts[0], "0 0"),
       quad(parts[1], "100% 0"),
