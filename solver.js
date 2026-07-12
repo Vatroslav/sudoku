@@ -52,6 +52,30 @@ const Solver = (() => {
     "bottom-right window",
   ];
 
+  // Antiknight: isti broj zabranjen na potezu šahovskog konja - dodatni peers
+  // (nije unit; ne dodaje regiju gdje svih 9 brojeva ide jednom).
+  const knightPeers = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    for (const [dr, dc] of [
+      [-2, -1],
+      [-2, 1],
+      [-1, -2],
+      [-1, 2],
+      [1, -2],
+      [1, 2],
+      [2, -1],
+      [2, 1],
+    ]) {
+      const nr = r + dr,
+        nc = c + dc;
+      if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
+    }
+    knightPeers.push(list);
+  }
+
   // Peerovi iz proizvoljnog skupa jedinica (svaka ćelija vidi ostale u istoj jedinici).
   const baseUnits = [...rows, ...cols, ...boxes];
   function buildPeers(units) {
@@ -62,8 +86,11 @@ const Solver = (() => {
   }
   // Dodatne jedinice po regijskoj varijanti (uz uvijek prisutne row/col/box).
   // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
-  const REGION_VARIANTS = ["x", "hyper"];
-  const EXTRA_UNITS = { x: [diagMain, diagAnti], hyper: hyperWindows };
+  // Antiknight nema svoje units (samo peers), pa mu je unos prazan.
+  const REGION_VARIANTS = ["x", "hyper", "antiknight"];
+  const EXTRA_UNITS = { x: [diagMain, diagAnti], hyper: hyperWindows, antiknight: [] };
+  // Dodatni peers po varijanti (idx -> polje "isti-broj-zabranjen" ćelija).
+  const EXTRA_PEERS = { antiknight: knightPeers };
 
   // Kanonski ključ aktivnog skupa (npr. "x+hyper"), "classic" ako je prazan.
   function variantKey(variants) {
@@ -81,7 +108,13 @@ const Solver = (() => {
     if (!unitCtx[key]) {
       const active = key === "classic" ? [] : key.split("+");
       const units = [...baseUnits, ...active.flatMap((v) => EXTRA_UNITS[v])];
-      unitCtx[key] = { allUnits: units, peers: buildPeers(units) };
+      const peers = buildPeers(units);
+      // Peer-varijante (antiknight): dodaj im susjede uz one iz units.
+      for (const v of active) {
+        const ep = EXTRA_PEERS[v];
+        if (ep) for (let i = 0; i < 81; i++) for (const j of ep[i]) peers[i].add(j);
+      }
+      unitCtx[key] = { allUnits: units, peers };
     }
     return unitCtx[key];
   }
@@ -378,6 +411,9 @@ const Solver = (() => {
       { cells: diagAnti, name: "anti-diagonal" },
     ],
     hyper: hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] })),
+    // Antiknight nema imenovanih jedinica (samo peers) - eliminacije se odražavaju
+    // kroz kandidate (naked single), ali nema hidden-single "u jedinici" hinta.
+    antiknight: [],
   };
   const namedCtx = {};
   function namedFor(variants) {

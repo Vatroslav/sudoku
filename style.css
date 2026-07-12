@@ -535,12 +535,12 @@ main {
   margin-bottom: 6px;
 }
 .menu-variant {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 16px;
 }
 .variant-btn {
-  flex: 1;
   background: var(--board-bg);
   border: 1px solid var(--line);
   color: var(--muted);

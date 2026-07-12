@@ -14,7 +14,10 @@ Regijske (samo prošire units/peers - najjeftinije):
 
 - [x] X-Sudoku (dvije dijagonale 1-9)
 - [x] Hyper / Windoku (4 dodatna 3×3 prozora kao units, v1.12.0)
-- [ ] Antiknight (isti broj zabranjen na skoku konja - dodatni peers)
+- [x] Antiknight (isti broj zabranjen na skoku konja - dodatni peers, v1.16.0).
+      Prva peer-varijanta: `EXTRA_PEERS` u `solver.js` (`ctxFor` dodaje susjede uz
+      units), nema imenovanih jedinica ni trajne dekoracije ploče (vidi se kroz
+      peer-highlight). Antiking je sad trivijalan (isti mehanizam, drugi offseti).
 - [ ] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers)
 - [ ] Jigsaw (9 nepravilnih regija umjesto kvadrata - `setup` geometrije + render)
 

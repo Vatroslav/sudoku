@@ -29,9 +29,34 @@ const Sudoku = (() => {
     return wr === -1 || wc === -1 ? -1 : wr * 2 + wc;
   }
 
+  // Antiknight: isti broj zabranjen na potezu šahovskog konja (8 L-skokova).
+  // Predizračunato po ćeliji - koristi se u vrućoj petlji generatora.
+  const KNIGHT_OFFSETS = [
+    [-2, -1],
+    [-2, 1],
+    [-1, -2],
+    [-1, 2],
+    [1, -2],
+    [1, 2],
+    [2, -1],
+    [2, 1],
+  ];
+  const knightPeers = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    for (const [dr, dc] of KNIGHT_OFFSETS) {
+      const nr = r + dr,
+        nc = c + dc;
+      if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
+    }
+    knightPeers.push(list);
+  }
+
   // Regijske varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
   // (prazno = classic). Redoslijed je kanonski (za stabilne cache-ključeve i labele).
-  const REGION_VARIANTS = ["x", "hyper"];
+  const REGION_VARIANTS = ["x", "hyper", "antiknight"];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];
@@ -57,6 +82,9 @@ const Sudoku = (() => {
     if (variants.includes("hyper")) {
       const w = hyperWindowOf(idx);
       if (w !== -1) for (const j of hyperWindows[w]) if (board[j] === val) return false;
+    }
+    if (variants.includes("antiknight")) {
+      for (const j of knightPeers[idx]) if (board[j] === val) return false;
     }
     return true;
   }
@@ -130,7 +158,8 @@ const Sudoku = (() => {
   // Generira slagalicu tražene težine. Ako u zadanom broju pokušaja ne nađe
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).
   // variants: polje (ili legacy string) aktivnih regijskih varijanti - prazno =
-  // classic, "x" (dvije dijagonale 1-9), "hyper" (4 prozora 1-9), ili kombinacija.
+  // classic, "x" (dvije dijagonale 1-9), "hyper" (4 prozora 1-9), "antiknight"
+  // (isti broj zabranjen na skoku konja), ili kombinacija.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
