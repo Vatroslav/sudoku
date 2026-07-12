@@ -35,7 +35,8 @@ generacija mora dati jedinstveno rješenje):
 ## Značajke
 
 - [x] Bojanje ćelija (v1.8.0, prerađeno v1.9.0) - color mode gumb → paleta 9 boja.
-      Unos kao broj: odaberi ćelije pa stisni boju. Do 4 boje po ćeliji (okomite
-      pruge), ista boja toggla off; Erase/Delete čisti. Perzistira u `state.colors`
+      Unos kao broj: odaberi ćelije pa stisni boju. Do 4 boje po ćeliji (1 puna,
+      2 stupca, 3 Y-oblik, 4 kvadranta), ista boja toggla off; Erase/Delete čisti.
+      Perzistira u `state.colors`
       (array po ćeliji) + localStorage + undo. Boji i givens; overlay (`::after`,
       dinamični gradijent preko `--cc`) neovisan o highlightu.

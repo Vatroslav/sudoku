@@ -42,18 +42,35 @@
     });
   }
 
-  // CSS background za obojenu ćeliju: 1 boja = puna, više = jednake okomite pruge.
+  // CSS background za obojenu ćeliju, jednaki omjeri po broju boja:
+  //   1 = puna ispuna, 2 = dva stupca, 3 = Y (tri 120° sektora), 4 = 2×2 kvadrata.
   function colorBackground(cols) {
     const parts = cols.slice().sort((a, b) => a - b);
     const rgba = (c) => `rgba(${PALETTE[c]}, ${BOARD_ALPHA})`;
-    if (parts.length === 1) return rgba(parts[0]);
     const n = parts.length;
-    const stops = parts.map((c, k) => {
-      const from = ((k * 100) / n).toFixed(3);
-      const to = (((k + 1) * 100) / n).toFixed(3);
-      return `${rgba(c)} ${from}% ${to}%`;
-    });
-    return `linear-gradient(to right, ${stops.join(", ")})`;
+    if (n === 1) return rgba(parts[0]);
+    if (n === 2) {
+      return `linear-gradient(to right, ${rgba(parts[0])} 0 50%, ${rgba(parts[1])} 50% 100%)`;
+    }
+    if (n === 3) {
+      // Y: granice na -60°/60°/180° (dvije ruke prema gornjim kutovima, noga dolje).
+      // Sektori: gornji, donji-desni, donji-lijevi.
+      return (
+        `conic-gradient(from -60deg, ${rgba(parts[0])} 0deg 120deg, ` +
+        `${rgba(parts[1])} 120deg 240deg, ${rgba(parts[2])} 240deg 360deg)`
+      );
+    }
+    // n === 4: četiri kvadranta (2×2). Svaki je zaseban sloj boje u svom kutu;
+    // sitni preklop (50% + 0.5px) sprječava tanku prazninu na spoju.
+    const sz = "calc(50% + 0.5px)";
+    const quad = (c, pos) =>
+      `linear-gradient(${rgba(c)}, ${rgba(c)}) ${pos} / ${sz} ${sz} no-repeat`;
+    return [
+      quad(parts[0], "0 0"),
+      quad(parts[1], "100% 0"),
+      quad(parts[2], "0 100%"),
+      quad(parts[3], "100% 100%"),
+    ].join(", ");
   }
 
   // Dijagonale za X-Sudoku (glavna r===c, sporedna r+c===8).
