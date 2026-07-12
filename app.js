@@ -344,20 +344,32 @@
 
   function erase() {
     if (!state || state.solved) return;
-    // Briše boje (i na given ćelijama) te vrijednost/bilješke na ne-given ćelijama.
-    const toClear = selectedCells().filter(
-      (i) =>
+    // Erase ovisi o modu: Color -> samo boje, Bilješke -> samo bilješke, inače
+    // -> sve (boje + vrijednost/bilješke na ne-given ćelijama). Undo vraća sve.
+    const mode = state.colorMode ? "colors" : state.notesMode ? "notes" : "all";
+    const has = (i) => {
+      if (mode === "colors") return state.colors[i].length > 0;
+      if (mode === "notes") return state.notes[i].length > 0;
+      return (
         state.colors[i].length > 0 ||
         (state.puzzle[i] === 0 && (state.values[i] !== 0 || state.notes[i].length > 0))
-    );
+      );
+    };
+    const toClear = selectedCells().filter(has);
     if (!toClear.length) return;
     clearHint();
     pushHistory();
     for (const idx of toClear) {
-      state.colors[idx] = [];
-      if (state.puzzle[idx] === 0) {
-        state.values[idx] = 0;
+      if (mode === "colors") {
+        state.colors[idx] = [];
+      } else if (mode === "notes") {
         state.notes[idx] = [];
+      } else {
+        state.colors[idx] = [];
+        if (state.puzzle[idx] === 0) {
+          state.values[idx] = 0;
+          state.notes[idx] = [];
+        }
       }
     }
     save();
