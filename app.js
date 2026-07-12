@@ -6,6 +6,56 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   const VARIANT_LABELS = { classic: "", x: "Diagonal" };
 
+  // Paleta za bojanje ćelija (9 boja, 1-9). Jedini izvor istine - iz nje se grade
+  // i gumbi palete i pruge na ploči. Vrijednosti su RGB trojke; alpha se dodaje
+  // po sloju (jače na gumbu, translucentnije na ploči da broj ostane čitljiv).
+  const PALETTE = [
+    null, // 0 = bez boje (indeks se ne koristi)
+    "239, 68, 68", // 1 crvena
+    "245, 158, 66", // 2 narančasta
+    "235, 200, 70", // 3 žuta
+    "150, 205, 80", // 4 limeta
+    "52, 199, 120", // 5 zelena
+    "45, 199, 197", // 6 tirkizna
+    "80, 150, 245", // 7 plava
+    "167, 129, 244", // 8 ljubičasta
+    "236, 110, 190", // 9 roza
+  ];
+  const BOARD_ALPHA = 0.5;
+  const SWATCH_ALPHA = 0.9;
+  const MAX_COLORS = 4; // najviše boja po ćeliji
+
+  // Očisti/migriraj colors iz spremljene igre: prazne arraye za novi/nevaljan
+  // oblik; stari v1.8.0 format (jedan broj po ćeliji) omota u array; postojeće
+  // arraye filtriraj na valjane 1-9, bez duplikata, najviše MAX_COLORS.
+  function normalizeColors(raw) {
+    const fresh = () => Array.from({ length: 81 }, () => []);
+    if (!Array.isArray(raw) || raw.length !== 81) return fresh();
+    return raw.map((c) => {
+      const arr = Array.isArray(c) ? c : c ? [c] : [];
+      const out = [];
+      for (const v of arr) {
+        if (Number.isInteger(v) && v >= 1 && v <= 9 && !out.includes(v) && out.length < MAX_COLORS)
+          out.push(v);
+      }
+      return out;
+    });
+  }
+
+  // CSS background za obojenu ćeliju: 1 boja = puna, više = jednake okomite pruge.
+  function colorBackground(cols) {
+    const parts = cols.slice().sort((a, b) => a - b);
+    const rgba = (c) => `rgba(${PALETTE[c]}, ${BOARD_ALPHA})`;
+    if (parts.length === 1) return rgba(parts[0]);
+    const n = parts.length;
+    const stops = parts.map((c, k) => {
+      const from = ((k * 100) / n).toFixed(3);
+      const to = (((k + 1) * 100) / n).toFixed(3);
+      return `${rgba(c)} ${from}% ${to}%`;
+    });
+    return `linear-gradient(to right, ${stops.join(", ")})`;
+  }
+
   // Dijagonale za X-Sudoku (glavna r===c, sporedna r+c===8).
   const onMainDiag = (i) => Math.floor(i / 9) === i % 9;
   const onAntiDiag = (i) => Math.floor(i / 9) + (i % 9) === 8;
@@ -74,16 +124,18 @@
     }
   }
 
-  // Paleta boja za color mode: 6 boja + brisač (0).
+  // Paleta boja za color mode: 9 boja (unos kao brojevi - prvo odaberi ćelije,
+  // pa stisni boju). Bez zasebnog brisača: isti klik na već postojeću boju je
+  // miče, a Erase/Delete čisti cijelu ćeliju.
   function buildPalette() {
     paletteEl.innerHTML = "";
-    for (const c of [1, 2, 3, 4, 5, 6, 0]) {
+    for (let c = 1; c <= 9; c++) {
       const btn = document.createElement("button");
       btn.className = "swatch";
       btn.dataset.color = c;
-      btn.setAttribute("aria-label", c === 0 ? "Clear color" : "Color " + c);
-      if (c === 0) btn.textContent = "⌫";
-      btn.addEventListener("click", () => setActiveColor(c));
+      btn.setAttribute("aria-label", "Color " + c);
+      btn.style.backgroundColor = `rgba(${PALETTE[c]}, ${SWATCH_ALPHA})`;
+      btn.addEventListener("click", () => inputColor(c));
       paletteEl.appendChild(btn);
     }
   }
@@ -100,7 +152,7 @@
         solution,
         values: puzzle.slice(),
         notes: Array.from({ length: 81 }, () => []),
-        colors: new Array(81).fill(0),
+        colors: Array.from({ length: 81 }, () => []),
         difficulty,
         variant,
         techniques: techniques || [],
@@ -109,7 +161,6 @@
         notesMode: false,
         activeNote: null,
         colorMode: false,
-        activeColor: 1,
         solved: false,
       };
       history = [];
@@ -140,9 +191,8 @@
       if (!state.notes) state.notes = Array.from({ length: 81 }, () => []);
       if (state.activeNote === undefined) state.activeNote = null;
       if (!state.multi) state.multi = [];
-      if (!state.colors || state.colors.length !== 81) state.colors = new Array(81).fill(0);
+      state.colors = normalizeColors(state.colors);
       if (state.colorMode === undefined) state.colorMode = false;
-      if (state.activeColor === undefined) state.activeColor = 1;
       if (state.variant !== "x") state.variant = "classic";
       return true;
     } catch (e) {
@@ -277,15 +327,21 @@
 
   function erase() {
     if (!state || state.solved) return;
+    // Briše boje (i na given ćelijama) te vrijednost/bilješke na ne-given ćelijama.
     const toClear = selectedCells().filter(
-      (i) => state.puzzle[i] === 0 && (state.values[i] !== 0 || state.notes[i].length > 0)
+      (i) =>
+        state.colors[i].length > 0 ||
+        (state.puzzle[i] === 0 && (state.values[i] !== 0 || state.notes[i].length > 0))
     );
     if (!toClear.length) return;
     clearHint();
     pushHistory();
     for (const idx of toClear) {
-      state.values[idx] = 0;
-      state.notes[idx] = [];
+      state.colors[idx] = [];
+      if (state.puzzle[idx] === 0) {
+        state.values[idx] = 0;
+        state.notes[idx] = [];
+      }
     }
     save();
     render();
@@ -304,9 +360,27 @@
     render();
   }
 
-  function setActiveColor(c) {
-    if (!state) return;
-    state.activeColor = c;
+  // Boja se unosi kao broj: primijeni na trenutno odabrane ćelije. Toggle po
+  // grupi (kao pencil): ako sve odabrane već imaju boju c -> makni je iz svih;
+  // inače dodaj u sve gdje je nema (dok ćelija ima manje od MAX_COLORS). Boja
+  // ide na bilo koju ćeliju (i given i s upisanim brojem).
+  function inputColor(c) {
+    if (!state || state.solved) return;
+    const targets = selectedCells();
+    if (!targets.length) return;
+    clearHint();
+    pushHistory();
+    const allHave = targets.every((i) => state.colors[i].includes(c));
+    for (const idx of targets) {
+      const arr = state.colors[idx];
+      const pos = arr.indexOf(c);
+      if (allHave) {
+        if (pos !== -1) arr.splice(pos, 1);
+      } else if (pos === -1 && arr.length < MAX_COLORS) {
+        arr.push(c);
+      }
+    }
+    save();
     render();
   }
 
@@ -321,23 +395,6 @@
     const cellEl = e.target.closest && e.target.closest(".cell");
     if (!cellEl || !boardEl.contains(cellEl)) return;
     const idx = Number(cellEl.dataset.idx);
-
-    // Color mod: povlačenje boji ćelije (i givens i prazne). Smjer poteza određuje
-    // sidro: ako sidro već ima aktivnu boju -> potez briše, inače maže. Brisač
-    // (activeColor 0) uvijek briše.
-    if (state.colorMode) {
-      e.preventDefault();
-      clearHint();
-      pushHistory();
-      drag.active = true;
-      drag.mode =
-        state.activeColor === 0 || state.colors[idx] === state.activeColor
-          ? "color-remove"
-          : "color-add";
-      drag.painted = new Set();
-      applyColorBrush(idx);
-      return;
-    }
 
     // Kist se maže samo u notes modu, s odabranim brojem, na praznoj ćeliji.
     // Inače povlačenje pomiče selekciju (drag = select) - radi i mišem i dodirom.
@@ -392,8 +449,6 @@
         drag.painted.add(idx);
         setSelection([...drag.painted], drag.anchor);
       }
-    } else if (drag.mode === "color-add" || drag.mode === "color-remove") {
-      applyColorBrush(idx);
     } else {
       applyBrush(idx);
     }
@@ -418,17 +473,6 @@
       notes.splice(pos, 1);
     }
     render();
-  }
-
-  // Bojanje ćelije tijekom povlačenja (svaka ćelija jednom po potezu).
-  function applyColorBrush(idx) {
-    if (!drag.active || drag.painted.has(idx)) return;
-    drag.painted.add(idx);
-    const target = drag.mode === "color-remove" ? 0 : state.activeColor;
-    if (state.colors[idx] !== target) {
-      state.colors[idx] = target;
-      render();
-    }
   }
 
   // --- Pomoć: objasni sljedeći potez ---
@@ -545,7 +589,7 @@
     history.push({
       values: state.values.slice(),
       notes: state.notes.map((a) => a.slice()),
-      colors: state.colors.slice(),
+      colors: state.colors.map((a) => a.slice()),
     });
     if (history.length > 100) history.shift();
   }
@@ -601,9 +645,6 @@
     document.getElementById("color-btn").classList.toggle("active", state.colorMode);
     paletteEl.classList.toggle("hidden", !state.colorMode);
     numpadEl.classList.toggle("hidden", state.colorMode);
-    paletteEl.querySelectorAll(".swatch").forEach((s) => {
-      s.classList.toggle("active", Number(s.dataset.color) === state.activeColor);
-    });
 
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
@@ -629,8 +670,15 @@
         if (onMainDiag(i)) cell.classList.add("diag-main");
         if (onAntiDiag(i)) cell.classList.add("diag-anti");
       }
-      // Ručno obojana ćelija (zaseban ::after sloj, ne dira highlight)
-      if (state.colors[i]) cell.classList.add("color-" + state.colors[i]);
+      // Ručno obojane ćelije: do 4 boje kao okomite pruge u zasebnom ::after
+      // sloju (ne dira highlight; upisani broj ostaje iznad). Boja se postavlja
+      // inline preko --cc jer je kombinacija dinamična.
+      if (state.colors[i].length) {
+        cell.classList.add("colored");
+        cell.style.setProperty("--cc", colorBackground(state.colors[i]));
+      } else {
+        cell.style.removeProperty("--cc");
+      }
 
       // Highlight odabranih ćelija (grupa ili sidro)
       if (selSet.has(i)) cell.classList.add("selected");

@@ -34,6 +34,8 @@ generacija mora dati jedinstveno rješenje):
 
 ## Značajke
 
-- [x] Bojanje ćelija (v1.8.0) - color mode gumb → paleta (6 boja + brisač), tap/drag
-      maže kao pencil brush (sidro odlučuje maže/briše). Perzistira u `state.colors` +
-      localStorage + undo. Boji i givens; overlay (`::after`) neovisan o highlightu.
+- [x] Bojanje ćelija (v1.8.0, prerađeno v1.9.0) - color mode gumb → paleta 9 boja.
+      Unos kao broj: odaberi ćelije pa stisni boju. Do 4 boje po ćeliji (okomite
+      pruge), ista boja toggla off; Erase/Delete čisti. Perzistira u `state.colors`
+      (array po ćeliji) + localStorage + undo. Boji i givens; overlay (`::after`,
+      dinamični gradijent preko `--cc`) neovisan o highlightu.
