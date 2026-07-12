@@ -799,7 +799,14 @@
     else if (e.key === "ArrowRight" && idx % 9 !== 8) idx += 1;
     else return;
     e.preventDefault();
-    selectCell(idx);
+    if (e.shiftKey) {
+      // Shift + strelica: proširi odabir dodajući ćelije usput (kao povlačenje
+      // mišem - freeform, ne pravokutnik). Kurzor je uvijek zadnja dodana ćelija.
+      if (state.solved) return;
+      setSelection([...selectedCells(), idx], idx);
+    } else {
+      selectCell(idx);
+    }
   }
 
   // --- Menu ---
