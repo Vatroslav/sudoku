@@ -46,8 +46,12 @@ body {
   max-width: 480px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-height: 100dvh;
+  /* Fiksna visina + bez scrolla: cijela igra (topbar + ploča + kontrole) uvijek
+     stane u viewport (iframe na itchu, prozor na desktopu, ekran na mobitelu).
+     Ploča se skalira da popuni ostatak - vidi .board-wrap/.board. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
 }
 
@@ -112,9 +116,9 @@ body {
 
 main {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   padding: 0 12px 12px;
   gap: 14px;
 }
@@ -150,13 +154,21 @@ main {
 /* Board */
 .board-wrap {
   position: relative;
+  /* Zauzme svu preostalu visinu i centrira ploču; size-container da ploča i font
+     mogu ovisiti o njegovoj širini/visini (cqw/cqh/cqmin). */
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
 }
 .board {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
+  /* Najveći kvadrat koji stane u board-wrap (manje od širine i visine). */
+  width: min(100cqw, 100cqh);
   aspect-ratio: 1 / 1;
-  width: 100%;
   background: var(--line-strong);
   border: 3px solid var(--line-strong);
   border-radius: 8px;
@@ -170,7 +182,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(20px, 6.5vw, 30px);
+  font-size: clamp(12px, 6.4cqmin, 30px);
   font-weight: 400;
   color: var(--user);
   cursor: pointer;
@@ -303,7 +315,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(8px, 2.4vw, 11px);
+  font-size: clamp(6px, 2.5cqmin, 12px);
   color: var(--note);
   line-height: 1;
 }
@@ -314,6 +326,7 @@ main {
 
 /* Controls */
 .controls {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -573,4 +586,21 @@ main {
   font-size: 14px;
   cursor: pointer;
   width: 100%;
+}
+
+/* Nisko-široki viewport (rotiran telefon, nizak prozor): ploča lijevo, kontrole
+   desno, umjesto jedne uske kolone gdje bi visoke kontrole zgnječile ploču.
+   Na itchu je embed portretni pa se ovo ne okida - ovo je za rotaciju/PWA. */
+@media (orientation: landscape) and (max-height: 600px) {
+  #app {
+    max-width: none;
+  }
+  main {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .controls {
+    width: clamp(230px, 40%, 340px);
+    justify-content: center;
+  }
 }
