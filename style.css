@@ -14,6 +14,7 @@
   --note: #e6e6ef;
   --accent: #6db3ff;
   --diag-line: rgba(109, 179, 255, 0.4);
+  --window-tint: rgba(160, 130, 240, 0.16);
   --text: #e8e8ef;
   --muted: #8a8a99;
   --depleted: #44444f;
@@ -244,6 +245,12 @@ main {
       var(--diag-line) calc(50% + 1px),
       transparent calc(50% + 1px)
     );
+}
+
+/* Hyper/Windoku prozori: translucentni tint u POZADINI ćelije (background-image,
+   kao dijagonala) - highlight (background-color) i upisani broj ostaju iznad. */
+.cell.window {
+  background-image: linear-gradient(var(--window-tint), var(--window-tint));
 }
 
 /* Bojanje ćelija: translucentni overlay (z-index -1 pa je ispod teksta, ali

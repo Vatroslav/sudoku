@@ -12,7 +12,7 @@ Faza 0 refaktor iz doca.
 Regijske (samo prošire units/peers - najjeftinije):
 
 - [x] X-Sudoku (dvije dijagonale 1-9)
-- [ ] Hyper / Windoku (4 dodatna 3×3 prozora kao units)
+- [x] Hyper / Windoku (4 dodatna 3×3 prozora kao units, v1.12.0)
 - [ ] Antiknight (isti broj zabranjen na skoku konja - dodatni peers)
 - [ ] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers)
 - [ ] Jigsaw (9 nepravilnih regija umjesto kvadrata - `setup` geometrije + render)

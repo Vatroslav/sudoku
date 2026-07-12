@@ -12,6 +12,23 @@ const Sudoku = (() => {
     return arr;
   }
 
+  // Hyper/Windoku: 4 dodatna 3×3 prozora (redovi 2-4/6-8, stupci 2-4/6-8 - 1-indeksirano).
+  const hyperWindows = [];
+  for (const wr of [1, 5])
+    for (const wc of [1, 5]) {
+      const cells = [];
+      for (let dr = 0; dr < 3; dr++)
+        for (let dc = 0; dc < 3; dc++) cells.push((wr + dr) * 9 + (wc + dc));
+      hyperWindows.push(cells);
+    }
+  function hyperWindowOf(idx) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const wr = r >= 1 && r <= 3 ? 0 : r >= 5 && r <= 7 ? 1 : -1;
+    const wc = c >= 1 && c <= 3 ? 0 : c >= 5 && c <= 7 ? 1 : -1;
+    return wr === -1 || wc === -1 ? -1 : wr * 2 + wc;
+  }
+
   function isValid(board, idx, val, variant) {
     const row = Math.floor(idx / 9),
       col = idx % 9;
@@ -26,6 +43,10 @@ const Sudoku = (() => {
       if (row === col) for (let i = 0; i < 9; i++) if (board[i * 9 + i] === val) return false;
       if (row + col === 8)
         for (let i = 0; i < 9; i++) if (board[i * 9 + (8 - i)] === val) return false;
+    }
+    if (variant === "hyper") {
+      const w = hyperWindowOf(idx);
+      if (w !== -1) for (const j of hyperWindows[w]) if (board[j] === val) return false;
     }
     return true;
   }
@@ -98,9 +119,10 @@ const Sudoku = (() => {
 
   // Generira slagalicu tražene težine. Ako u zadanom broju pokušaja ne nađe
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).
-  // variant: "classic" (default) ili "x" (X-Sudoku, dvije dijagonale 1-9).
+  // variant: "classic" (default), "x" (X-Sudoku, dvije dijagonale 1-9) ili
+  // "hyper" (Hyper/Windoku, 4 dodatna 3×3 prozora 1-9).
   function generate(difficulty, variant) {
-    variant = variant === "x" ? "x" : "classic";
+    variant = variant === "x" || variant === "hyper" ? variant : "classic";
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
     const target = TARGET[difficulty] || 34;
     const attempts = MAX_ATTEMPTS[difficulty] || 150;

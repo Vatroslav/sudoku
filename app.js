@@ -4,7 +4,7 @@
 
   const STORAGE_KEY = "sudoku-game-v2";
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
-  const VARIANT_LABELS = { classic: "", x: "Diagonal" };
+  const VARIANT_LABELS = { classic: "", x: "Diagonal", hyper: "Hyper" };
 
   // Paleta za bojanje ćelija (9 boja, 1-9). Jedini izvor istine - iz nje se grade
   // i gumbi palete i pruge na ploči. Vrijednosti su RGB trojke; alpha se dodaje
@@ -76,6 +76,24 @@
   // Dijagonale za X-Sudoku (glavna r===c, sporedna r+c===8).
   const onMainDiag = (i) => Math.floor(i / 9) === i % 9;
   const onAntiDiag = (i) => Math.floor(i / 9) + (i % 9) === 8;
+
+  // Hyper/Windoku: 4 dodatna 3×3 prozora (redovi 2-4/6-8, stupci 2-4/6-8).
+  const hyperWindows = [];
+  for (const wr of [1, 5])
+    for (const wc of [1, 5]) {
+      const cells = [];
+      for (let dr = 0; dr < 3; dr++)
+        for (let dc = 0; dc < 3; dc++) cells.push((wr + dr) * 9 + (wc + dc));
+      hyperWindows.push(cells);
+    }
+  // Indeks prozora (0-3) kojem ćelija pripada, ili -1 ako nije ni u jednom.
+  function hyperWindowOf(idx) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const wr = r >= 1 && r <= 3 ? 0 : r >= 5 && r <= 7 ? 1 : -1;
+    const wc = c >= 1 && c <= 3 ? 0 : c >= 5 && c <= 7 ? 1 : -1;
+    return wr === -1 || wc === -1 ? -1 : wr * 2 + wc;
+  }
 
   // Varijanta trenutno odabrana u meniju (dok se ne pokrene nova igra).
   let menuVariant = "classic";
@@ -159,7 +177,7 @@
 
   // --- Nova igra ---
   function newGame(difficulty, variant) {
-    variant = variant === "x" ? "x" : "classic";
+    variant = variant === "x" || variant === "hyper" ? variant : "classic";
     loadingOverlay.classList.remove("hidden");
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
@@ -210,7 +228,7 @@
       if (!state.multi) state.multi = [];
       state.colors = normalizeColors(state.colors);
       if (state.colorMode === undefined) state.colorMode = false;
-      if (state.variant !== "x") state.variant = "classic";
+      if (state.variant !== "x" && state.variant !== "hyper") state.variant = "classic";
       return true;
     } catch (e) {
       return false;
@@ -335,6 +353,10 @@
     if (state.variant === "x") {
       if (onMainDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + i);
       if (onAntiDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + (8 - i));
+    }
+    if (state.variant === "hyper") {
+      const w = hyperWindowOf(idx);
+      if (w !== -1) for (const t of hyperWindows[w]) targets.add(t);
     }
     for (const t of targets) {
       const p = state.notes[t].indexOf(n);
@@ -663,6 +685,7 @@
     if (!state) return;
     diffLabelEl.textContent = statusLabel();
     const xMode = state.variant === "x";
+    const hyperMode = state.variant === "hyper";
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -699,6 +722,9 @@
         if (onMainDiag(i)) cell.classList.add("diag-main");
         if (onAntiDiag(i)) cell.classList.add("diag-anti");
       }
+      // Hyper/Windoku: 4 prozora se sjenčaju translucentnim tintom (background-
+      // image, kao dijagonala) da highlight i upisani broj ostanu iznad.
+      if (hyperMode && hyperWindowOf(i) !== -1) cell.classList.add("window");
       // Ručno obojane ćelije: do 4 boje kao okomite pruge u zasebnom ::after
       // sloju (ne dira highlight; upisani broj ostaje iznad). Boja se postavlja
       // inline preko --cc jer je kombinacija dinamična.
@@ -718,6 +744,10 @@
         if (xMode) {
           if (onMainDiag(sel) && onMainDiag(i)) isPeer = true;
           if (onAntiDiag(sel) && onAntiDiag(i)) isPeer = true;
+        }
+        if (hyperMode) {
+          const sw = hyperWindowOf(sel);
+          if (sw !== -1 && sw === hyperWindowOf(i)) isPeer = true;
         }
         if (isPeer) cell.classList.add("peer");
         if (selVal !== 0 && v === selVal) cell.classList.add("same");
@@ -843,7 +873,8 @@
     });
     document.querySelectorAll(".variant-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        menuVariant = btn.dataset.variant === "x" ? "x" : "classic";
+        const v = btn.dataset.variant;
+        menuVariant = v === "x" || v === "hyper" ? v : "classic";
         syncVariantButtons();
       });
     });

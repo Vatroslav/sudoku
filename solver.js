@@ -36,6 +36,22 @@ const Solver = (() => {
     diagAnti.push(i * 9 + (8 - i));
   }
 
+  // Hyper/Windoku: 4 dodatna 3×3 prozora (redovi 2-4/6-8, stupci 2-4/6-8).
+  const hyperWindows = [];
+  for (const wr of [1, 5])
+    for (const wc of [1, 5]) {
+      const cells = [];
+      for (let dr = 0; dr < 3; dr++)
+        for (let dc = 0; dc < 3; dc++) cells.push((wr + dr) * 9 + (wc + dc));
+      hyperWindows.push(cells);
+    }
+  const HYPER_NAMES = [
+    "top-left window",
+    "top-right window",
+    "bottom-left window",
+    "bottom-right window",
+  ];
+
   // Peerovi iz proizvoljnog skupa jedinica (svaka ćelija vidi ostale u istoj jedinici).
   const baseUnits = [...rows, ...cols, ...boxes];
   function buildPeers(units) {
@@ -47,9 +63,11 @@ const Solver = (() => {
   // Kontekst jedinica/peerova po varijanti. Klasik = redovi/stupci/kvadrati;
   // X uz to dodaje dvije dijagonale. Grading i pomoć rade nad AKTIVNIM kontekstom.
   const xUnits = [...baseUnits, diagMain, diagAnti];
+  const hyperUnits = [...baseUnits, ...hyperWindows];
   const unitCtx = {
     classic: { allUnits: baseUnits, peers: buildPeers(baseUnits) },
     x: { allUnits: xUnits, peers: buildPeers(xUnits) },
+    hyper: { allUnits: hyperUnits, peers: buildPeers(hyperUnits) },
   };
   let allUnits = unitCtx.classic.allUnits;
   let peers = unitCtx.classic.peers;
@@ -343,6 +361,7 @@ const Solver = (() => {
       { cells: diagMain, name: "main diagonal" },
       { cells: diagAnti, name: "anti-diagonal" },
     ],
+    hyper: [...namedBase, ...hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] }))],
   };
   let namedUnits = namedCtx.classic;
   const cellName = (idx) => `row ${Math.floor(idx / 9) + 1}, column ${(idx % 9) + 1}`;
@@ -350,7 +369,7 @@ const Solver = (() => {
   // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Nepoznata
   // varijanta => klasik (unatražna kompatibilnost sa spremljenim igrama).
   function useVariant(v) {
-    const key = v === "x" ? "x" : "classic";
+    const key = v === "x" || v === "hyper" ? v : "classic";
     allUnits = unitCtx[key].allUnits;
     peers = unitCtx[key].peers;
     namedUnits = namedCtx[key];
