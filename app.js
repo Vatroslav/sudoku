@@ -213,34 +213,83 @@
   }
 
   // --- Nova igra ---
-  function newGame(difficulty, variants) {
-    variants = normVariants(variants);
-    loadingOverlay.classList.remove("hidden");
+  // Generiranje ide u Web Worker: glavna nit ostaje slobodna (spinner živi, a
+  // gumb Cancel je klikabilan). Prekid = worker.terminate(). Fallback na sinkrono
+  // ako okruženje nema Worker.
+  let genWorker = null;
+
+  function buildState(difficulty, variants, puzzle, solution, techniques) {
+    state = {
+      puzzle,
+      solution,
+      values: puzzle.slice(),
+      notes: Array.from({ length: 81 }, () => []),
+      colors: Array.from({ length: 81 }, () => []),
+      difficulty,
+      variants,
+      techniques: techniques || [],
+      selected: null,
+      multi: [],
+      notesMode: false,
+      activeNote: null,
+      colorMode: false,
+      solved: false,
+    };
+    history = [];
+    clearHint();
+    save();
+    render();
+    loadingOverlay.classList.add("hidden");
+  }
+
+  function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
       const { puzzle, solution, techniques } = Sudoku.generate(difficulty, variants);
-      state = {
-        puzzle,
-        solution,
-        values: puzzle.slice(),
-        notes: Array.from({ length: 81 }, () => []),
-        colors: Array.from({ length: 81 }, () => []),
-        difficulty,
-        variants,
-        techniques: techniques || [],
-        selected: null,
-        multi: [],
-        notesMode: false,
-        activeNote: null,
-        colorMode: false,
-        solved: false,
-      };
-      history = [];
-      clearHint();
-      save();
-      render();
-      loadingOverlay.classList.add("hidden");
+      buildState(difficulty, variants, puzzle, solution, techniques);
     }, 30);
+  }
+
+  function newGame(difficulty, variants) {
+    variants = normVariants(variants);
+    loadingOverlay.classList.remove("hidden");
+    if (genWorker) {
+      genWorker.terminate();
+      genWorker = null;
+    }
+    if (typeof Worker !== "undefined") {
+      try {
+        genWorker = new Worker("gen-worker.js");
+        genWorker.onmessage = (e) => {
+          genWorker.terminate();
+          genWorker = null;
+          const { puzzle, solution, techniques } = e.data;
+          buildState(difficulty, variants, puzzle, solution, techniques);
+        };
+        genWorker.onerror = () => {
+          // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
+          genWorker.terminate();
+          genWorker = null;
+          generateSync(difficulty, variants);
+        };
+        genWorker.postMessage({ difficulty, variants });
+        return;
+      } catch (e) {
+        genWorker = null;
+      }
+    }
+    generateSync(difficulty, variants);
+  }
+
+  // Prekid generiranja: ubij worker i vrati korisnika u meni da odabere lakšu
+  // kombinaciju (npr. manje varijanti ili nižu težinu).
+  function cancelGeneration() {
+    if (genWorker) {
+      genWorker.terminate();
+      genWorker = null;
+    }
+    loadingOverlay.classList.add("hidden");
+    openMenu();
   }
 
   // --- Spremanje / učitavanje ---
@@ -929,6 +978,7 @@
       clearHint();
       render();
     });
+    document.getElementById("gen-cancel").addEventListener("click", cancelGeneration);
     document.getElementById("win-new-btn").addEventListener("click", () => {
       winOverlay.classList.add("hidden");
       openMenu();

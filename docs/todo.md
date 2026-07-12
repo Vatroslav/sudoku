@@ -59,5 +59,7 @@ generacija mora dati jedinstveno rješenje):
   Diagonal+Hyper još gore). Odluka: prihvatljivo (puzzle se ionako rješava 10+ min),
   korisnik je informiran napomenom u meniju. **Ne "popravljati" bez potrebe.** Ako
   ikad zatreba brže: za varijante "hard" vezati uz **broj zadanih polja** umjesto
-  klasičnog tiera (po [dorada-varijante.md](dorada-varijante.md)), ili generaciju
-  maknuti s glavne niti (Web Worker) da spinner ostane živ.
+  klasičnog tiera (po [dorada-varijante.md](dorada-varijante.md)).
+  - Ublaženo (v1.17.0): generiranje ide u Web Worker (`gen-worker.js`), glavna nit
+    ostaje slobodna, a loading overlay ima **Cancel** (worker.terminate() → natrag u
+    meni). Spinner više ne zamrzava. Kombinacije su k tome capane na 2 (v1.16.1).

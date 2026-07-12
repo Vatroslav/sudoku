@@ -41,5 +41,11 @@ export default [
     files: ["sw.js"],
     languageOptions: { globals: { ...globals.serviceworker } },
   },
+  {
+    // Web Worker: worker globali (importScripts, postMessage, onmessage) +
+    // Sudoku učitan preko importScripts.
+    files: ["gen-worker.js"],
+    languageOptions: { globals: { ...globals.worker, Sudoku: "readonly" } },
+  },
   prettierConfig,
 ];
