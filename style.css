@@ -11,7 +11,7 @@
   --given: #e8e8ef;
   --user: #6db3ff;
   --wrong: #ff6b6b;
-  --note: #8a8a99;
+  --note: #e6e6ef;
   --accent: #6db3ff;
   --diag-line: rgba(109, 179, 255, 0.4);
   --text: #e8e8ef;
@@ -317,6 +317,7 @@ main {
   justify-content: center;
   font-size: clamp(6px, 2.5cqmin, 12px);
   color: var(--note);
+  font-weight: 500;
   line-height: 1;
 }
 .notes span.note-match {
