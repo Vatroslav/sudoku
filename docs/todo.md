@@ -47,10 +47,12 @@ generacija mora dati jedinstveno rješenje):
 
 ## Poznato / tehnički dug
 
-- [ ] **Spora HARD generacija za varijante.** `Sudoku.generate` za "hard" traži
-      slagalicu čija je najteža KLASIČNA tehnika tier-2. Kod varijanti je solver jači
-      (dodatni units), pa slagalice češće ispadnu tier-1 → generator vrti puno pokušaja
-      i **sinkrono zaledi tab** (izmjereno: classic ~2.7s, hyper ~10.6s, Diagonal+Hyper
-      još gore). Rješenje (po [dorada-varijante.md](dorada-varijante.md)): za varijante
-      "hard" vezati uz **broj zadanih polja**, ne uz klasični tier. Alternativa/dopuna:
-      generaciju maknuti s glavne niti (Web Worker) da spinner ostane živ.
+- **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
+  `Sudoku.generate` za "hard" traži slagalicu čija je najteža KLASIČNA tehnika
+  tier-2. Kod varijanti je solver jači (dodatni units), pa slagalice češće ispadnu
+  tier-1 → generator vrti puno pokušaja (izmjereno: classic ~2.7s, hyper ~10.6s,
+  Diagonal+Hyper još gore). Odluka: prihvatljivo (puzzle se ionako rješava 10+ min),
+  korisnik je informiran napomenom u meniju. **Ne "popravljati" bez potrebe.** Ako
+  ikad zatreba brže: za varijante "hard" vezati uz **broj zadanih polja** umjesto
+  klasičnog tiera (po [dorada-varijante.md](dorada-varijante.md)), ili generaciju
+  maknuti s glavne niti (Web Worker) da spinner ostane živ.
