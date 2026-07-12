@@ -580,6 +580,9 @@ main {
   text-align: left;
   margin: 2px 0 14px;
 }
+.menu-hint.warn {
+  color: var(--wrong);
+}
 
 /* Loading spinner */
 .loading-card {

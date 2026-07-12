@@ -863,9 +863,13 @@
       const on = v === "classic" ? menuVariants.length === 0 : menuVariants.includes(v);
       b.classList.toggle("active", on);
     });
-    // Napomena o sporijoj Hard generaciji - relevantna tek uz aktivnu varijantu.
+    // Napomena o sporijoj Hard generaciji - relevantna tek uz aktivnu varijantu,
+    // crvena kad je odabrano više od jedne (tad generacija naglo poraste).
     const hint = document.getElementById("variant-hint");
-    if (hint) hint.classList.toggle("hidden", menuVariants.length === 0);
+    if (hint) {
+      hint.classList.toggle("hidden", menuVariants.length === 0);
+      hint.classList.toggle("warn", menuVariants.length > 1);
+    }
   }
   function openMenu() {
     if (state && state.variants) menuVariants = normVariants(state.variants);
