@@ -34,7 +34,6 @@ generacija mora dati jedinstveno rješenje):
 
 ## Značajke
 
-- [ ] Bojanje ćelija - ručno bojanje/označavanje ćelija bojama (pomoć pri rješavanju,
-      npr. praćenje lanaca/parova). Perzistirati po ćeliji u state + localStorage kao
-      `notes`; ponuditi brush-unos poput pencil draga
-      ([dorada-pencil-drag.md](dorada-pencil-drag.md)).
+- [x] Bojanje ćelija (v1.8.0) - color mode gumb → paleta (6 boja + brisač), tap/drag
+      maže kao pencil brush (sidro odlučuje maže/briše). Perzistira u `state.colors` +
+      localStorage + undo. Boji i givens; overlay (`::after`) neovisan o highlightu.

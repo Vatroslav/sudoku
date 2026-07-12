@@ -31,6 +31,7 @@
   // --- DOM ---
   const boardEl = document.getElementById("board");
   const numpadEl = document.getElementById("numpad");
+  const paletteEl = document.getElementById("palette");
   const diffLabelEl = document.getElementById("difficulty-label");
   const techniqueHintEl = document.getElementById("technique-hint");
   const notesStateEl = document.getElementById("notes-state");
@@ -73,6 +74,20 @@
     }
   }
 
+  // Paleta boja za color mode: 6 boja + brisač (0).
+  function buildPalette() {
+    paletteEl.innerHTML = "";
+    for (const c of [1, 2, 3, 4, 5, 6, 0]) {
+      const btn = document.createElement("button");
+      btn.className = "swatch";
+      btn.dataset.color = c;
+      btn.setAttribute("aria-label", c === 0 ? "Clear color" : "Color " + c);
+      if (c === 0) btn.textContent = "⌫";
+      btn.addEventListener("click", () => setActiveColor(c));
+      paletteEl.appendChild(btn);
+    }
+  }
+
   // --- Nova igra ---
   function newGame(difficulty, variant) {
     variant = variant === "x" ? "x" : "classic";
@@ -85,6 +100,7 @@
         solution,
         values: puzzle.slice(),
         notes: Array.from({ length: 81 }, () => []),
+        colors: new Array(81).fill(0),
         difficulty,
         variant,
         techniques: techniques || [],
@@ -92,6 +108,8 @@
         multi: [],
         notesMode: false,
         activeNote: null,
+        colorMode: false,
+        activeColor: 1,
         solved: false,
       };
       history = [];
@@ -122,6 +140,9 @@
       if (!state.notes) state.notes = Array.from({ length: 81 }, () => []);
       if (state.activeNote === undefined) state.activeNote = null;
       if (!state.multi) state.multi = [];
+      if (!state.colors || state.colors.length !== 81) state.colors = new Array(81).fill(0);
+      if (state.colorMode === undefined) state.colorMode = false;
+      if (state.activeColor === undefined) state.activeColor = 1;
       if (state.variant !== "x") state.variant = "classic";
       return true;
     } catch (e) {
@@ -283,6 +304,12 @@
     render();
   }
 
+  function setActiveColor(c) {
+    if (!state) return;
+    state.activeColor = c;
+    render();
+  }
+
   // --- Pencil brush (povlačenje kandidata) ---
   // Bilješke prima samo prazna ne-given ćelija.
   function isPaintable(idx) {
@@ -294,6 +321,23 @@
     const cellEl = e.target.closest && e.target.closest(".cell");
     if (!cellEl || !boardEl.contains(cellEl)) return;
     const idx = Number(cellEl.dataset.idx);
+
+    // Color mod: povlačenje boji ćelije (i givens i prazne). Smjer poteza određuje
+    // sidro: ako sidro već ima aktivnu boju -> potez briše, inače maže. Brisač
+    // (activeColor 0) uvijek briše.
+    if (state.colorMode) {
+      e.preventDefault();
+      clearHint();
+      pushHistory();
+      drag.active = true;
+      drag.mode =
+        state.activeColor === 0 || state.colors[idx] === state.activeColor
+          ? "color-remove"
+          : "color-add";
+      drag.painted = new Set();
+      applyColorBrush(idx);
+      return;
+    }
 
     // Kist se maže samo u notes modu, s odabranim brojem, na praznoj ćeliji.
     // Inače povlačenje pomiče selekciju (drag = select) - radi i mišem i dodirom.
@@ -348,6 +392,8 @@
         drag.painted.add(idx);
         setSelection([...drag.painted], drag.anchor);
       }
+    } else if (drag.mode === "color-add" || drag.mode === "color-remove") {
+      applyColorBrush(idx);
     } else {
       applyBrush(idx);
     }
@@ -372,6 +418,17 @@
       notes.splice(pos, 1);
     }
     render();
+  }
+
+  // Bojanje ćelije tijekom povlačenja (svaka ćelija jednom po potezu).
+  function applyColorBrush(idx) {
+    if (!drag.active || drag.painted.has(idx)) return;
+    drag.painted.add(idx);
+    const target = drag.mode === "color-remove" ? 0 : state.activeColor;
+    if (state.colors[idx] !== target) {
+      state.colors[idx] = target;
+      render();
+    }
   }
 
   // --- Pomoć: objasni sljedeći potez ---
@@ -472,6 +529,14 @@
   function toggleNotes() {
     if (!state) return;
     state.notesMode = !state.notesMode;
+    if (state.notesMode) state.colorMode = false;
+    render();
+  }
+
+  function toggleColorMode() {
+    if (!state) return;
+    state.colorMode = !state.colorMode;
+    if (state.colorMode) state.notesMode = false;
     render();
   }
 
@@ -480,6 +545,7 @@
     history.push({
       values: state.values.slice(),
       notes: state.notes.map((a) => a.slice()),
+      colors: state.colors.slice(),
     });
     if (history.length > 100) history.shift();
   }
@@ -490,6 +556,7 @@
     const prev = history.pop();
     state.values = prev.values;
     state.notes = prev.notes;
+    if (prev.colors) state.colors = prev.colors;
     save();
     render();
   }
@@ -531,6 +598,12 @@
     }
     notesStateEl.textContent = state.notesMode ? "On" : "Off";
     document.getElementById("notes-btn").classList.toggle("active", state.notesMode);
+    document.getElementById("color-btn").classList.toggle("active", state.colorMode);
+    paletteEl.classList.toggle("hidden", !state.colorMode);
+    numpadEl.classList.toggle("hidden", state.colorMode);
+    paletteEl.querySelectorAll(".swatch").forEach((s) => {
+      s.classList.toggle("active", Number(s.dataset.color) === state.activeColor);
+    });
 
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
@@ -556,6 +629,8 @@
         if (onMainDiag(i)) cell.classList.add("diag-main");
         if (onAntiDiag(i)) cell.classList.add("diag-anti");
       }
+      // Ručno obojana ćelija (zaseban ::after sloj, ne dira highlight)
+      if (state.colors[i]) cell.classList.add("color-" + state.colors[i]);
 
       // Highlight odabranih ćelija (grupa ili sidro)
       if (selSet.has(i)) cell.classList.add("selected");
@@ -672,6 +747,7 @@
     document.getElementById("undo-btn").addEventListener("click", undo);
     document.getElementById("erase-btn").addEventListener("click", erase);
     document.getElementById("notes-btn").addEventListener("click", toggleNotes);
+    document.getElementById("color-btn").addEventListener("click", toggleColorMode);
     document.getElementById("hint-btn").addEventListener("click", hint);
     document.getElementById("hint-close").addEventListener("click", () => {
       clearHint();
@@ -726,6 +802,7 @@
   function init() {
     buildBoard();
     buildNumpad();
+    buildPalette();
     bind();
     showVersion();
     if (load() && !allSolved()) {
