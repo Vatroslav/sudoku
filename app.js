@@ -4,7 +4,20 @@
 
   const STORAGE_KEY = "sudoku-game-v2";
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
-  const VARIANT_LABELS = { classic: "", x: "Diagonal", hyper: "Hyper" };
+  // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
+  // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
+  const REGION_VARIANTS = ["x", "hyper"];
+  const VARIANT_LABELS = { x: "Diagonal", hyper: "Hyper" };
+  const normVariants = (v) => {
+    if (typeof v === "string") v = v === "classic" ? [] : [v];
+    if (!Array.isArray(v)) return [];
+    return REGION_VARIANTS.filter((k) => v.includes(k));
+  };
+  // Ljudska labela aktivnog skupa: "Diagonal + Hyper", "" za classic.
+  const variantLabel = (variants) =>
+    normVariants(variants)
+      .map((v) => VARIANT_LABELS[v])
+      .join(" + ");
 
   // Paleta za bojanje ćelija (9 boja, 1-9). Jedini izvor istine - iz nje se grade
   // i gumbi palete i pruge na ploči. Vrijednosti su RGB trojke; alpha se dodaje
@@ -96,7 +109,7 @@
   }
 
   // Varijanta trenutno odabrana u meniju (dok se ne pokrene nova igra).
-  let menuVariant = "classic";
+  let menuVariants = [];
 
   // --- Stanje ---
   let state = null;
@@ -105,7 +118,7 @@
   //   solution: [81],
   //   values: [81] (trenutni unosi igrača, 0 prazno),
   //   notes: [81] od Set-ova (kao polje brojeva u JSON-u),
-  //   difficulty, variant ("classic"|"x"), selected (idx|null),
+  //   difficulty, variants (npr. ["x","hyper"], prazno = classic), selected (idx|null),
   //   notesMode (bool), solved (bool)
   // }
 
@@ -176,12 +189,12 @@
   }
 
   // --- Nova igra ---
-  function newGame(difficulty, variant) {
-    variant = variant === "x" || variant === "hyper" ? variant : "classic";
+  function newGame(difficulty, variants) {
+    variants = normVariants(variants);
     loadingOverlay.classList.remove("hidden");
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques } = Sudoku.generate(difficulty, variant);
+      const { puzzle, solution, techniques } = Sudoku.generate(difficulty, variants);
       state = {
         puzzle,
         solution,
@@ -189,7 +202,7 @@
         notes: Array.from({ length: 81 }, () => []),
         colors: Array.from({ length: 81 }, () => []),
         difficulty,
-        variant,
+        variants,
         techniques: techniques || [],
         selected: null,
         multi: [],
@@ -228,7 +241,9 @@
       if (!state.multi) state.multi = [];
       state.colors = normalizeColors(state.colors);
       if (state.colorMode === undefined) state.colorMode = false;
-      if (state.variant !== "x" && state.variant !== "hyper") state.variant = "classic";
+      // Migracija: stare spremljene igre imaju string `variant`, nove `variants`.
+      state.variants = normVariants(state.variants !== undefined ? state.variants : state.variant);
+      delete state.variant;
       return true;
     } catch (e) {
       return false;
@@ -350,11 +365,11 @@
       targets.add(i * 9 + col);
       targets.add((boxRow + Math.floor(i / 3)) * 9 + (boxCol + (i % 3)));
     }
-    if (state.variant === "x") {
+    if (state.variants.includes("x")) {
       if (onMainDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + i);
       if (onAntiDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + (8 - i));
     }
-    if (state.variant === "hyper") {
+    if (state.variants.includes("hyper")) {
       const w = hyperWindowOf(idx);
       if (w !== -1) for (const t of hyperWindows[w]) targets.add(t);
     }
@@ -564,7 +579,7 @@
       return;
     }
 
-    const res = Solver.explainNext(state.values, state.notes, state.solution, state.variant);
+    const res = Solver.explainNext(state.values, state.notes, state.solution, state.variants);
     if (!res || res.done) {
       clearHint();
       showHint("Everything is already solved.");
@@ -669,7 +684,7 @@
   }
 
   function statusLabel() {
-    const vl = VARIANT_LABELS[state.variant] || "";
+    const vl = variantLabel(state.variants);
     const dl = DIFF_LABELS[state.difficulty] || "";
     return vl ? `${vl} · ${dl}` : dl;
   }
@@ -684,8 +699,8 @@
   function render() {
     if (!state) return;
     diffLabelEl.textContent = statusLabel();
-    const xMode = state.variant === "x";
-    const hyperMode = state.variant === "hyper";
+    const xMode = state.variants.includes("x");
+    const hyperMode = state.variants.includes("hyper");
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -840,13 +855,17 @@
   }
 
   // --- Menu ---
+  // Varijante su multi-select: Diagonal i Hyper su nezavisni toggle-i, Classic
+  // znači "nijedna" (prazan skup). "active" gumb = varijanta je u skupu.
   function syncVariantButtons() {
     document.querySelectorAll(".variant-btn").forEach((b) => {
-      b.classList.toggle("active", b.dataset.variant === menuVariant);
+      const v = b.dataset.variant;
+      const on = v === "classic" ? menuVariants.length === 0 : menuVariants.includes(v);
+      b.classList.toggle("active", on);
     });
   }
   function openMenu() {
-    if (state && state.variant) menuVariant = state.variant;
+    if (state && state.variants) menuVariants = normVariants(state.variants);
     syncVariantButtons();
     menuOverlay.classList.remove("hidden");
   }
@@ -874,7 +893,13 @@
     document.querySelectorAll(".variant-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const v = btn.dataset.variant;
-        menuVariant = v === "x" || v === "hyper" ? v : "classic";
+        if (v === "classic") {
+          menuVariants = [];
+        } else if (menuVariants.includes(v)) {
+          menuVariants = menuVariants.filter((k) => k !== v);
+        } else {
+          menuVariants = normVariants([...menuVariants, v]);
+        }
         syncVariantButtons();
       });
     });
@@ -882,7 +907,7 @@
       btn.addEventListener("click", () => {
         closeMenu();
         winOverlay.classList.add("hidden");
-        newGame(btn.dataset.diff, menuVariant);
+        newGame(btn.dataset.diff, menuVariants);
       });
     });
     menuOverlay.addEventListener("click", (e) => {

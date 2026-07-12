@@ -253,6 +253,32 @@ main {
   background-image: linear-gradient(var(--window-tint), var(--window-tint));
 }
 
+/* Kombinacija Diagonal + Hyper: ćelija koja je i na dijagonali i u prozoru mora
+   pokazati oboje - dijagonalna crta kao gornji sloj, tint prozora ispod (jedan
+   background-image property inače pregazi drugi). */
+.cell.window.diag-main {
+  background-image:
+    linear-gradient(
+      to top right,
+      transparent calc(50% - 1px),
+      var(--diag-line) calc(50% - 1px),
+      var(--diag-line) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    linear-gradient(var(--window-tint), var(--window-tint));
+}
+.cell.window.diag-anti {
+  background-image:
+    linear-gradient(
+      to top left,
+      transparent calc(50% - 1px),
+      var(--diag-line) calc(50% - 1px),
+      var(--diag-line) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    linear-gradient(var(--window-tint), var(--window-tint));
+}
+
 /* Bojanje ćelija: translucentni overlay (z-index -1 pa je ispod teksta, ali
    iznad background-boje ćelije - zato se selection/peer highlight vidi kroz
    njega). Zaseban kanal od highlighta (koji koriste background-color). Sadržaj

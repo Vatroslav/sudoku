@@ -2,10 +2,11 @@
 
 Otvoreni plan za Sudoku. Arhitektura i redoslijed dodavanja varijanti opisani su u
 [dorada-varijante.md](dorada-varijante.md) (klasifikacija: regijske → derivacijske →
-geometrija-first). Trenutno su varijante složene kao lagani `variant` string-switch
-(`"classic"|"x"`) kroz `sudoku.js` (`isValid`) i `solver.js` (`unitCtx`/`namedCtx`), ne
-kroz puni Constraint registry - kad broj varijanti naraste, procijeniti isplati li se
-Faza 0 refaktor iz doca.
+geometrija-first). Regijske varijante su složene kao **kombinabilan skup** aktivnih
+varijanti (`state.variants`, npr. `["x","hyper"]`): `sudoku.js` (`isValid`) i `solver.js`
+(`ctxFor`/`namedFor`) komponiraju units/peers preko aktivnog skupa. Nije puni Constraint
+registry - kad broj varijanti naraste (ili kad zatreba `setup`/`deriveClues`), procijeniti
+isplati li se Faza 0 refaktor iz doca.
 
 ## Varijante
 
@@ -34,9 +35,22 @@ generacija mora dati jedinstveno rješenje):
 
 ## Značajke
 
+- [x] Multi-select varijante (v1.13.0) - Diagonal i Hyper se biraju nezavisno i
+      kombiniraju (npr. "Diagonal + Hyper"). Meni ima toggle-gumbe, Classic = prazan
+      skup. `state.variants` je polje; stare spremljene igre migriraju iz `state.variant`.
 - [x] Bojanje ćelija (v1.8.0, prerađeno v1.9.0) - color mode gumb → paleta 9 boja.
       Unos kao broj: odaberi ćelije pa stisni boju. Do 4 boje po ćeliji (1 puna,
       2 stupca, 3 Y-oblik, 4 kvadranta), ista boja toggla off; Erase/Delete čisti.
       Perzistira u `state.colors`
       (array po ćeliji) + localStorage + undo. Boji i givens; overlay (`::after`,
       dinamični gradijent preko `--cc`) neovisan o highlightu.
+
+## Poznato / tehnički dug
+
+- [ ] **Spora HARD generacija za varijante.** `Sudoku.generate` za "hard" traži
+      slagalicu čija je najteža KLASIČNA tehnika tier-2. Kod varijanti je solver jači
+      (dodatni units), pa slagalice češće ispadnu tier-1 → generator vrti puno pokušaja
+      i **sinkrono zaledi tab** (izmjereno: classic ~2.7s, hyper ~10.6s, Diagonal+Hyper
+      još gore). Rješenje (po [dorada-varijante.md](dorada-varijante.md)): za varijante
+      "hard" vezati uz **broj zadanih polja**, ne uz klasični tier. Alternativa/dopuna:
+      generaciju maknuti s glavne niti (Web Worker) da spinner ostane živ.

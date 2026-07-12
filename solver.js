@@ -60,17 +60,33 @@ const Solver = (() => {
     for (const u of units) for (const a of u) for (const b of u) if (a !== b) p[a].add(b);
     return p;
   }
-  // Kontekst jedinica/peerova po varijanti. Klasik = redovi/stupci/kvadrati;
-  // X uz to dodaje dvije dijagonale. Grading i pomoć rade nad AKTIVNIM kontekstom.
-  const xUnits = [...baseUnits, diagMain, diagAnti];
-  const hyperUnits = [...baseUnits, ...hyperWindows];
-  const unitCtx = {
-    classic: { allUnits: baseUnits, peers: buildPeers(baseUnits) },
-    x: { allUnits: xUnits, peers: buildPeers(xUnits) },
-    hyper: { allUnits: hyperUnits, peers: buildPeers(hyperUnits) },
-  };
-  let allUnits = unitCtx.classic.allUnits;
-  let peers = unitCtx.classic.peers;
+  // Dodatne jedinice po regijskoj varijanti (uz uvijek prisutne row/col/box).
+  // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
+  const REGION_VARIANTS = ["x", "hyper"];
+  const EXTRA_UNITS = { x: [diagMain, diagAnti], hyper: hyperWindows };
+
+  // Kanonski ključ aktivnog skupa (npr. "x+hyper"), "classic" ako je prazan.
+  function variantKey(variants) {
+    if (typeof variants === "string") variants = variants === "classic" ? [] : [variants];
+    if (!Array.isArray(variants)) variants = [];
+    const active = REGION_VARIANTS.filter((k) => variants.includes(k));
+    return active.length ? active.join("+") : "classic";
+  }
+
+  // Kontekst jedinica/peerova za aktivni skup, lijeno građen i cacheiran po ključu.
+  // Klasik = redovi/stupci/kvadrati; svaka varijanta dodaje svoje jedinice.
+  const unitCtx = {};
+  function ctxFor(variants) {
+    const key = variantKey(variants);
+    if (!unitCtx[key]) {
+      const active = key === "classic" ? [] : key.split("+");
+      const units = [...baseUnits, ...active.flatMap((v) => EXTRA_UNITS[v])];
+      unitCtx[key] = { allUnits: units, peers: buildPeers(units) };
+    }
+    return unitCtx[key];
+  }
+  let allUnits = ctxFor([]).allUnits;
+  let peers = ctxFor([]).peers;
 
   const T_SINGLE = 1,
     T_INTER = 2,
@@ -354,25 +370,35 @@ const Solver = (() => {
   for (let r = 0; r < 9; r++) namedBase.push({ cells: rows[r], name: `row ${r + 1}` });
   for (let c = 0; c < 9; c++) namedBase.push({ cells: cols[c], name: `column ${c + 1}` });
   for (let b = 0; b < 9; b++) namedBase.push({ cells: boxes[b], name: `box ${BOX_NAMES[b]}` });
-  const namedCtx = {
-    classic: namedBase,
+  // Imenovane dodatne jedinice po varijanti (za tekst hinta). Isti aktivni skup
+  // kao EXTRA_UNITS, samo s ljudskim nazivima.
+  const EXTRA_NAMED = {
     x: [
-      ...namedBase,
       { cells: diagMain, name: "main diagonal" },
       { cells: diagAnti, name: "anti-diagonal" },
     ],
-    hyper: [...namedBase, ...hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] }))],
+    hyper: hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] })),
   };
-  let namedUnits = namedCtx.classic;
+  const namedCtx = {};
+  function namedFor(variants) {
+    const key = variantKey(variants);
+    if (!namedCtx[key]) {
+      const active = key === "classic" ? [] : key.split("+");
+      namedCtx[key] = [...namedBase, ...active.flatMap((v) => EXTRA_NAMED[v])];
+    }
+    return namedCtx[key];
+  }
+  let namedUnits = namedFor([]);
   const cellName = (idx) => `row ${Math.floor(idx / 9) + 1}, column ${(idx % 9) + 1}`;
 
-  // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Nepoznata
-  // varijanta => klasik (unatražna kompatibilnost sa spremljenim igrama).
-  function useVariant(v) {
-    const key = v === "x" || v === "hyper" ? v : "classic";
-    allUnits = unitCtx[key].allUnits;
-    peers = unitCtx[key].peers;
-    namedUnits = namedCtx[key];
+  // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Prima polje (ili
+  // legacy string) aktivnih varijanti; nepoznato => klasik (unatražna
+  // kompatibilnost sa spremljenim igrama).
+  function useVariant(variants) {
+    const ctx = ctxFor(variants);
+    allUnits = ctx.allUnits;
+    peers = ctx.peers;
+    namedUnits = namedFor(variants);
   }
 
   function hNakedSingle(cand) {
@@ -794,8 +820,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution, variant) {
-    useVariant(variant);
+  function explainNext(values, notes, solution, variants) {
+    useVariant(variants);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -820,8 +846,8 @@ const Solver = (() => {
   ];
 
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
-  function solveAndGrade(puzzle, variant) {
-    useVariant(variant);
+  function solveAndGrade(puzzle, variants) {
+    useVariant(variants);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;
