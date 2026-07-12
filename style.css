@@ -572,6 +572,14 @@ main {
 .diff-btn:active {
   background: var(--cell-sel);
 }
+/* Napomena o vremenu generiranja (prikazuje se kad je odabrana ≥1 varijanta). */
+.menu-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+  text-align: left;
+  margin: 2px 0 14px;
+}
 
 /* Loading spinner */
 .loading-card {
