@@ -554,6 +554,10 @@ main {
   color: var(--accent);
   background: var(--cell-sel);
 }
+.variant-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .menu-diff {
   display: flex;
   flex-direction: column;
