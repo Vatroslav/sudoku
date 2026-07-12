@@ -933,20 +933,18 @@
   }
 
   // --- Menu ---
-  // Varijante su multi-select: Diagonal i Hyper su nezavisni toggle-i, Classic
-  // znači "nijedna" (prazan skup). "active" gumb = varijanta je u skupu.
-  // Najviše 2 varijante odjednom: kombinacija 3+ digne generaciju (i na Normal)
-  // do neupotrebljivosti. Cap je UI ograničenje - jezgra podržava bilo koliko.
+  // Varijante su multi-select toggle-i; prazan skup = Classic. "active" redak =
+  // varijanta je u skupu. Najviše 2 odjednom: kombinacija 3+ digne generaciju
+  // (i na Normal) do neupotrebljivosti. Cap je UI - jezgra podržava bilo koliko.
   const MAX_VARIANTS = 2;
   function syncVariantButtons() {
     const full = menuVariants.length >= MAX_VARIANTS;
-    document.querySelectorAll(".variant-btn").forEach((b) => {
-      const v = b.dataset.variant;
-      const on = v === "classic" ? menuVariants.length === 0 : menuVariants.includes(v);
+    document.querySelectorAll(".variant-row").forEach((b) => {
+      const on = menuVariants.includes(b.dataset.variant);
       b.classList.toggle("active", on);
-      // Kad su dvije aktivne, onemogući dodavanje treće: zatamni neaktivne
-      // ne-classic gumbe. Classic (reset) i aktivni (za odznačiti) ostaju živi.
-      b.disabled = full && v !== "classic" && !on;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      // Kad su dvije aktivne, onemogući dodavanje treće (zatamni neaktivne retke).
+      b.disabled = full && !on;
     });
     // Napomena o sporijoj Hard generaciji - relevantna tek uz aktivnu varijantu,
     // crvena kad je odabrano više od jedne (tad generacija naglo poraste).
@@ -983,12 +981,10 @@
       winOverlay.classList.add("hidden");
       openMenu();
     });
-    document.querySelectorAll(".variant-btn").forEach((btn) => {
+    document.querySelectorAll(".variant-row").forEach((btn) => {
       btn.addEventListener("click", () => {
         const v = btn.dataset.variant;
-        if (v === "classic") {
-          menuVariants = [];
-        } else if (menuVariants.includes(v)) {
+        if (menuVariants.includes(v)) {
           menuVariants = menuVariants.filter((k) => k !== v);
         } else if (menuVariants.length < MAX_VARIANTS) {
           menuVariants = normVariants([...menuVariants, v]);

@@ -72,11 +72,29 @@
       <div class="menu-card">
         <div class="menu-title">New game</div>
         <div class="menu-label">Variants</div>
+        <div class="menu-sublabel">Choose up to 2. None selected = Classic.</div>
         <div class="menu-variant" id="menu-variant">
-          <button class="variant-btn active" data-variant="classic">Classic</button>
-          <button class="variant-btn" data-variant="x">Diagonal</button>
-          <button class="variant-btn" data-variant="hyper">Hyper</button>
-          <button class="variant-btn" data-variant="antiknight">Antiknight</button>
+          <button class="variant-row" data-variant="x">
+            <span class="variant-info">
+              <span class="variant-name">Diagonal</span>
+              <span class="variant-desc">Both main diagonals must also contain 1-9.</span>
+            </span>
+            <span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="hyper">
+            <span class="variant-info">
+              <span class="variant-name">Hyper</span>
+              <span class="variant-desc">Four extra 3×3 boxes must also contain 1-9.</span>
+            </span>
+            <span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="antiknight">
+            <span class="variant-info">
+              <span class="variant-name">Antiknight</span>
+              <span class="variant-desc">Cells a knight's move apart can't share a digit.</span>
+            </span>
+            <span class="variant-toggle" aria-hidden="true"></span>
+          </button>
         </div>
         <div class="menu-label">Difficulty</div>
         <div class="menu-diff" id="menu-diff">

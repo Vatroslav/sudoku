@@ -42,7 +42,9 @@ generacija mora dati jedinstveno rješenje):
       kombiniraju (npr. "Diagonal + Hyper"). Meni ima toggle-gumbe, Classic = prazan
       skup. `state.variants` je polje; stare spremljene igre migriraju iz `state.variant`.
       Cap na 2 istovremeno (v1.16.1, `MAX_VARIANTS` u `app.js`) - kombinacija 3+ digne
-      generaciju do neupotrebljivosti i na Normal; kad su 2 aktivne, treći gumb je disabled.
+      generaciju do neupotrebljivosti i na Normal; kad su 2 aktivne, treći je disabled.
+      Redizajn u listu s toggle-prekidačima + jednorečenični opis po varijanti (v1.18.0);
+      Classic više nije gumb (= sve isključeno), napomena "Choose up to 2" iznad liste.
 - [x] Bojanje ćelija (v1.8.0, prerađeno v1.9.0) - color mode gumb → paleta 9 boja.
       Unos kao broj: odaberi ćelije pa stisni boju. Do 4 boje po ćeliji (1 puna,
       2 stupca, 3 Y-oblik, 4 kvadranta), ista boja toggla off; Erase/Delete čisti.
