@@ -6,8 +6,9 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
   // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
-  const REGION_VARIANTS = ["x", "hyper", "antiknight", "antiking"];
+  const REGION_VARIANTS = ["jigsaw", "x", "hyper", "antiknight", "antiking"];
   const VARIANT_LABELS = {
+    jigsaw: "Jigsaw",
     x: "Diagonal",
     hyper: "Hyper",
     antiknight: "Antiknight",
@@ -158,6 +159,24 @@
     kingPeers.push(list);
   }
 
+  // Jigsaw: geometrija regija je per-puzzle podatak (state.regions, 81-polje
+  // id-eva 0-8). Validacija oblika (za odbacivanje korumpiranog spremljenog savea).
+  function validRegions(regions) {
+    if (!Array.isArray(regions) || regions.length !== 81) return false;
+    const counts = new Array(9).fill(0);
+    for (const r of regions) {
+      if (!Number.isInteger(r) || r < 0 || r > 8) return false;
+      counts[r]++;
+    }
+    return counts.every((c) => c === 9);
+  }
+  // Regija ćelije: jigsaw -> state.regions[idx], inače klasični 3×3 kvadrat.
+  function regionOf(idx) {
+    if (state.variants.includes("jigsaw") && Array.isArray(state.regions))
+      return state.regions[idx];
+    return Math.floor(Math.floor(idx / 9) / 3) * 3 + Math.floor((idx % 9) / 3);
+  }
+
   // Varijanta trenutno odabrana u meniju (dok se ne pokrene nova igra).
   let menuVariants = [];
 
@@ -244,7 +263,7 @@
   // ako okruženje nema Worker.
   let genWorker = null;
 
-  function buildState(difficulty, variants, puzzle, solution, techniques) {
+  function buildState(difficulty, variants, puzzle, solution, techniques, regions) {
     state = {
       puzzle,
       solution,
@@ -253,6 +272,7 @@
       colors: Array.from({ length: 81 }, () => []),
       difficulty,
       variants,
+      regions: regions || null,
       techniques: techniques || [],
       selected: null,
       multi: [],
@@ -271,8 +291,8 @@
   function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques } = Sudoku.generate(difficulty, variants);
-      buildState(difficulty, variants, puzzle, solution, techniques);
+      const { puzzle, solution, techniques, regions } = Sudoku.generate(difficulty, variants);
+      buildState(difficulty, variants, puzzle, solution, techniques, regions);
     }, 30);
   }
 
@@ -289,8 +309,8 @@
         genWorker.onmessage = (e) => {
           genWorker.terminate();
           genWorker = null;
-          const { puzzle, solution, techniques } = e.data;
-          buildState(difficulty, variants, puzzle, solution, techniques);
+          const { puzzle, solution, techniques, regions } = e.data;
+          buildState(difficulty, variants, puzzle, solution, techniques, regions);
         };
         genWorker.onerror = () => {
           // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
@@ -343,6 +363,13 @@
       // Migracija: stare spremljene igre imaju string `variant`, nove `variants`.
       state.variants = normVariants(state.variants !== undefined ? state.variants : state.variant);
       delete state.variant;
+      // Jigsaw: regions mora biti valjan (81, id-evi 0-8, svaki 9x). Korumpiran
+      // save s jigsaw variants odbaci (solver bi tiho sudio krivo). Non-jigsaw = null.
+      if (state.variants.includes("jigsaw")) {
+        if (!validRegions(state.regions)) return false;
+      } else {
+        state.regions = null;
+      }
       return true;
     } catch (e) {
       return false;
@@ -456,13 +483,20 @@
   function clearNotesAround(idx, n) {
     const row = Math.floor(idx / 9);
     const col = idx % 9;
-    const boxRow = Math.floor(row / 3) * 3;
-    const boxCol = Math.floor(col / 3) * 3;
     const targets = new Set();
     for (let i = 0; i < 9; i++) {
       targets.add(row * 9 + i);
       targets.add(i * 9 + col);
-      targets.add((boxRow + Math.floor(i / 3)) * 9 + (boxCol + (i % 3)));
+    }
+    // Box/regija: jigsaw čisti cijelu regiju ćelije, inače klasični 3×3 kvadrat.
+    if (state.variants.includes("jigsaw") && Array.isArray(state.regions)) {
+      const rid = state.regions[idx];
+      for (let t = 0; t < 81; t++) if (state.regions[t] === rid) targets.add(t);
+    } else {
+      const boxRow = Math.floor(row / 3) * 3;
+      const boxCol = Math.floor(col / 3) * 3;
+      for (let i = 0; i < 9; i++)
+        targets.add((boxRow + Math.floor(i / 3)) * 9 + (boxCol + (i % 3)));
     }
     if (state.variants.includes("x")) {
       if (onMainDiag(idx)) for (let i = 0; i < 9; i++) targets.add(i * 9 + i);
@@ -684,7 +718,13 @@
       return;
     }
 
-    const res = Solver.explainNext(state.values, state.notes, state.solution, state.variants);
+    const res = Solver.explainNext(
+      state.values,
+      state.notes,
+      state.solution,
+      state.variants,
+      state.regions
+    );
     if (!res || res.done) {
       clearHint();
       showHint("Everything is already solved.");
@@ -808,6 +848,7 @@
     const hyperMode = state.variants.includes("hyper");
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
+    const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(state.regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -827,7 +868,7 @@
     const selVal = sel !== null ? state.values[sel] || 0 : 0;
     const selRow = sel !== null ? Math.floor(sel / 9) : -1;
     const selCol = sel !== null ? sel % 9 : -1;
-    const selBox = sel !== null ? Math.floor(selRow / 3) * 3 + Math.floor(selCol / 3) : -1;
+    const selRegion = sel !== null ? regionOf(sel) : -1;
 
     for (let i = 0; i < 81; i++) {
       const cell = cells[i];
@@ -836,8 +877,20 @@
       cell.className = "cell";
       const col = i % 9;
       const row = Math.floor(i / 9);
-      if (col % 3 === 2 && col !== 8) cell.classList.add("br");
-      if (row % 3 === 2 && row !== 8) cell.classList.add("bb");
+      // Granice regija: jigsaw crta rub gdje susjedna ćelija pripada drugoj regiji,
+      // inače klasične granice 3×3 kvadrata. Isti .br/.bb mehanizam (2px linija).
+      if (
+        jigsawMode
+          ? col !== 8 && state.regions[i] !== state.regions[i + 1]
+          : col % 3 === 2 && col !== 8
+      )
+        cell.classList.add("br");
+      if (
+        jigsawMode
+          ? row !== 8 && state.regions[i] !== state.regions[i + 9]
+          : row % 3 === 2 && row !== 8
+      )
+        cell.classList.add("bb");
       // Dijagonalna crta (X-Sudoku) crta se u POZADINI ćelije pa upisani broj
       // (tekst) uvijek ostaje iznad nje.
       if (xMode) {
@@ -861,8 +914,7 @@
       if (selSet.has(i)) cell.classList.add("selected");
       // Peer/isti-broj samo kod jednostrukog odabira (kod grupe bi bilo prešaroliko)
       if (sel !== null && !groupSel) {
-        const box = Math.floor(row / 3) * 3 + Math.floor(col / 3);
-        let isPeer = row === selRow || col === selCol || box === selBox;
+        let isPeer = row === selRow || col === selCol || regionOf(i) === selRegion;
         if (xMode) {
           if (onMainDiag(sel) && onMainDiag(i)) isPeer = true;
           if (onAntiDiag(sel) && onAntiDiag(i)) isPeer = true;

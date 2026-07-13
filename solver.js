@@ -98,7 +98,6 @@ const Solver = (() => {
   }
 
   // Peerovi iz proizvoljnog skupa jedinica (svaka ćelija vidi ostale u istoj jedinici).
-  const baseUnits = [...rows, ...cols, ...boxes];
   function buildPeers(units) {
     const p = [];
     for (let i = 0; i < 81; i++) p.push(new Set());
@@ -107,9 +106,11 @@ const Solver = (() => {
   }
   // Dodatne jedinice po regijskoj varijanti (uz uvijek prisutne row/col/box).
   // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
-  // Antiknight nema svoje units (samo peers), pa mu je unos prazan.
-  const REGION_VARIANTS = ["x", "hyper", "antiknight", "antiking"];
+  // Antiknight nema svoje units (samo peers), pa mu je unos prazan. Jigsaw ZAMJENJUJE
+  // box-units regijama (kroz ctxFor), pa mu je EXTRA_UNITS unos isto prazan.
+  const REGION_VARIANTS = ["jigsaw", "x", "hyper", "antiknight", "antiking"];
   const EXTRA_UNITS = {
+    jigsaw: [],
     x: [diagMain, diagAnti],
     hyper: hyperWindows,
     antiknight: [],
@@ -117,6 +118,23 @@ const Solver = (() => {
   };
   // Dodatni peers po varijanti (idx -> polje "isti-broj-zabranjen" ćelija).
   const EXTRA_PEERS = { antiknight: knightPeers, antiking: kingPeers };
+
+  // Jigsaw regije -> 9 polja ćelija (indeks = id regije). Uz validaciju oblika
+  // (81 elemenata, id-evi 0-8, svaki točno 9 puta) - nevaljano se tretira klasično.
+  function regionUnits(regions) {
+    const cells = Array.from({ length: 9 }, () => []);
+    for (let i = 0; i < 81; i++) cells[regions[i]].push(i);
+    return cells;
+  }
+  function validRegions(regions) {
+    if (!Array.isArray(regions) || regions.length !== 81) return false;
+    const counts = new Array(9).fill(0);
+    for (const r of regions) {
+      if (!Number.isInteger(r) || r < 0 || r > 8) return false;
+      counts[r]++;
+    }
+    return counts.every((c) => c === 9);
+  }
 
   // Kanonski ključ aktivnog skupa (npr. "x+hyper"), "classic" ako je prazan.
   function variantKey(variants) {
@@ -126,26 +144,38 @@ const Solver = (() => {
     return active.length ? active.join("+") : "classic";
   }
 
-  // Kontekst jedinica/peerova za aktivni skup, lijeno građen i cacheiran po ključu.
-  // Klasik = redovi/stupci/kvadrati; svaka varijanta dodaje svoje jedinice.
-  const unitCtx = {};
-  function ctxFor(variants) {
-    const key = variantKey(variants);
-    if (!unitCtx[key]) {
-      const active = key === "classic" ? [] : key.split("+");
-      const units = [...baseUnits, ...active.flatMap((v) => EXTRA_UNITS[v])];
-      const peers = buildPeers(units);
-      // Peer-varijante (antiknight): dodaj im susjede uz one iz units.
-      for (const v of active) {
-        const ep = EXTRA_PEERS[v];
-        if (ep) for (let i = 0; i < 81; i++) for (const j of ep[i]) peers[i].add(j);
-      }
-      unitCtx[key] = { allUnits: units, peers };
+  // Gradi kontekst jedinica/peerova iz aktivnih varijanti i danih box-jedinica
+  // (statični kvadrati ili jigsaw regije). Vraća i `boxes` (aktivne box-units).
+  function buildCtx(active, boxUnits) {
+    const units = [...rows, ...cols, ...boxUnits, ...active.flatMap((v) => EXTRA_UNITS[v])];
+    const peers = buildPeers(units);
+    // Peer-varijante (antiknight/antiking): dodaj im susjede uz one iz units.
+    for (const v of active) {
+      const ep = EXTRA_PEERS[v];
+      if (ep) for (let i = 0; i < 81; i++) for (const j of ep[i]) peers[i].add(j);
     }
+    return { allUnits: units, peers, boxes: boxUnits };
+  }
+
+  // Kontekst jedinica/peerova za aktivni skup. Klasik/aditivne varijante se lijeno
+  // grade i cacheiraju po ključu; JIGSAW nosi per-puzzle geometriju pa se NE
+  // cacheira (isti ključ, različite regije - cache bi podmetnuo tuđe regije).
+  const unitCtx = {};
+  function ctxFor(variants, regions) {
+    const key = variantKey(variants);
+    const active = key === "classic" ? [] : key.split("+");
+    if (active.includes("jigsaw") && validRegions(regions)) {
+      return buildCtx(active, regionUnits(regions));
+    }
+    if (!unitCtx[key]) unitCtx[key] = buildCtx(active, boxes);
     return unitCtx[key];
   }
   let allUnits = ctxFor([]).allUnits;
   let peers = ctxFor([]).peers;
+  // Aktivne box-jedinice i njihova pripadnost/naziv (jigsaw ih preusmjeri na regije).
+  let curBoxes = boxes;
+  let curBoxOf = boxOf;
+  let curBoxLabel = (b) => `box ${BOX_NAMES[b]}`;
 
   const T_SINGLE = 1,
     T_INTER = 2,
@@ -203,8 +233,8 @@ const Solver = (() => {
   }
 
   function lockedCandidates(grid, cand) {
-    // Pointing: kandidat u kvadratu zaključan na jedan red/stupac
-    for (const box of boxes) {
+    // Pointing: kandidat u kvadratu/regiji zaključan na jedan red/stupac
+    for (const box of curBoxes) {
       for (let v = 1; v <= 9; v++) {
         const cells = box.filter((idx) => cand[idx] && cand[idx].has(v));
         if (cells.length < 2) continue;
@@ -228,14 +258,14 @@ const Solver = (() => {
         }
       }
     }
-    // Claiming: kandidat u redu/stupcu zaključan na jedan kvadrat
+    // Claiming: kandidat u redu/stupcu zaključan na jedan kvadrat/regiju
     for (const line of [...rows, ...cols]) {
       for (let v = 1; v <= 9; v++) {
         const cells = line.filter((idx) => cand[idx] && cand[idx].has(v));
         if (cells.length < 2) continue;
-        const b0 = boxOf(cells[0]);
-        if (cells.every((idx) => boxOf(idx) === b0)) {
-          for (const idx of boxes[b0]) {
+        const b0 = curBoxOf(cells[0]);
+        if (cells.every((idx) => curBoxOf(idx) === b0)) {
+          for (const idx of curBoxes[b0]) {
             if (!line.includes(idx) && cand[idx] && cand[idx].has(v)) {
               cand[idx].delete(v);
               return true;
@@ -425,13 +455,18 @@ const Solver = (() => {
     "bottom-center",
     "bottom-right",
   ];
-  const namedBase = [];
-  for (let r = 0; r < 9; r++) namedBase.push({ cells: rows[r], name: `row ${r + 1}` });
-  for (let c = 0; c < 9; c++) namedBase.push({ cells: cols[c], name: `column ${c + 1}` });
-  for (let b = 0; b < 9; b++) namedBase.push({ cells: boxes[b], name: `box ${BOX_NAMES[b]}` });
+  // Imenovane linije (rows/cols) su statične; box-jedinice ovise o jigsawu pa se
+  // grade zasebno (klasični kvadrati ili regije s nazivom "region N").
+  const namedLines = [];
+  for (let r = 0; r < 9; r++) namedLines.push({ cells: rows[r], name: `row ${r + 1}` });
+  for (let c = 0; c < 9; c++) namedLines.push({ cells: cols[c], name: `column ${c + 1}` });
+  const namedBoxes = [];
+  for (let b = 0; b < 9; b++) namedBoxes.push({ cells: boxes[b], name: `box ${BOX_NAMES[b]}` });
   // Imenovane dodatne jedinice po varijanti (za tekst hinta). Isti aktivni skup
-  // kao EXTRA_UNITS, samo s ljudskim nazivima.
+  // kao EXTRA_UNITS, samo s ljudskim nazivima. Jigsaw je prazan (regije se
+  // ubacuju kao box-jedinice u namedFor, ne ovdje).
   const EXTRA_NAMED = {
+    jigsaw: [],
     x: [
       { cells: diagMain, name: "main diagonal" },
       { cells: diagAnti, name: "anti-diagonal" },
@@ -443,11 +478,16 @@ const Solver = (() => {
     antiking: [],
   };
   const namedCtx = {};
-  function namedFor(variants) {
+  function namedFor(variants, regions) {
     const key = variantKey(variants);
+    const active = key === "classic" ? [] : key.split("+");
+    // Jigsaw: box-jedinice su regije ("region N"), ne cacheira se (per-puzzle).
+    if (active.includes("jigsaw") && validRegions(regions)) {
+      const boxUnits = regionUnits(regions).map((cells, b) => ({ cells, name: `region ${b + 1}` }));
+      return [...namedLines, ...boxUnits, ...active.flatMap((v) => EXTRA_NAMED[v])];
+    }
     if (!namedCtx[key]) {
-      const active = key === "classic" ? [] : key.split("+");
-      namedCtx[key] = [...namedBase, ...active.flatMap((v) => EXTRA_NAMED[v])];
+      namedCtx[key] = [...namedLines, ...namedBoxes, ...active.flatMap((v) => EXTRA_NAMED[v])];
     }
     return namedCtx[key];
   }
@@ -456,12 +496,25 @@ const Solver = (() => {
 
   // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Prima polje (ili
   // legacy string) aktivnih varijanti; nepoznato => klasik (unatražna
-  // kompatibilnost sa spremljenim igrama).
-  function useVariant(variants) {
-    const ctx = ctxFor(variants);
+  // kompatibilnost sa spremljenim igrama). regions = jigsaw geometrija (81-polje)
+  // ili null; nevaljano se tretira klasično (statični kvadrati).
+  function useVariant(variants, regions) {
+    const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
-    namedUnits = namedFor(variants);
+    const active = variantKey(variants);
+    const jig =
+      active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
+    if (jig) {
+      curBoxes = ctx.boxes;
+      curBoxOf = (i) => regions[i];
+      curBoxLabel = (b) => `region ${b + 1}`;
+    } else {
+      curBoxes = boxes;
+      curBoxOf = boxOf;
+      curBoxLabel = (b) => `box ${BOX_NAMES[b]}`;
+    }
+    namedUnits = namedFor(variants, regions);
   }
 
   function hNakedSingle(cand) {
@@ -511,7 +564,7 @@ const Solver = (() => {
 
   function hLocked(cand) {
     for (let b = 0; b < 9; b++) {
-      const box = boxes[b];
+      const box = curBoxes[b];
       for (let v = 1; v <= 9; v++) {
         const cs = box.filter((i) => cand[i] && cand[i].has(v));
         if (cs.length < 2) continue;
@@ -528,7 +581,7 @@ const Solver = (() => {
               targets: elim,
               base: cs,
               focus: cs.concat(elim),
-              note: `in box ${BOX_NAMES[b]} the number ${v} can only be in row ${r0 + 1}, so it is removed from the rest of that row`,
+              note: `in ${curBoxLabel(b)} the number ${v} can only be in row ${r0 + 1}, so it is removed from the rest of that row`,
             };
         }
         if (cs.every((i) => i % 9 === c0)) {
@@ -542,7 +595,7 @@ const Solver = (() => {
               targets: elim,
               base: cs,
               focus: cs.concat(elim),
-              note: `in box ${BOX_NAMES[b]} the number ${v} can only be in column ${c0 + 1}, so it is removed from the rest of that column`,
+              note: `in ${curBoxLabel(b)} the number ${v} can only be in column ${c0 + 1}, so it is removed from the rest of that column`,
             };
         }
       }
@@ -551,9 +604,9 @@ const Solver = (() => {
       for (let v = 1; v <= 9; v++) {
         const cs = line.filter((i) => cand[i] && cand[i].has(v));
         if (cs.length < 2) continue;
-        const b0 = boxOf(cs[0]);
-        if (cs.every((i) => boxOf(i) === b0)) {
-          const elim = boxes[b0].filter((i) => !line.includes(i) && cand[i] && cand[i].has(v));
+        const b0 = curBoxOf(cs[0]);
+        if (cs.every((i) => curBoxOf(i) === b0)) {
+          const elim = curBoxes[b0].filter((i) => !line.includes(i) && cand[i] && cand[i].has(v));
           if (elim.length)
             return {
               technique: "Locked Candidates",
@@ -563,7 +616,7 @@ const Solver = (() => {
               targets: elim,
               base: cs,
               focus: cs.concat(elim),
-              note: `the number ${v} in that line lies only within box ${BOX_NAMES[b0]}, so it is removed from the rest of that box`,
+              note: `the number ${v} in that line lies only within ${curBoxLabel(b0)}, so it is removed from the rest of that box`,
             };
         }
       }
@@ -883,8 +936,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution, variants) {
-    useVariant(variants);
+  function explainNext(values, notes, solution, variants, regions) {
+    useVariant(variants, regions);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -909,8 +962,9 @@ const Solver = (() => {
   ];
 
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
-  function solveAndGrade(puzzle, variants) {
-    useVariant(variants);
+  // regions = jigsaw geometrija (81-polje id-eva) ili null/izostavljeno = klasik.
+  function solveAndGrade(puzzle, variants, regions) {
+    useVariant(variants, regions);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;
