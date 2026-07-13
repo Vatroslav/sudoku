@@ -76,6 +76,27 @@ const Solver = (() => {
     knightPeers.push(list);
   }
 
+  // Antiking: isti broj zabranjen na potezu šahovskog kralja - dodatni peers.
+  // Enkodiramo samo 4 DIJAGONALNA susjeda; ortogonalni potezi kralja već su
+  // pokriveni redom/stupcem, pa bi bili suvišni.
+  const kingPeers = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    for (const [dr, dc] of [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ]) {
+      const nr = r + dr,
+        nc = c + dc;
+      if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
+    }
+    kingPeers.push(list);
+  }
+
   // Peerovi iz proizvoljnog skupa jedinica (svaka ćelija vidi ostale u istoj jedinici).
   const baseUnits = [...rows, ...cols, ...boxes];
   function buildPeers(units) {
@@ -87,10 +108,15 @@ const Solver = (() => {
   // Dodatne jedinice po regijskoj varijanti (uz uvijek prisutne row/col/box).
   // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
   // Antiknight nema svoje units (samo peers), pa mu je unos prazan.
-  const REGION_VARIANTS = ["x", "hyper", "antiknight"];
-  const EXTRA_UNITS = { x: [diagMain, diagAnti], hyper: hyperWindows, antiknight: [] };
+  const REGION_VARIANTS = ["x", "hyper", "antiknight", "antiking"];
+  const EXTRA_UNITS = {
+    x: [diagMain, diagAnti],
+    hyper: hyperWindows,
+    antiknight: [],
+    antiking: [],
+  };
   // Dodatni peers po varijanti (idx -> polje "isti-broj-zabranjen" ćelija).
-  const EXTRA_PEERS = { antiknight: knightPeers };
+  const EXTRA_PEERS = { antiknight: knightPeers, antiking: kingPeers };
 
   // Kanonski ključ aktivnog skupa (npr. "x+hyper"), "classic" ako je prazan.
   function variantKey(variants) {
@@ -411,9 +437,10 @@ const Solver = (() => {
       { cells: diagAnti, name: "anti-diagonal" },
     ],
     hyper: hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] })),
-    // Antiknight nema imenovanih jedinica (samo peers) - eliminacije se odražavaju
-    // kroz kandidate (naked single), ali nema hidden-single "u jedinici" hinta.
+    // Antiknight/Antiking nemaju imenovanih jedinica (samo peers) - eliminacije se
+    // odražavaju kroz kandidate (naked single), ali nema hidden-single "u jedinici" hinta.
     antiknight: [],
+    antiking: [],
   };
   const namedCtx = {};
   function namedFor(variants) {

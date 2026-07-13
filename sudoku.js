@@ -54,9 +54,30 @@ const Sudoku = (() => {
     knightPeers.push(list);
   }
 
+  // Antiking: isti broj zabranjen na potezu šahovskog kralja. Samo 4 dijagonalna
+  // susjeda - ortogonalni potezi su već pokriveni redom/stupcem.
+  const KING_OFFSETS = [
+    [-1, -1],
+    [-1, 1],
+    [1, -1],
+    [1, 1],
+  ];
+  const kingPeers = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    for (const [dr, dc] of KING_OFFSETS) {
+      const nr = r + dr,
+        nc = c + dc;
+      if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
+    }
+    kingPeers.push(list);
+  }
+
   // Regijske varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
   // (prazno = classic). Redoslijed je kanonski (za stabilne cache-ključeve i labele).
-  const REGION_VARIANTS = ["x", "hyper", "antiknight"];
+  const REGION_VARIANTS = ["x", "hyper", "antiknight", "antiking"];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];
@@ -85,6 +106,9 @@ const Sudoku = (() => {
     }
     if (variants.includes("antiknight")) {
       for (const j of knightPeers[idx]) if (board[j] === val) return false;
+    }
+    if (variants.includes("antiking")) {
+      for (const j of kingPeers[idx]) if (board[j] === val) return false;
     }
     return true;
   }
@@ -159,7 +183,8 @@ const Sudoku = (() => {
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).
   // variants: polje (ili legacy string) aktivnih regijskih varijanti - prazno =
   // classic, "x" (dvije dijagonale 1-9), "hyper" (4 prozora 1-9), "antiknight"
-  // (isti broj zabranjen na skoku konja), ili kombinacija.
+  // (isti broj zabranjen na skoku konja), "antiking" (isti broj zabranjen na
+  // dijagonalnom susjedu), ili kombinacija.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;

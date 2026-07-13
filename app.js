@@ -6,8 +6,13 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
   // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
-  const REGION_VARIANTS = ["x", "hyper", "antiknight"];
-  const VARIANT_LABELS = { x: "Diagonal", hyper: "Hyper", antiknight: "Antiknight" };
+  const REGION_VARIANTS = ["x", "hyper", "antiknight", "antiking"];
+  const VARIANT_LABELS = {
+    x: "Diagonal",
+    hyper: "Hyper",
+    antiknight: "Antiknight",
+    antiking: "Antiking",
+  };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];
@@ -130,6 +135,27 @@
       if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
     }
     knightPeers.push(list);
+  }
+
+  // Antiking: ćelije na dijagonalnom potezu kralja (za peer-highlight i čišćenje
+  // bilješki). Ortogonalne susjede ne trebamo - njih već hvata red/stupac. Kao
+  // antiknight, nema trajne dekoracije ploče - ograničenje se vidi kroz highlight.
+  const kingPeers = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    for (const [dr, dc] of [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1],
+    ]) {
+      const nr = r + dr,
+        nc = c + dc;
+      if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
+    }
+    kingPeers.push(list);
   }
 
   // Varijanta trenutno odabrana u meniju (dok se ne pokrene nova igra).
@@ -448,6 +474,9 @@
     }
     if (state.variants.includes("antiknight")) {
       for (const t of knightPeers[idx]) targets.add(t);
+    }
+    if (state.variants.includes("antiking")) {
+      for (const t of kingPeers[idx]) targets.add(t);
     }
     for (const t of targets) {
       const p = state.notes[t].indexOf(n);
@@ -778,6 +807,7 @@
     const xMode = state.variants.includes("x");
     const hyperMode = state.variants.includes("hyper");
     const antiknightMode = state.variants.includes("antiknight");
+    const antikingMode = state.variants.includes("antiking");
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -842,6 +872,7 @@
           if (sw !== -1 && sw === hyperWindowOf(i)) isPeer = true;
         }
         if (antiknightMode && knightPeers[sel].includes(i)) isPeer = true;
+        if (antikingMode && kingPeers[sel].includes(i)) isPeer = true;
         if (isPeer) cell.classList.add("peer");
         if (selVal !== 0 && v === selVal) cell.classList.add("same");
       }

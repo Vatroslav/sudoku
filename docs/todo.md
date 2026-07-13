@@ -18,7 +18,9 @@ Regijske (samo prošire units/peers - najjeftinije):
       Prva peer-varijanta: `EXTRA_PEERS` u `solver.js` (`ctxFor` dodaje susjede uz
       units), nema imenovanih jedinica ni trajne dekoracije ploče (vidi se kroz
       peer-highlight). Antiking je sad trivijalan (isti mehanizam, drugi offseti).
-- [ ] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers)
+- [x] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers, v1.19.0).
+      Isti `EXTRA_PEERS` mehanizam kao Antiknight, samo drugi offseti (4 dijagonalna
+      susjeda; ortogonalni potezi kralja su suvišni - već ih hvata red/stupac).
 - [ ] Jigsaw (9 nepravilnih regija umjesto kvadrata - `setup` geometrije + render)
 
 Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
