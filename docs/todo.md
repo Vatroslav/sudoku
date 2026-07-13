@@ -8,6 +8,34 @@ varijanti (`state.variants`, npr. `["x","hyper"]`): `sudoku.js` (`isValid`) i `s
 registry - kad broj varijanti naraste (ili kad zatreba `setup`/`deriveClues`), procijeniti
 isplati li se Faza 0 refaktor iz doca.
 
+## Metrike (blocker za launch na itch)
+
+- [ ] **Anonimni event tracking** - mjeriti koliko se partija pokreće, kakvih
+      (classic / pojedina varijanta / kombinacija) i po kojoj težini, te koliko ih
+      se riješi. Bez ovoga launch na itch nema signal koristi li itko igru.
+  - **Mehanizam kao u LRO** (`~/github/left-right-onwards-web`): tanak klijentski
+    modul → POST na Google Apps Script web app → Google Sheet. Referenca:
+    `src/core/metrics.ts` + `metrics/README.md` u tom repou. Načela iz LRO-a:
+    anoniman per-browser session id (localStorage, bez PII), fire-and-forget
+    (`fetch` + `no-cors` + `keepalive`, response se ne čita), sve u `try/catch`
+    (tracking nikad ne smije srušiti igru), i **no-op dok `METRICS_URL` nije
+    postavljen**. URL nije secret (vidi se u network tabu) - smije u repo.
+  - **Točke emitiranja u ovom repou** (`app.js`):
+    - start: u `newGame(difficulty, variants)` → event `game_started`
+    - kraj: gdje se postavlja `state.solved = true` (win) → event `game_solved`
+  - **Predloženi eventi i payload**:
+    - `game_started` → `{ gameId, difficulty, variants }`
+    - `game_solved` → `{ gameId, difficulty, variants }` (kasnije po želji + vrijeme/potezi)
+    - `difficulty` je `"normal"` / `"hard"` (`DIFF_LABELS`); `variants` je
+      `state.variants` polje (prazno = classic, npr. `["x","hyper"]` = kombinacija -
+      polje samo pokriva i pojedinačne varijante i kombinacije).
+    - `gameId` (novi uuid u `newGame`, spremljen u `state`) veže start↔solve pa se
+      completion rate računa po partiji, ne samo agregatno; preživi reload kroz
+      localStorage kao i ostatak `state`.
+  - Dev vs prod razlikovati u payloadu (`env`) da lokalno testiranje ne zagađuje
+    analizu - LRO to radi preko `import.meta.env.DEV`; ovdje nema build systema, pa
+    izvesti iz `location.hostname` (localhost/127.0.0.1 = dev).
+
 ## Varijante
 
 Regijske (samo prošire units/peers - najjeftinije):
