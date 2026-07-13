@@ -49,7 +49,10 @@ Regijske (samo prošire units/peers - najjeftinije):
 - [x] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers, v1.19.0).
       Isti `EXTRA_PEERS` mehanizam kao Antiknight, samo drugi offseti (4 dijagonalna
       susjeda; ortogonalni potezi kralja su suvišni - već ih hvata red/stupac).
-- [ ] Jigsaw (9 nepravilnih regija umjesto kvadrata - `setup` geometrije + render)
+- [ ] Jigsaw (9 nepravilnih regija umjesto kvadrata - `setup` geometrije + render).
+      Implementacijski spec spreman: [dorada-jigsaw.md](dorada-jigsaw.md) - za
+      razliku od dosadašnjih varijanti ZAMJENJUJE box-units (ne dodaje ih) i nosi
+      per-puzzle geometriju (`regions[81]`), pa solver cache mora zaobići jigsaw.
 
 Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 
