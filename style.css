@@ -466,6 +466,11 @@ main {
 .num-btn:active {
   background: var(--board-bg);
 }
+/* Fiksni line-height znamenke: visina .num-btn je deterministicna (24px padding
+   + 1.1x font + 13px brojac), pa je swatch moze tocno pogoditi istom formulom. */
+.num {
+  line-height: 1.1;
+}
 .num-count {
   font-size: 11px;
   color: var(--muted);
@@ -494,7 +499,9 @@ main {
 }
 .swatch {
   flex: 0 0 calc(20% - 8px);
-  height: 44px;
+  /* Točno ista visina kao .num-btn (ista formula, isti fiksni line-height 1.1):
+     padding (16+8) + red znamenke (1.1 × font) + brojač (13px). */
+  height: calc(24px + clamp(26px, 9vw, 38px) * 1.1 + 13px);
   border-radius: 12px;
   border: none;
   cursor: pointer;
