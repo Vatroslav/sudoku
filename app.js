@@ -6,13 +6,13 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
   // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
-  const REGION_VARIANTS = ["jigsaw", "x", "hyper", "antiknight", "antiking"];
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw"];
   const VARIANT_LABELS = {
-    jigsaw: "Jigsaw",
+    antiking: "Antiking",
+    antiknight: "Antiknight",
     x: "Diagonal",
     hyper: "Hyper",
-    antiknight: "Antiknight",
-    antiking: "Antiking",
+    jigsaw: "Jigsaw",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];

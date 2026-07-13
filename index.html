@@ -74,12 +74,17 @@
         <div class="menu-label">Variants</div>
         <div class="menu-sublabel">Choose up to 2. None selected = Classic.</div>
         <div class="menu-variant" id="menu-variant">
-          <button class="variant-row" data-variant="jigsaw">
+          <button class="variant-row" data-variant="antiking">
             <span class="variant-info">
-              <span class="variant-name">Jigsaw</span>
-              <span class="variant-desc"
-                >The 3×3 boxes are replaced by nine irregular regions.</span
-              >
+              <span class="variant-name">Antiking</span>
+              <span class="variant-desc">Cells touching diagonally can't share a digit.</span>
+            </span>
+            <span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="antiknight">
+            <span class="variant-info">
+              <span class="variant-name">Antiknight</span>
+              <span class="variant-desc">Cells a knight's move apart can't share a digit.</span>
             </span>
             <span class="variant-toggle" aria-hidden="true"></span>
           </button>
@@ -97,17 +102,12 @@
             </span>
             <span class="variant-toggle" aria-hidden="true"></span>
           </button>
-          <button class="variant-row" data-variant="antiknight">
+          <button class="variant-row" data-variant="jigsaw">
             <span class="variant-info">
-              <span class="variant-name">Antiknight</span>
-              <span class="variant-desc">Cells a knight's move apart can't share a digit.</span>
-            </span>
-            <span class="variant-toggle" aria-hidden="true"></span>
-          </button>
-          <button class="variant-row" data-variant="antiking">
-            <span class="variant-info">
-              <span class="variant-name">Antiking</span>
-              <span class="variant-desc">Cells touching diagonally can't share a digit.</span>
+              <span class="variant-name">Jigsaw</span>
+              <span class="variant-desc"
+                >The 3×3 boxes are replaced by nine irregular regions.</span
+              >
             </span>
             <span class="variant-toggle" aria-hidden="true"></span>
           </button>

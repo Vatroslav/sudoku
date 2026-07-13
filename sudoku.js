@@ -77,7 +77,7 @@ const Sudoku = (() => {
 
   // Regijske varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
   // (prazno = classic). Redoslijed je kanonski (za stabilne cache-ključeve i labele).
-  const REGION_VARIANTS = ["jigsaw", "x", "hyper", "antiknight", "antiking"];
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw"];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];

@@ -108,13 +108,13 @@ const Solver = (() => {
   // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
   // Antiknight nema svoje units (samo peers), pa mu je unos prazan. Jigsaw ZAMJENJUJE
   // box-units regijama (kroz ctxFor), pa mu je EXTRA_UNITS unos isto prazan.
-  const REGION_VARIANTS = ["jigsaw", "x", "hyper", "antiknight", "antiking"];
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw"];
   const EXTRA_UNITS = {
-    jigsaw: [],
+    antiking: [],
+    antiknight: [],
     x: [diagMain, diagAnti],
     hyper: hyperWindows,
-    antiknight: [],
-    antiking: [],
+    jigsaw: [],
   };
   // Dodatni peers po varijanti (idx -> polje "isti-broj-zabranjen" ćelija).
   const EXTRA_PEERS = { antiknight: knightPeers, antiking: kingPeers };
@@ -466,16 +466,16 @@ const Solver = (() => {
   // kao EXTRA_UNITS, samo s ljudskim nazivima. Jigsaw je prazan (regije se
   // ubacuju kao box-jedinice u namedFor, ne ovdje).
   const EXTRA_NAMED = {
-    jigsaw: [],
+    // Antiknight/Antiking nemaju imenovanih jedinica (samo peers) - eliminacije se
+    // odražavaju kroz kandidate (naked single), ali nema hidden-single "u jedinici" hinta.
+    antiking: [],
+    antiknight: [],
     x: [
       { cells: diagMain, name: "main diagonal" },
       { cells: diagAnti, name: "anti-diagonal" },
     ],
     hyper: hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] })),
-    // Antiknight/Antiking nemaju imenovanih jedinica (samo peers) - eliminacije se
-    // odražavaju kroz kandidate (naked single), ali nema hidden-single "u jedinici" hinta.
-    antiknight: [],
-    antiking: [],
+    jigsaw: [],
   };
   const namedCtx = {};
   function namedFor(variants, regions) {
