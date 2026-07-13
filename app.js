@@ -860,6 +860,8 @@
     document.getElementById("color-btn").classList.toggle("active", state.colorMode);
     paletteEl.classList.toggle("hidden", !state.colorMode);
     numpadEl.classList.toggle("hidden", state.colorMode);
+    // Jigsaw: ploča dobiva klasu za deblje/svjetlije granice regija (vidi CSS).
+    boardEl.classList.toggle("jigsaw", jigsawMode);
 
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];

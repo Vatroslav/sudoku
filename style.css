@@ -4,6 +4,9 @@
   --board-bg: #23232c;
   --line: #34343f;
   --line-strong: #5a5a6b;
+  /* Jigsaw: granice regija (i okvir ploče) - svjetlije od običnih razmaka među
+     ćelijama, da se nepravilne regije jasno vide kao "kavezi". */
+  --jig-line: #b0b1c6;
   --cell: #1f1f27;
   --cell-peer: #262631;
   --cell-sel: #2f4a6b;
@@ -205,6 +208,26 @@ main {
   box-shadow:
     1px 0 0 0 var(--line-strong),
     0 1px 0 0 var(--line-strong);
+}
+
+/* Jigsaw: iste .br/.bb klase, ali granice regija su deblje (2px) i svjetlije
+   (--jig-line) da se nepravilni oblici jasno čitaju. Unutar-regijski razmaci
+   ostaju tanki i prigušeni (board gap), pa kontrast crta granicu regije. */
+.board.jigsaw {
+  border-color: var(--jig-line);
+}
+.board.jigsaw .cell.br {
+  margin-right: 2px;
+  box-shadow: 2px 0 0 0 var(--jig-line);
+}
+.board.jigsaw .cell.bb {
+  margin-bottom: 2px;
+  box-shadow: 0 2px 0 0 var(--jig-line);
+}
+.board.jigsaw .cell.br.bb {
+  box-shadow:
+    2px 0 0 0 var(--jig-line),
+    0 2px 0 0 var(--jig-line);
 }
 
 /* Dijagonale (X-Sudoku): crta se boja u POZADINI ćelije (background-image), pa
