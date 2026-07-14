@@ -41,13 +41,26 @@ brojke. Dev evente ne brišemo, korisni su za provjeru da tracking uopće radi.
 
 ## Eventi
 
-| event          | payload                            | kada                              |
-| -------------- | ---------------------------------- | --------------------------------- |
-| `game_started` | `{ gameId, difficulty, variants }` | ploča generirana i prikazana      |
-| `game_solved`  | `{ gameId, difficulty, variants }` | zadnja ćelija točna (win overlay) |
+| event            | payload                                                                          | kada                              |
+| ---------------- | -------------------------------------------------------------------------------- | --------------------------------- |
+| `app_opened`     | `{ resumed }` (+ `gameId/difficulty/variants/solved` ako je nastavljena partija) | svako otvaranje igre              |
+| `game_started`   | `{ gameId, difficulty, variants }`                                               | ploča generirana i prikazana      |
+| `game_solved`    | `{ gameId, difficulty, variants, playMs, moves, hints }`                         | zadnja ćelija točna (win overlay) |
+| `game_cancelled` | `{ difficulty, variants, waitedMs }`                                             | Cancel na generiranju             |
 
+- `app_opened` je jedini trag povratnika: tko nastavi spremljenu partiju ne generira
+  novu ploču, pa bez ovoga ne proizvede nijedan event. Bez njega su sesije i povrati
+  nevidljivi, a nema ni nazivnika za ostale brojke.
 - `game_started` se šalje tek kad ploča stvarno postoji - generiranje koje korisnik
   prekine **Cancelom nije partija** i ne broji se (inače bi razvodnilo completion rate).
+- `game_cancelled` mjeri odustajanje od spore HARD generacije varijanti (poznati
+  tehnički dug): `waitedMs` je koliko je čekao prije nego je prekinuo.
+- `playMs` je **igrano** vrijeme - sat teče samo dok je kartica vidljiva, pa partija
+  ostavljena otvorena preko noći ne daje besmislenih 10 sati. `moves` broji unose
+  brojeva (ne bilješke ni boje), `hints` koliko je puta tražena pomoć.
+- U Sheetu se nova polja pišu **na kraj** reda (`play_ms`, `moves`, `hints`,
+  `waited_ms`, `resumed`); prazna ćelija znači "polje ne pripada tom eventu", pa
+  `app_opened` ne izgleda kao partija s 0 poteza.
 - `gameId` (uuid po partiji) veže start↔solve, pa je completion rate mjerljiv po
   partiji, ne samo agregatno. Živi u `state` → preživi reload kroz localStorage.
 - `difficulty` je `normal` / `hard`; `variants` je polje (`[]` = classic,

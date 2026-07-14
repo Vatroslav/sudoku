@@ -282,12 +282,36 @@
     difficulty: state.difficulty,
     variants: state.variants,
   });
+  // Uz solve ide i koliko je partija koštala: je li Normal trivijalan, je li Hard
+  // neprolazan. `playMs` je igrano vrijeme, ne vrijeme od početka (vidi sat ispod).
+  const solveFacts = () => ({
+    ...gameFacts(),
+    playMs: state.playMs || 0,
+    moves: state.moves || 0,
+    hints: state.hints || 0,
+  });
+
+  // Sat igranog vremena: broji samo dok je kartica vidljiva. Partija ostavljena
+  // otvorena preko noći inače bi dala besmislenih 10 sati. Akumulira se u
+  // `state.playMs` (preživi reload), `activeSince` je efemeran.
+  let activeSince = null;
+  function clockStart() {
+    if (activeSince === null && state && !state.solved) activeSince = Date.now();
+  }
+  function clockStop() {
+    if (activeSince === null) return;
+    if (state) state.playMs = (state.playMs || 0) + (Date.now() - activeSince);
+    activeSince = null;
+  }
 
   // --- Nova igra ---
   // Generiranje ide u Web Worker: glavna nit ostaje slobodna (spinner živi, a
   // gumb Cancel je klikabilan). Prekid = worker.terminate(). Fallback na sinkrono
   // ako okruženje nema Worker.
   let genWorker = null;
+  // Što se trenutno generira (i otkad) - da Cancel može javiti od čega je korisnik
+  // odustao i koliko je čekao. Čisti se čim ploča sjedne.
+  let pendingGen = null;
 
   function buildState(difficulty, variants, puzzle, solution, techniques, regions) {
     state = {
@@ -301,6 +325,9 @@
       regions: regions || null,
       techniques: techniques || [],
       gameId: newGameId(),
+      playMs: 0,
+      moves: 0,
+      hints: 0,
       selected: null,
       multi: [],
       notesMode: false,
@@ -313,6 +340,9 @@
     save();
     render();
     loadingOverlay.classList.add("hidden");
+    pendingGen = null;
+    activeSince = null;
+    clockStart();
     // Start se broji tek kad ploča stvarno postoji - generiranje koje korisnik
     // prekine Cancelom nije odigrana partija i ne smije razvodniti completion rate.
     track("game_started", gameFacts());
@@ -328,6 +358,7 @@
 
   function newGame(difficulty, variants) {
     variants = normVariants(variants);
+    pendingGen = { difficulty, variants, at: Date.now() };
     loadingOverlay.classList.remove("hidden");
     if (genWorker) {
       genWorker.terminate();
@@ -365,6 +396,16 @@
       genWorker = null;
     }
     loadingOverlay.classList.add("hidden");
+    // Odustajanje od generiranja je jedini signal za sporu HARD generaciju varijanti:
+    // bez njega čovjek koji je odustao izgleda isto kao onaj koji nikad nije ni došao.
+    if (pendingGen) {
+      track("game_cancelled", {
+        difficulty: pendingGen.difficulty,
+        variants: pendingGen.variants,
+        waitedMs: Date.now() - pendingGen.at,
+      });
+      pendingGen = null;
+    }
     openMenu();
   }
 
@@ -391,6 +432,10 @@
       // Igre spremljene prije metrika nemaju gameId - njihov solve ostaje bez veze
       // na start (prazan gameId), ne izmišljamo novi jer start nikad nije poslan.
       if (!state.gameId) state.gameId = "";
+      // Brojači uvedeni s metrikama - stare spremljene igre kreću od nule.
+      if (typeof state.playMs !== "number") state.playMs = 0;
+      if (typeof state.moves !== "number") state.moves = 0;
+      if (typeof state.hints !== "number") state.hints = 0;
       state.colors = normalizeColors(state.colors);
       if (state.colorMode === undefined) state.colorMode = false;
       // Migracija: stare spremljene igre imaju string `variant`, nove `variants`.
@@ -464,6 +509,9 @@
       state.values[idx] = 0;
       return true;
     }
+    // Potez = unos broja (i njegovo poništavanje ponovnim istim brojem). Bilješke,
+    // boje i Erase se ne broje - mjerimo koliko je unosa trebalo do rješenja.
+    state.moves = (state.moves || 0) + 1;
     if (state.values[idx] === n) {
       state.values[idx] = 0; // ponovni isti broj briše
       return true;
@@ -733,6 +781,10 @@
 
   function hint() {
     if (!state || state.solved) return;
+    // Svaki zahtjev za pomoć se broji (i onaj koji samo javi "imaš krivih polja") -
+    // mjera je koliko je puta korisnik zapeo, ne koliko mu je logike servirano.
+    state.hints = (state.hints || 0) + 1;
+    save();
 
     // 1) Krivi unosi prvo - logika na pogrešnoj ploči je besmislena.
     const wrong = [];
@@ -856,8 +908,9 @@
       if (state.values[i] !== state.solution[i]) return;
     }
     state.solved = true;
+    clockStop();
     save();
-    track("game_solved", gameFacts());
+    track("game_solved", solveFacts());
     winStats.textContent = winStatsText();
     winOverlay.classList.remove("hidden");
   }
@@ -1127,9 +1180,14 @@
     window.addEventListener("pointermove", onBoardPointerMove);
     window.addEventListener("pointerup", onBoardPointerUp);
     window.addEventListener("pointercancel", onBoardPointerUp);
-    // Spremi kad app ode u pozadinu
+    // Spremi kad app ode u pozadinu; sat igranog vremena staje s njim.
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) save();
+      if (document.hidden) {
+        clockStop();
+        save();
+      } else {
+        clockStart();
+      }
     });
   }
 
@@ -1153,13 +1211,18 @@
     buildPalette();
     bind();
     showVersion();
+    // app_opened je jedini event koji hvata povratnika: tko nastavi spremljenu
+    // partiju ne generira novu ploču, pa bez ovoga ne proizvede baš nikakav trag.
     if (load() && !allSolved()) {
       render();
+      clockStart();
+      track("app_opened", { resumed: true, ...gameFacts(), solved: !!state.solved });
       if (state.solved) {
         winStats.textContent = winStatsText();
         winOverlay.classList.remove("hidden");
       }
     } else {
+      track("app_opened", { resumed: false });
       newGame("normal");
     }
   }

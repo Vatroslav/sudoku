@@ -26,8 +26,14 @@ isplati li se Faza 0 refaktor iz doca.
       Provjereno end-to-end: partija pokrenuta u browseru zapiše red (anon session,
       `env=dev`, gameId, difficulty, variants). Postavljanje opisano u
       [metrics/README.md](../metrics/README.md).
-- [ ] Po želji kasnije: trajanje partije / broj poteza u `game_solved`, i event za
-      prekinuto generiranje (koliko ljudi odustane od spore HARD generacije varijanti).
+- [x] **Drugi krug eventa** (v1.23.0): `app_opened` (jedini trag povratnika - tko
+      nastavi spremljenu partiju ne generira ploču pa inače ne proizvede ništa),
+      `game_cancelled` (odustajanje od spore HARD generacije - `waitedMs`), te
+      `playMs` / `moves` / `hints` u `game_solved`. `playMs` je igrano vrijeme (sat
+      teče samo dok je kartica vidljiva).
+- [ ] Po želji kasnije: `game_left` na `pagehide` - koliko je ćelija bilo popunjeno
+      kad je čovjek otišao (jedini način da se vidi GDJE unutar partije ljudi
+      odustaju). Ide throttlano, jednom po partiji, inače je previše šuma.
 
 ## Varijante
 
