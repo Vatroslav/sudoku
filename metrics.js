@@ -8,7 +8,8 @@
 
   /** Apps Script web app URL (.../exec). Prazno = tracking isključen (no-op).
       Nije secret (klijent ga svejedno otkriva u network tabu), pa smije u repo. */
-  const METRICS_URL = "";
+  const METRICS_URL =
+    "https://script.google.com/macros/s/AKfycbydNb2L5QtAqMrRyD7QBRpMNjOM06OTmNXWlUo-PrDinyVttSelQEz9Cjsrf6LEQ7ju/exec";
 
   const SID_KEY = "sudoku_sid";
 

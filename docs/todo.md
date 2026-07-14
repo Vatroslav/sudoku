@@ -21,12 +21,11 @@ isplati li se Faza 0 refaktor iz doca.
       LRO-ov `import.meta.env.DEV`: dev = localhost/`file://`, prod = svaka
       isporučena kopija (itch hostovi se namjerno ne nabrajaju - vidi
       [metrics/README.md](../metrics/README.md)).
-- [ ] **Endpoint (Apps Script + Sheet)** - dok ovo ne postoji, tracking je no-op i
-      launch i dalje nema signal. Koraci u [metrics/README.md](../metrics/README.md):
-      novi Sheet (tab `events`) → Extensions → Apps Script → zalijepi
-      [metrics/apps-script.gs](../metrics/apps-script.gs) + upiši `SHEET_ID` → Deploy
-      as Web app (Execute as Me, Access Anyone) → dobiveni `/exec` URL upiši u
-      `metrics.js` → `METRICS_URL`. Zaseban Sheet od LRO-ovog (druge kolone).
+- [x] **Endpoint (Apps Script + Sheet)** postavljen (v1.22.0) - `METRICS_URL` upisan u
+      `metrics.js`, tracking je aktivan. Sheet "Sudoku - metrics" (tab `events`).
+      Provjereno end-to-end: partija pokrenuta u browseru zapiše red (anon session,
+      `env=dev`, gameId, difficulty, variants). Postavljanje opisano u
+      [metrics/README.md](../metrics/README.md).
 - [ ] Po želji kasnije: trajanje partije / broj poteza u `game_solved`, i event za
       prekinuto generiranje (koliko ljudi odustane od spore HARD generacije varijanti).
 
