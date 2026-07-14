@@ -10,6 +10,7 @@ const ASSETS = [
   "./solver.js",
   "./sudoku.js",
   "./gen-worker.js",
+  "./metrics.js",
   "./app.js",
   "./package.json",
   "./manifest.webmanifest",

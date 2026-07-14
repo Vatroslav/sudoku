@@ -257,6 +257,32 @@
     }
   }
 
+  // --- Metrike ---
+  // Anoniman event tracking (metrics.js). No-op dok METRICS_URL nije postavljen, a
+  // ovdje je dodatno zaštićen: ako se metrics.js ne učita, igra radi normalno dalje.
+  const track = (event, payload) => {
+    try {
+      if (window.Metrics) window.Metrics.track(event, payload);
+    } catch (e) {
+      /* tracking nikad ne smije srušiti igru */
+    }
+  };
+  const newGameId = () => {
+    try {
+      return window.Metrics ? window.Metrics.uuid() : "";
+    } catch (e) {
+      return "";
+    }
+  };
+  // Ono što opisuje partiju u svakom eventu. `gameId` veže game_started↔game_solved
+  // (completion rate po partiji, ne samo agregatno) i preživi reload jer živi u
+  // state-u; `variants` je polje pa pokriva i pojedinačne varijante i kombinacije.
+  const gameFacts = () => ({
+    gameId: state.gameId || "",
+    difficulty: state.difficulty,
+    variants: state.variants,
+  });
+
   // --- Nova igra ---
   // Generiranje ide u Web Worker: glavna nit ostaje slobodna (spinner živi, a
   // gumb Cancel je klikabilan). Prekid = worker.terminate(). Fallback na sinkrono
@@ -274,6 +300,7 @@
       variants,
       regions: regions || null,
       techniques: techniques || [],
+      gameId: newGameId(),
       selected: null,
       multi: [],
       notesMode: false,
@@ -286,6 +313,9 @@
     save();
     render();
     loadingOverlay.classList.add("hidden");
+    // Start se broji tek kad ploča stvarno postoji - generiranje koje korisnik
+    // prekine Cancelom nije odigrana partija i ne smije razvodniti completion rate.
+    track("game_started", gameFacts());
   }
 
   function generateSync(difficulty, variants) {
@@ -358,6 +388,9 @@
       if (!state.notes) state.notes = Array.from({ length: 81 }, () => []);
       if (state.activeNote === undefined) state.activeNote = null;
       if (!state.multi) state.multi = [];
+      // Igre spremljene prije metrika nemaju gameId - njihov solve ostaje bez veze
+      // na start (prazan gameId), ne izmišljamo novi jer start nikad nije poslan.
+      if (!state.gameId) state.gameId = "";
       state.colors = normalizeColors(state.colors);
       if (state.colorMode === undefined) state.colorMode = false;
       // Migracija: stare spremljene igre imaju string `variant`, nove `variants`.
@@ -824,6 +857,7 @@
     }
     state.solved = true;
     save();
+    track("game_solved", gameFacts());
     winStats.textContent = winStatsText();
     winOverlay.classList.remove("hidden");
   }
