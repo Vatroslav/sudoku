@@ -322,12 +322,14 @@ const Sudoku = (() => {
   // Even/Odd: djelić ćelija nosi oznaku parnosti izvedenu iz rješenja (kvadrat =
   // parno, krug = neparno u UI-ju). Oznake su aktivne u countSolutions/dig pa daju
   // logičku snagu (smiju se maknuti dodatni zadani brojevi uz jedinstvenost).
-  // PARITY_DENSITY je knob za ugađanje: više oznaka = lakše, premalo = ne osjeti se.
-  const PARITY_DENSITY = 0.3;
+  // PARITY_DENSITY je raspon (knob): gustoća se nasumično bira po generaciji da
+  // slagalice variraju. Više oznaka = lakše, premalo = ne osjeti se.
+  const PARITY_DENSITY = { min: 0.24, max: 0.38 };
   function deriveParity(solution) {
     const parity = new Array(81).fill(0);
     const idxs = shuffle([...Array(81).keys()]);
-    const count = Math.round(81 * PARITY_DENSITY);
+    const density = PARITY_DENSITY.min + Math.random() * (PARITY_DENSITY.max - PARITY_DENSITY.min);
+    const count = Math.round(81 * density);
     for (let k = 0; k < count; k++) {
       const i = idxs[k];
       parity[i] = solution[i] % 2 === 0 ? 1 : 2; // 1 = parno, 2 = neparno
@@ -337,9 +339,9 @@ const Sudoku = (() => {
 
   // Kropki (casual): prikaži podskup točaka izvedenih iz rješenja. Skupi sve bridove
   // gdje odnos postoji (uzastopni/omjer 2), pa otkrij njihov djelić. Samo pozitivno -
-  // odsutnost točke ne znači ništa. KROPKI_DENSITY je knob (udio kvalificiranih
-  // bridova koji se prikažu): više = više pomoći/gušće, manje = rjeđe.
-  const KROPKI_DENSITY = 0.45;
+  // odsutnost točke ne znači ništa. KROPKI_DENSITY je raspon (knob, udio kvalificiranih
+  // bridova): gustoća se nasumično bira po generaciji da slagalice variraju.
+  const KROPKI_DENSITY = { min: 0.35, max: 0.55 };
   function deriveDots(solution) {
     const h = new Array(81).fill(0),
       v = new Array(81).fill(0);
@@ -357,7 +359,8 @@ const Sudoku = (() => {
       }
     }
     shuffle(cands);
-    const count = Math.round(cands.length * KROPKI_DENSITY);
+    const density = KROPKI_DENSITY.min + Math.random() * (KROPKI_DENSITY.max - KROPKI_DENSITY.min);
+    const count = Math.round(cands.length * density);
     for (let k = 0; k < count; k++) {
       const [axis, i, t] = cands[k];
       if (axis === "h") h[i] = t;
