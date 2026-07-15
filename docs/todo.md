@@ -105,6 +105,16 @@ generacija mora dati jedinstveno rješenje):
       Perzistira u `state.colors`
       (array po ćeliji) + localStorage + undo. Boji i givens; overlay (`::after`,
       dinamični gradijent preko `--cc`) neovisan o highlightu.
+- [ ] **Daily Variant Mix** (ideja, neplanirano) - dnevni izazov: **ručno/offline
+      pre-generirana Hard kombinacija 3+ varijanti**, isporučena playerima da ju igraju.
+      Poanta je da zaobilazi dva postojeća ograničenja: `MAX_VARIANTS = 2` cap i sporu
+      3+ generaciju (vidi tech-dug niže) - taj trošak platimo mi jednom, offline, umjesto
+      da player čeka generaciju na uređaju. Otvorena pitanja za kad se uzme: kako "daily"
+      radi (fiksni dnevni puzzle iz pre-generirane banke vs deterministički seed po
+      datumu), gdje živi banka (bundlana JSON jer je PWA offline-first), kako se puzzle
+      ubaci u `state` (isti oblik kao `Sudoku.generate` rezultat - puzzle/solution/variants/
+      regions/parity/dots), i UX (zaseban "Daily" ulaz u meniju, jedan pokušaj po danu?).
+      Metrike već nose `variants` u eventima pa se completion po danu vidi bez izmjena.
 
 ## Poznato / tehnički dug
 
