@@ -10,9 +10,6 @@
     <style>
       :root {
         --bg: #14141a;
-        --surface: #1b1b22;
-        --board-bg: #23232c;
-        --line: #34343f;
         --line-strong: #5a5a6b;
         --cell: #1f1f27;
         --cell-sel: #2f4a6b;
@@ -22,7 +19,7 @@
         --accent: #6db3ff;
         --text: #e8e8ef;
         --muted: #9a9aae;
-        --diag: rgba(109, 179, 255, 0.35);
+        --diag: rgba(109, 179, 255, 0.5);
         --window-tint: rgba(160, 130, 240, 0.16);
       }
       * {
@@ -40,37 +37,36 @@
         position: relative;
         width: 630px;
         height: 500px;
-        background: radial-gradient(120% 100% at 85% 30%, #20202b 0%, var(--bg) 60%), var(--bg);
+        background: radial-gradient(130% 110% at 88% 35%, #21212c 0%, var(--bg) 62%), var(--bg);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
         overflow: hidden;
       }
-      /* Grid bleeds off the right edge, dimmed, behind a scrim so the title reads. */
+      /* Board fully visible on the right; title sits clear on the left. */
       .board {
         position: absolute;
         top: 50%;
-        right: -70px;
+        right: 26px;
         transform: translateY(-50%);
-        width: 430px;
-        height: 430px;
+        width: 360px;
+        height: 360px;
         display: grid;
         grid-template-columns: repeat(9, 1fr);
         grid-template-rows: repeat(9, 1fr);
         background: var(--line-strong);
         gap: 1px;
         border: 2px solid var(--line-strong);
-        border-radius: 10px;
+        border-radius: 12px;
         overflow: hidden;
-        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
       }
       .c {
         background: var(--cell);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 26px;
+        font-size: 21px;
         font-weight: 600;
         color: var(--given);
-        position: relative;
       }
       .c.bb {
         box-shadow: inset 0 -2px 0 var(--line-strong);
@@ -95,39 +91,28 @@
       .c.win {
         background-image: linear-gradient(var(--window-tint), var(--window-tint));
       }
-      /* Diagonal accent line (nod to the Diagonal variant). */
-      .diag {
-        position: absolute;
-        top: 50%;
-        right: -70px;
-        transform: translateY(-50%) rotate(45deg);
-        transform-origin: center;
-        width: 600px;
-        height: 3px;
-        background: var(--diag);
-        pointer-events: none;
-      }
-      /* Left scrim so the grid never fights the title. */
-      .scrim {
+      /* Both main diagonals, exactly corner-to-corner of the grid (Diagonal variant). */
+      .xlines {
         position: absolute;
         inset: 0;
-        background: linear-gradient(
-          90deg,
-          var(--bg) 34%,
-          rgba(20, 20, 26, 0.72) 52%,
-          rgba(20, 20, 26, 0) 78%
-        );
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      .xlines line {
+        stroke: var(--diag);
+        stroke-width: 0.7;
       }
       .text {
         position: absolute;
-        left: 44px;
+        left: 42px;
         top: 50%;
         transform: translateY(-50%);
         z-index: 2;
-        max-width: 360px;
+        width: 220px;
       }
       .title {
-        font-size: 68px;
+        font-size: 54px;
         font-weight: 800;
         letter-spacing: -1px;
         color: var(--text);
@@ -136,39 +121,42 @@
       .title .v {
         color: var(--accent);
         display: block;
-        letter-spacing: 6px;
-        font-size: 40px;
+        letter-spacing: 5px;
+        font-size: 31px;
         font-weight: 700;
         margin-top: 6px;
       }
       .tagline {
-        margin-top: 20px;
-        font-size: 19px;
-        line-height: 1.35;
+        margin-top: 18px;
+        font-size: 16px;
+        line-height: 1.4;
         color: var(--muted);
         font-weight: 500;
       }
       .chips {
-        margin-top: 22px;
+        margin-top: 20px;
         display: flex;
-        gap: 8px;
+        gap: 7px;
         flex-wrap: wrap;
       }
       .chip {
-        font-size: 13px;
+        font-size: 12px;
         font-weight: 600;
         color: var(--accent);
         border: 1px solid rgba(109, 179, 255, 0.4);
         border-radius: 999px;
-        padding: 5px 11px;
+        padding: 4px 10px;
       }
     </style>
   </head>
   <body>
     <div class="cover">
-      <div class="board" id="board"></div>
-      <div class="diag"></div>
-      <div class="scrim"></div>
+      <div class="board" id="board">
+        <svg class="xlines" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <line x1="0" y1="0" x2="100" y2="100" />
+          <line x1="100" y1="0" x2="0" y2="100" />
+        </svg>
+      </div>
       <div class="text">
         <div class="title">Sudoku<span class="v">VARIANTS</span></div>
         <div class="tagline">Classic Sudoku &mdash; plus rules you can mix &amp; match.</div>
@@ -188,14 +176,12 @@
         6, 1, 4, 2, 3, 4, 2, 6, 8, 5, 3, 7, 9, 1, 7, 1, 3, 9, 2, 4, 8, 5, 6, 9, 6, 1, 5, 3, 7, 2, 8,
         4, 2, 8, 7, 4, 1, 9, 6, 3, 5, 3, 4, 5, 2, 8, 6, 1, 7, 9,
       ];
-      // Which cells show a digit at all (a plausible puzzle-in-progress).
       const SHOWN = new Set([
         0, 2, 4, 7, 9, 13, 16, 20, 22, 24, 27, 30, 33, 36, 40, 44, 48, 52, 56, 58, 60, 63, 67, 70,
         72, 74, 78, 80, 11, 38, 42, 65,
       ]);
-      // Of the shown, these were "entered" by the player (blue).
       const USER = new Set([11, 38, 42, 65, 22, 58]);
-      const SEL = 40; // selected cell (value 5)
+      const SEL = 40;
       const selVal = SOL[SEL];
       const board = document.getElementById("board");
       for (let i = 0; i < 81; i++) {
@@ -205,7 +191,6 @@
           col = i % 9;
         if (col % 3 === 2 && col !== 8) d.classList.add("br");
         if (r % 3 === 2 && r !== 8) d.classList.add("bb");
-        // Hyper windows tint (rows/cols 1-3 and 5-7 in each 3x3 window).
         const inWin = (a) => a >= 1 && a <= 3;
         const inWin2 = (a) => a >= 5 && a <= 7;
         if ((inWin(r) || inWin2(r)) && (inWin(col) || inWin2(col))) d.classList.add("win");
@@ -215,9 +200,8 @@
           if (SOL[i] === selVal && i !== SEL) d.classList.add("same");
         }
         if (i === SEL) {
-          d.classList.add("sel");
+          d.classList.add("sel", "user");
           d.textContent = SOL[i];
-          d.classList.add("user");
         }
         board.appendChild(d);
       }

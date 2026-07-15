@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#1b1b22" />
+    <link rel="stylesheet" href="../style.css" />
+    <title>Sudoku</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="status">
+          <span class="status-item" id="difficulty-label">Normal</span>
+          <span class="status-chip hidden" id="technique-hint"></span>
+        </div>
+        <span class="app-version" id="app-version"></span>
+        <button class="icon-btn" id="new-btn" aria-label="New game">New</button>
+      </header>
+      <div id="hint-banner" class="hint-banner hidden">
+        <span class="hint-text" id="hint-text"></span>
+        <button class="hint-close" id="hint-close" aria-label="Close">×</button>
+      </div>
+      <main>
+        <div class="board-wrap">
+          <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+          <div id="win-overlay" class="win-overlay hidden">
+            <div class="win-card">
+              <div class="win-title">Solved!</div>
+              <div class="win-sub" id="win-stats"></div>
+              <button class="primary-btn" id="win-new-btn">New game</button>
+            </div>
+          </div>
+        </div>
+        <div class="controls">
+          <div class="action-row">
+            <button class="action-btn" id="undo-btn" aria-label="Undo">
+              <span class="action-icon">↶</span><span class="action-label">Undo</span>
+            </button>
+            <button class="action-btn" id="erase-btn" aria-label="Erase">
+              <span class="action-icon">⌫</span><span class="action-label">Erase</span>
+            </button>
+            <button class="action-btn" id="notes-btn" aria-label="Notes">
+              <span class="action-icon">✎</span><span class="action-label">Notes</span>
+              <span class="notes-state" id="notes-state">Off</span>
+            </button>
+            <button class="action-btn" id="color-btn" aria-label="Color">
+              <span class="action-icon">🎨</span><span class="action-label">Color</span>
+            </button>
+            <button class="action-btn" id="hint-btn" aria-label="Hint">
+              <span class="action-icon">💡</span><span class="action-label">Hint</span>
+            </button>
+          </div>
+          <div class="numpad" id="numpad"></div>
+          <div class="palette hidden" id="palette"></div>
+        </div>
+      </main>
+    </div>
+
+    <div id="menu-overlay" class="menu-overlay hidden">
+      <div class="menu-card">
+        <div class="menu-title">New game</div>
+        <div class="menu-label">Variants</div>
+        <div class="menu-sublabel">Choose up to 2. None selected = Classic.</div>
+        <div class="menu-variant" id="menu-variant">
+          <button class="variant-row" data-variant="antiking">
+            <span class="variant-info"
+              ><span class="variant-name">Antiking</span
+              ><span class="variant-desc"
+                >Cells touching diagonally can't share a digit.</span
+              ></span
+            ><span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="antiknight">
+            <span class="variant-info"
+              ><span class="variant-name">Antiknight</span
+              ><span class="variant-desc"
+                >Cells a knight's move apart can't share a digit.</span
+              ></span
+            ><span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="x">
+            <span class="variant-info"
+              ><span class="variant-name">Diagonal</span
+              ><span class="variant-desc">Both main diagonals must also contain 1-9.</span></span
+            ><span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="hyper">
+            <span class="variant-info"
+              ><span class="variant-name">Hyper</span
+              ><span class="variant-desc">Four extra 3×3 boxes must also contain 1-9.</span></span
+            ><span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="jigsaw">
+            <span class="variant-info"
+              ><span class="variant-name">Jigsaw</span
+              ><span class="variant-desc"
+                >The 3×3 boxes are replaced by nine irregular regions.</span
+              ></span
+            ><span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div class="menu-label">Difficulty</div>
+        <div class="menu-diff" id="menu-diff">
+          <button class="diff-btn" data-diff="normal">Normal</button>
+          <button class="diff-btn" data-diff="hard">Hard</button>
+        </div>
+        <div class="menu-hint hidden" id="variant-hint">
+          On Hard, each extra variant sharply increases generation time.
+        </div>
+        <button class="ghost-btn" id="menu-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="menu-overlay hidden">
+      <div class="loading-card">
+        <div class="spinner"></div>
+        <div class="loading-text">Generating…</div>
+        <button class="ghost-btn" id="gen-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <script src="../solver.js"></script>
+    <script src="../sudoku.js"></script>
+    <!-- SCREENSHOT seeder: synchronously generate a real puzzle for the requested
+         variants and seed localStorage with a plausible mid-solve state (correct
+         blue user entries from the solution, pencil notes, colors, a selection),
+         so app.js init() loads and renders it directly - no worker, no timing. -->
+    <script>
+      (function () {
+        const variants = (new URLSearchParams(location.search).get("v") || "")
+          .split(",")
+          .filter(Boolean);
+        let g;
+        try {
+          g = Sudoku.generate("normal", variants);
+        } catch (e) {
+          g = Sudoku.generate("normal", []);
+        }
+        const puzzle = g.puzzle,
+          solution = g.solution;
+        const values = puzzle.slice();
+        const notes = Array.from({ length: 81 }, () => []);
+        const colors = Array.from({ length: 81 }, () => []);
+        const empty = [];
+        for (let i = 0; i < 81; i++) if (puzzle[i] === 0) empty.push(i);
+        const pick = (arr, n, step) => {
+          const out = [];
+          for (let k = 0; k < arr.length && out.length < n; k += step) out.push(arr[k]);
+          return out;
+        };
+        // Correct user entries (render blue, never red).
+        pick(empty, 11, 3).forEach((i) => (values[i] = solution[i]));
+        // Classic candidates for realistic pencil marks.
+        const cands = (i) => {
+          const r = Math.floor(i / 9),
+            c = i % 9,
+            br = Math.floor(r / 3) * 3,
+            bc = Math.floor(c / 3) * 3;
+          const used = new Set();
+          for (let k = 0; k < 9; k++) {
+            used.add(values[r * 9 + k]);
+            used.add(values[k * 9 + c]);
+          }
+          for (let a = 0; a < 3; a++)
+            for (let b = 0; b < 3; b++) used.add(values[(br + a) * 9 + bc + b]);
+          const out = [];
+          for (let d = 1; d <= 9; d++) if (!used.has(d)) out.push(d);
+          return out;
+        };
+        const stillEmpty = empty.filter((i) => values[i] === 0);
+        pick(stillEmpty, 5, 2).forEach((i) => (notes[i] = cands(i).slice(0, 3)));
+        // A couple of colored cells (one plain given/user, one two-color stack).
+        if (stillEmpty.length > 3) colors[stillEmpty[3]] = [4];
+        if (stillEmpty.length > 7) colors[stillEmpty[7]] = [2, 6];
+        // Selection on a central filled cell -> row/col/box + same-digit highlight.
+        const filled = [];
+        for (let i = 0; i < 81; i++) if (values[i]) filled.push(i);
+        const at = (i) => (filled.includes(i) ? i : null);
+        const sel = at(40) ?? at(31) ?? at(49) ?? filled[Math.floor(filled.length / 2)];
+        const state = {
+          puzzle,
+          solution,
+          values,
+          notes,
+          colors,
+          difficulty: "normal",
+          variants,
+          regions: g.regions || null,
+          techniques: g.techniques || [],
+          gameId: "",
+          playMs: 0,
+          moves: 0,
+          hints: 0,
+          selected: sel,
+          multi: [],
+          notesMode: false,
+          activeNote: null,
+          colorMode: false,
+          solved: false,
+        };
+        try {
+          localStorage.setItem("sudoku-game-v2", JSON.stringify(state));
+        } catch (e) {}
+      })();
+    </script>
+    <script src="../app.js"></script>
+  </body>
+</html>

@@ -6,29 +6,36 @@ builda **v1.23.0**. Screenshotovi su iz stvarne igre (headless render, portrait 
 ## Fajlovi
 
 - `cover.png` - itch cover (630x500): naslov + tagline + pravi 9x9 grid u paleti igre
-  (hyper-tint, dijagonala, odabrana ćelija). Generira ga `../make-cover.html`.
-- `01-variants.png` - New game meni: lista varijanti (Diagonal + Hyper uključeni),
-  Normal/Hard težine. Glavni diferencijator igre.
-- `02-gameplay.png` - ploča u tijeku: odabrana ćelija + highlight istog broja, numpad s
-  brojem preostalih znamenki.
+  (X-dijagonale poravnate s gridom, hyper-tint, odabrana ćelija). Generira ga `../make-cover.html`.
+- `01-jigsaw.png` - Jigsaw partija u tijeku: nepravilne regije, plavi upisi, bilješke, boje.
+- `02-variants.png` - New game meni: lista varijanti (Diagonal + Hyper uključeni), Normal/Hard.
+- `03-diagonal.png` - Diagonal partija: plave X-dijagonale + play stanje.
+- `04-hyper.png` - Hyper partija: četiri dodatna prozora (ljubičasti tint) + play stanje.
 - `description.html` - tekst store stranice (paste-ready HTML za Description). Izvor istine;
   držati ažurnim po verziji (oznaka u komentaru fajla).
 
-## Regeneracija covera
+Screenshotovi su iz **stvarne igre** - `../shot-harness.html` sinkrono generira pravu slagalicu
+(`Sudoku.generate`) i seeda `localStorage` s uvjerljivim mid-solve stanjem (točni plavi upisi iz
+rješenja, pencil bilješke, boje, odabir), pa `app.js` to učita i renderira. Nema workera ni timinga.
 
-`make-cover.html` je samostalan (inline CSS/JS, bez asseta). Renderiraj na 630x500:
+## Regeneracija (cover + screenshotovi)
+
+Oba generatora su u `promo/`. Posluži repo lokalno (`python -m http.server PORT`) pa headless render:
 
 ```
+# cover (630x500)
 msedge --headless=new --disable-gpu --hide-scrollbars --window-size=630,500 \
   --virtual-time-budget=4000 --screenshot=promo/itch/cover.png \
-  file:///C:/Users/mileu/github/sudoku/promo/make-cover.html
+  http://localhost:PORT/promo/make-cover.html
+
+# screenshot varijante (portrait 520x1040); ?v= je prazan (classic), x, hyper, jigsaw...
+msedge --headless=new --disable-gpu --hide-scrollbars --window-size=520,1040 \
+  --virtual-time-budget=10000 --screenshot=promo/itch/01-jigsaw.png \
+  "http://localhost:PORT/promo/shot-harness.html?v=jigsaw"
 ```
 
-(ili posluži repo lokalno pa gađaj `http://localhost:PORT/promo/make-cover.html`).
-
-Screenshotovi: pokreni igru (`python -m http.server`), headless render portrait prozora;
-za meni/highlight stanja koristi privremenu HTML kopiju s ubačenim `<script>` koji otvori
-meni / odabere ćeliju (vidi git povijest ovog commita za obrazac).
+(`make-cover.html` je samostalan pa radi i preko `file:///`; `shot-harness.html` treba
+posluženo jer učitava `../app.js` i drugove.)
 
 ## Upload je ručni
 
@@ -43,7 +50,7 @@ fajlove: cover je gore u formi, screenshotovi u **Screenshots** sekciji.
 - [ ] **Embed**: Manually set size, viewport **450x800** (portrait ~9:16); Mobile friendly ON,
       Fullscreen button ON, Automatically start OFF, scrollbars OFF
 - [ ] **Cover image**: `cover.png`
-- [ ] **Screenshots**: `01-variants.png`, `02-gameplay.png`
+- [ ] **Screenshots**: `01-jigsaw.png`, `02-variants.png`, `03-diagonal.png`, `04-hyper.png`
 - [ ] **Genre**: Puzzle
 - [ ] **Tags**: sudoku, puzzle, logic, minimalist, singleplayer, mobile, offline, pwa, numbers, brain-training
 - [ ] **AI generation disclosure**: odgovori po Vatrinoj procjeni (kod je AI-asistiran; grafika/zvuk/tekst nisu gen-AI)
