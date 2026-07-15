@@ -1,0 +1,7 @@
+{
+  "target": "Vatroslav/sudoku-variants",
+  "channel": "html5",
+  "build": "node scripts/build-itch.mjs",
+  "dist": "dist",
+  "versionFrom": "package.json"
+}
