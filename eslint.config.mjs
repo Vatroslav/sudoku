@@ -3,7 +3,7 @@ import globals from "globals";
 import prettierConfig from "eslint-config-prettier";
 
 export default [
-  { ignores: ["node_modules/"] },
+  { ignores: ["node_modules/", "dist/"] },
   js.configs.recommended,
   {
     // Vanilla browser skripte, učitane preko <script>.
@@ -46,6 +46,14 @@ export default [
     // Sudoku učitan preko importScripts.
     files: ["gen-worker.js"],
     languageOptions: { globals: { ...globals.worker, Sudoku: "readonly" } },
+  },
+  {
+    // Node ESM build/tooling skripte (npr. scripts/build-itch.mjs).
+    files: ["scripts/**", "*.mjs"],
+    languageOptions: {
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
   },
   prettierConfig,
 ];
