@@ -4,9 +4,9 @@
   --board-bg: #23232c;
   --line: #34343f;
   --line-strong: #5a5a6b;
-  /* Jigsaw: granice regija (i okvir ploče) - svjetlije od običnih razmaka među
-     ćelijama, da se nepravilne regije jasno vide kao "kavezi". */
-  --jig-line: #b0b1c6;
+  /* Jače granice blokova/regija (i okvir ploče) - svjetlije i deblje od tankih
+     razmaka među ćelijama, da se 3×3 blokovi (i jigsaw regije) jasno čitaju. */
+  --block-line: #b0b1c6;
   --cell: #1f1f27;
   --cell-peer: #262631;
   --cell-sel: #2f4a6b;
@@ -173,7 +173,7 @@ main {
   width: min(100cqw, 100cqh);
   aspect-ratio: 1 / 1;
   background: var(--line-strong);
-  border: 3px solid var(--line-strong);
+  border: 3px solid var(--block-line);
   border-radius: 8px;
   overflow: hidden;
   gap: 1px;
@@ -196,38 +196,22 @@ main {
   isolation: isolate;
   user-select: none;
 }
+/* Granice 3×3 blokova (i jigsaw regija): deblje (2px) i svjetlije (--block-line)
+   od tankih 1px razmaka među ćelijama (board gap), pa se blokovi jasno čitaju.
+   Iste .br/.bb klase koristi i jigsaw - JS ih postavi na granice regija umjesto
+   kvadrata, pa nose isti jaki rub. */
 .cell.br {
-  margin-right: 1px;
-  box-shadow: 1px 0 0 0 var(--line-strong);
+  margin-right: 2px;
+  box-shadow: 2px 0 0 0 var(--block-line);
 }
 .cell.bb {
-  margin-bottom: 1px;
-  box-shadow: 0 1px 0 0 var(--line-strong);
+  margin-bottom: 2px;
+  box-shadow: 0 2px 0 0 var(--block-line);
 }
 .cell.br.bb {
   box-shadow:
-    1px 0 0 0 var(--line-strong),
-    0 1px 0 0 var(--line-strong);
-}
-
-/* Jigsaw: iste .br/.bb klase, ali granice regija su deblje (2px) i svjetlije
-   (--jig-line) da se nepravilni oblici jasno čitaju. Unutar-regijski razmaci
-   ostaju tanki i prigušeni (board gap), pa kontrast crta granicu regije. */
-.board.jigsaw {
-  border-color: var(--jig-line);
-}
-.board.jigsaw .cell.br {
-  margin-right: 2px;
-  box-shadow: 2px 0 0 0 var(--jig-line);
-}
-.board.jigsaw .cell.bb {
-  margin-bottom: 2px;
-  box-shadow: 0 2px 0 0 var(--jig-line);
-}
-.board.jigsaw .cell.br.bb {
-  box-shadow:
-    2px 0 0 0 var(--jig-line),
-    0 2px 0 0 var(--jig-line);
+    2px 0 0 0 var(--block-line),
+    0 2px 0 0 var(--block-line);
 }
 
 /* Dijagonale (X-Sudoku): crta se boja u POZADINI ćelije (background-image), pa
