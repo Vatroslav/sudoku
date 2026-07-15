@@ -75,9 +75,11 @@ const Sudoku = (() => {
     kingPeers.push(list);
   }
 
-  // Regijske varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
+  // Poznate varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
   // (prazno = classic). Redoslijed je kanonski (za stabilne cache-ključeve i labele).
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw"];
+  // Većina su regijske (šire units/peers); "evenodd" je iznimka - ne dira units/peers
+  // nego nosi per-puzzle parity masku koju provjerava isValid (kao jigsaw regions).
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "evenodd"];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];
@@ -168,7 +170,8 @@ const Sudoku = (() => {
   // variants = normalizirano polje aktivnih regijskih varijanti (vidi normVariants).
   // jig = null | { map: regions, cells: regionCells } - kad je postavljen,
   // box-provjeru zamjenjuje regija ćelije (row/col ostaju).
-  function isValid(board, idx, val, variants, jig) {
+  // parity = null | 81-polje (0 bez oznake, 1 parno, 2 neparno) - Even/Odd maska.
+  function isValid(board, idx, val, variants, jig, parity) {
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -196,6 +199,10 @@ const Sudoku = (() => {
     }
     if (variants.includes("antiking")) {
       for (const j of kingPeers[idx]) if (board[j] === val) return false;
+    }
+    if (parity && parity[idx]) {
+      const even = val % 2 === 0;
+      if (parity[idx] === 1 ? !even : even) return false; // 1 = parno, 2 = neparno
     }
     return true;
   }
@@ -227,13 +234,13 @@ const Sudoku = (() => {
 
   // Broji rješenja (staje na 'limit'). MRV: bira praznu ćeliju s najmanje
   // kandidata -> drastično brže od first-empty backtrackinga.
-  function countSolutions(board, limit, variants, jig) {
+  function countSolutions(board, limit, variants, jig, parity) {
     let bestIdx = -1,
       bestCands = null;
     for (let idx = 0; idx < 81; idx++) {
       if (board[idx] !== 0) continue;
       const cands = [];
-      for (let v = 1; v <= 9; v++) if (isValid(board, idx, v, variants, jig)) cands.push(v);
+      for (let v = 1; v <= 9; v++) if (isValid(board, idx, v, variants, jig, parity)) cands.push(v);
       if (cands.length === 0) return 0;
       if (bestCands === null || cands.length < bestCands.length) {
         bestIdx = idx;
@@ -245,7 +252,7 @@ const Sudoku = (() => {
     let count = 0;
     for (const v of bestCands) {
       board[bestIdx] = v;
-      count += countSolutions(board, limit, variants, jig);
+      count += countSolutions(board, limit, variants, jig, parity);
       board[bestIdx] = 0;
       if (count >= limit) return count;
     }
@@ -254,7 +261,7 @@ const Sudoku = (() => {
 
   // Briše ćelije (bez simetrije, za maksimalan izazov) dok čuva jedinstveno
   // rješenje, do otprilike 'target' zadanih ćelija.
-  function dig(solution, target, variants, jig) {
+  function dig(solution, target, variants, jig, parity) {
     const puzzle = solution.slice();
     let givens = 81;
     for (const idx of shuffle([...Array(81).keys()])) {
@@ -262,10 +269,26 @@ const Sudoku = (() => {
       if (puzzle[idx] === 0) continue;
       const backup = puzzle[idx];
       puzzle[idx] = 0;
-      if (countSolutions(puzzle.slice(), 2, variants, jig) !== 1) puzzle[idx] = backup;
+      if (countSolutions(puzzle.slice(), 2, variants, jig, parity) !== 1) puzzle[idx] = backup;
       else givens--;
     }
     return puzzle;
+  }
+
+  // Even/Odd: djelić ćelija nosi oznaku parnosti izvedenu iz rješenja (kvadrat =
+  // parno, krug = neparno u UI-ju). Oznake su aktivne u countSolutions/dig pa daju
+  // logičku snagu (smiju se maknuti dodatni zadani brojevi uz jedinstvenost).
+  // PARITY_DENSITY je knob za ugađanje: više oznaka = lakše, premalo = ne osjeti se.
+  const PARITY_DENSITY = 0.3;
+  function deriveParity(solution) {
+    const parity = new Array(81).fill(0);
+    const idxs = shuffle([...Array(81).keys()]);
+    const count = Math.round(81 * PARITY_DENSITY);
+    for (let k = 0; k < count; k++) {
+      const i = idxs[k];
+      parity[i] = solution[i] % 2 === 0 ? 1 : 2; // 1 = parno, 2 = neparno
+    }
+    return parity;
   }
 
   const TARGET = { normal: 34, hard: 28 };
@@ -286,27 +309,39 @@ const Sudoku = (() => {
   // classic, "jigsaw" (9 nepravilnih regija umjesto kvadrata), "x" (dvije
   // dijagonale 1-9), "hyper" (4 prozora 1-9), "antiknight" (isti broj zabranjen
   // na skoku konja), "antiking" (isti broj zabranjen na dijagonalnom susjedu),
-  // ili kombinacija. Rezultat nosi `regions` (81-polje id-eva regije) kad je
-  // jigsaw aktivan, inače `null`.
+  // "evenodd" (djelić ćelija označen parno/neparno), ili kombinacija. Rezultat nosi
+  // `regions` (81-polje id-eva regije) kad je jigsaw aktivan, inače `null`, te
+  // `parity` (81-polje 0/1/2) kad je evenodd aktivan, inače `null`.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
     const target = TARGET[difficulty] || 34;
     const attempts = MAX_ATTEMPTS[difficulty] || 150;
     const useJig = variants.includes("jigsaw");
+    const useEven = variants.includes("evenodd");
     let best = null;
 
     for (let a = 0; a < attempts; a++) {
       const { regions, jig } = newRegionCtx(useJig);
       const solution = generateSolution(variants, jig);
       if (!solution) continue; // probijen budžet (loše regije) -> novi pokušaj
-      const puzzle = dig(solution, target, variants, jig);
-      const res = Solver.solveAndGrade(puzzle, variants, regions);
+      // Parity se izvodi iz rješenja (uvijek konzistentna) pa je aktivna u dig/solveAndGrade.
+      const parity = useEven ? deriveParity(solution) : null;
+      const puzzle = dig(solution, target, variants, jig, parity);
+      const res = Solver.solveAndGrade(puzzle, variants, regions, parity);
       if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti
 
       if (res.tier === reqTier) {
-        return { puzzle, solution, difficulty, variants, techniques: res.techniques, regions };
+        return {
+          puzzle,
+          solution,
+          difficulty,
+          variants,
+          techniques: res.techniques,
+          regions,
+          parity,
+        };
       }
       if (!best || Math.abs(res.tier - reqTier) < Math.abs(best.tier - reqTier)) {
         best = {
@@ -316,6 +351,7 @@ const Sudoku = (() => {
           techniques: res.techniques,
           tier: res.tier,
           regions,
+          parity,
         };
       }
     }
@@ -328,6 +364,7 @@ const Sudoku = (() => {
         variants,
         techniques: best.techniques,
         regions: best.regions,
+        parity: best.parity,
       };
     // Krajnji fallback - bilo što rješivo (nove regije za jigsaw, ne recikliraj).
     let ctx, solution;
@@ -335,13 +372,15 @@ const Sudoku = (() => {
       ctx = newRegionCtx(useJig);
       solution = generateSolution(variants, ctx.jig);
     } while (!solution);
+    const parity = useEven ? deriveParity(solution) : null;
     return {
-      puzzle: dig(solution, target, variants, ctx.jig),
+      puzzle: dig(solution, target, variants, ctx.jig, parity),
       solution,
       difficulty,
       variants,
       techniques: [],
       regions: ctx.regions,
+      parity,
     };
   }
 

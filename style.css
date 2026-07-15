@@ -18,6 +18,7 @@
   --accent: #6db3ff;
   --diag-line: rgba(109, 179, 255, 0.4);
   --window-tint: rgba(160, 130, 240, 0.16);
+  --parity: #7a7a8c;
   --text: #e8e8ef;
   --muted: #8a8a99;
   --depleted: #44444f;
@@ -299,6 +300,30 @@ main {
   /* Boje u --cc su neprozirne; prozirnost daje ovaj jedan sloj, pa preklop kod
      4 kvadranta ne udvostručuje alphu (nema tamne crte na spoju). */
   opacity: 0.5;
+}
+
+/* Even/Odd: oznaka parnosti u ::before sloju (::after je zauzet Color overlayom).
+   z-index -1 -> iznad background-boje/highlighta, ispod upisanog broja/bilješki.
+   Kvadrat = parno, krug = neparno. Obris (ne ispuna) da highlight ostane vidljiv.
+   inset:0 + margin:auto centrira apsolutni element (flex centriranje ne vrijedi za
+   ::before izvan toka). --parity je knob za ton oznake. */
+.cell.even::before,
+.cell.odd::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 62%;
+  height: 62%;
+  border: 2px solid var(--parity);
+  z-index: -1;
+  pointer-events: none;
+}
+.cell.even::before {
+  border-radius: 3px;
+}
+.cell.odd::before {
+  border-radius: 50%;
 }
 
 .cell.given {

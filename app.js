@@ -6,13 +6,14 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
   // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw"];
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "evenodd"];
   const VARIANT_LABELS = {
     antiking: "Antiking",
     antiknight: "Antiknight",
     x: "Diagonal",
     hyper: "Hyper",
     jigsaw: "Jigsaw",
+    evenodd: "Even/Odd",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -170,6 +171,12 @@
     }
     return counts.every((c) => c === 9);
   }
+  // Even/Odd: parity maska je per-puzzle podatak (state.parity, 81-polje 0/1/2).
+  function validParity(parity) {
+    if (!Array.isArray(parity) || parity.length !== 81) return false;
+    for (const p of parity) if (p !== 0 && p !== 1 && p !== 2) return false;
+    return true;
+  }
   // Regija ćelije: jigsaw -> state.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
     if (state.variants.includes("jigsaw") && Array.isArray(state.regions))
@@ -313,7 +320,7 @@
   // odustao i koliko je čekao. Čisti se čim ploča sjedne.
   let pendingGen = null;
 
-  function buildState(difficulty, variants, puzzle, solution, techniques, regions) {
+  function buildState(difficulty, variants, puzzle, solution, techniques, regions, parity) {
     state = {
       puzzle,
       solution,
@@ -323,6 +330,7 @@
       difficulty,
       variants,
       regions: regions || null,
+      parity: parity || null,
       techniques: techniques || [],
       gameId: newGameId(),
       playMs: 0,
@@ -351,8 +359,11 @@
   function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques, regions } = Sudoku.generate(difficulty, variants);
-      buildState(difficulty, variants, puzzle, solution, techniques, regions);
+      const { puzzle, solution, techniques, regions, parity } = Sudoku.generate(
+        difficulty,
+        variants
+      );
+      buildState(difficulty, variants, puzzle, solution, techniques, regions, parity);
     }, 30);
   }
 
@@ -370,8 +381,8 @@
         genWorker.onmessage = (e) => {
           genWorker.terminate();
           genWorker = null;
-          const { puzzle, solution, techniques, regions } = e.data;
-          buildState(difficulty, variants, puzzle, solution, techniques, regions);
+          const { puzzle, solution, techniques, regions, parity } = e.data;
+          buildState(difficulty, variants, puzzle, solution, techniques, regions, parity);
         };
         genWorker.onerror = () => {
           // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
@@ -447,6 +458,13 @@
         if (!validRegions(state.regions)) return false;
       } else {
         state.regions = null;
+      }
+      // Even/Odd: parity maska mora biti valjana (81-polje 0/1/2). Isto kao jigsaw -
+      // korumpiran save odbaci; non-evenodd = null.
+      if (state.variants.includes("evenodd")) {
+        if (!validParity(state.parity)) return false;
+      } else {
+        state.parity = null;
       }
       return true;
     } catch (e) {
@@ -808,7 +826,8 @@
       state.notes,
       state.solution,
       state.variants,
-      state.regions
+      state.regions,
+      state.parity
     );
     if (!res || res.done) {
       clearHint();
@@ -997,6 +1016,11 @@
         cell.style.setProperty("--cc", colorBackground(state.colors[i]));
       } else {
         cell.style.removeProperty("--cc");
+      }
+      // Even/Odd: oznaka parnosti u ::before sloju (kvadrat = parno, krug = neparno).
+      // Skrivena na zadanim ćelijama - upisani broj već pokazuje parnost.
+      if (state.parity && state.parity[i] && !isGiven) {
+        cell.classList.add(state.parity[i] === 1 ? "even" : "odd");
       }
 
       // Highlight odabranih ćelija (grupa ili sidro)

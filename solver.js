@@ -136,6 +136,13 @@ const Solver = (() => {
     return counts.every((c) => c === 9);
   }
 
+  // Even/Odd parity maska: 81-polje s 0 (bez oznake) / 1 (parno) / 2 (neparno).
+  function validParity(parity) {
+    if (!Array.isArray(parity) || parity.length !== 81) return false;
+    for (const p of parity) if (p !== 0 && p !== 1 && p !== 2) return false;
+    return true;
+  }
+
   // Kanonski ključ aktivnog skupa (npr. "x+hyper"), "classic" ako je prazan.
   function variantKey(variants) {
     if (typeof variants === "string") variants = variants === "classic" ? [] : [variants];
@@ -176,6 +183,9 @@ const Solver = (() => {
   let curBoxes = boxes;
   let curBoxOf = boxOf;
   let curBoxLabel = (b) => `box ${BOX_NAMES[b]}`;
+  // Even/Odd: per-puzzle parity maska (0 bez oznake, 1 parno, 2 neparno) ili null.
+  // computeCandidates iz označenih praznih ćelija makne kandidate krive parnosti.
+  let curParity = null;
 
   const T_SINGLE = 1,
     T_INTER = 2,
@@ -187,6 +197,10 @@ const Solver = (() => {
       if (grid[idx] !== 0) continue;
       const s = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9]);
       for (const p of peers[idx]) s.delete(grid[p]);
+      if (curParity && curParity[idx]) {
+        const wantEven = curParity[idx] === 1;
+        for (const v of [...s]) if ((v % 2 === 0) !== wantEven) s.delete(v);
+      }
       cand[idx] = s;
     }
     return cand;
@@ -497,11 +511,13 @@ const Solver = (() => {
   // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Prima polje (ili
   // legacy string) aktivnih varijanti; nepoznato => klasik (unatražna
   // kompatibilnost sa spremljenim igrama). regions = jigsaw geometrija (81-polje)
-  // ili null; nevaljano se tretira klasično (statični kvadrati).
-  function useVariant(variants, regions) {
+  // ili null; nevaljano se tretira klasično (statični kvadrati). parity = Even/Odd
+  // maska (81-polje 0/1/2) ili null; nevaljano se ignorira.
+  function useVariant(variants, regions, parity) {
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
+    curParity = validParity(parity) ? parity : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
@@ -936,8 +952,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution, variants, regions) {
-    useVariant(variants, regions);
+  function explainNext(values, notes, solution, variants, regions, parity) {
+    useVariant(variants, regions, parity);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -963,8 +979,9 @@ const Solver = (() => {
 
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
   // regions = jigsaw geometrija (81-polje id-eva) ili null/izostavljeno = klasik.
-  function solveAndGrade(puzzle, variants, regions) {
-    useVariant(variants, regions);
+  // parity = Even/Odd maska (81-polje 0/1/2) ili null.
+  function solveAndGrade(puzzle, variants, regions, parity) {
+    useVariant(variants, regions, parity);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;

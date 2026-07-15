@@ -59,7 +59,14 @@ Regijske (samo prošire units/peers - najjeftinije):
 
 Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 
-- [ ] Even/Odd (ćelija označena kao parna/neparna)
+- [x] Even/Odd (ćelija označena kao parna/neparna, v1.24.0). Prva derivacijska:
+      per-puzzle `state.parity` (81-polje 0/1/2), izvedena iz rješenja na podskupu
+      ćelija (`deriveParity`, `PARITY_DENSITY` knob u `sudoku.js`). Bolt-on bez Faza 0
+      refaktora - "evenodd" je u `REGION_VARIANTS` ali ne dira units/peers: `isValid`
+      (sudoku.js) i `computeCandidates` (solver.js) samo provjere parnost označene
+      ćelije, parity se provlači kroz `dig`/`countSolutions`/`solveAndGrade`/`explainNext`
+      (kao jigsaw `regions`). Render: kvadrat (parno) / krug (neparno) u `::before`
+      sloju ćelije (skriveno na givens). Gustoća oznaka je knob za ugađanje težine.
 - [ ] Parity (ograničenje parnosti - srodno Even/Odd, procijeniti spajanje)
 - [ ] Kropki (crne/bijele točke između susjeda: omjer 2 / razlika 1)
 - [ ] XV (X = zbroj 10, V = zbroj 5 između susjeda)
