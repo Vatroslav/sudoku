@@ -7,7 +7,7 @@
   /* Jače granice blokova/regija (i okvir ploče) - svjetlije i deblje od tankih
      razmaka među ćelijama, da se 3×3 blokovi (i jigsaw regije) jasno čitaju. */
   --block-line: #b0b1c6;
-  --cell: #1f1f27;
+  --cell: #0e0e13;
   --cell-peer: #262631;
   --cell-sel: #2f4a6b;
   --cell-same: #3a3550;
