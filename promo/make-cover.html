@@ -37,34 +37,34 @@
         position: relative;
         width: 630px;
         height: 500px;
-        background: radial-gradient(130% 110% at 88% 35%, #21212c 0%, var(--bg) 62%), var(--bg);
+        background: radial-gradient(120% 100% at 85% 30%, #20202b 0%, var(--bg) 60%), var(--bg);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
         overflow: hidden;
       }
-      /* Board fully visible on the right; title sits clear on the left. */
+      /* Grid bleeds off the right edge, dimmed, behind a scrim so the title reads. */
       .board {
         position: absolute;
         top: 50%;
-        right: 26px;
+        right: -70px;
         transform: translateY(-50%);
-        width: 360px;
-        height: 360px;
+        width: 430px;
+        height: 430px;
         display: grid;
         grid-template-columns: repeat(9, 1fr);
         grid-template-rows: repeat(9, 1fr);
         background: var(--line-strong);
         gap: 1px;
         border: 2px solid var(--line-strong);
-        border-radius: 12px;
+        border-radius: 10px;
         overflow: hidden;
-        box-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
       }
       .c {
         background: var(--cell);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 21px;
+        font-size: 26px;
         font-weight: 600;
         color: var(--given);
       }
@@ -91,28 +91,40 @@
       .c.win {
         background-image: linear-gradient(var(--window-tint), var(--window-tint));
       }
-      /* Both main diagonals, exactly corner-to-corner of the grid (Diagonal variant). */
-      .xlines {
+      /* Main diagonal, exactly corner-to-corner of the grid cells (Diagonal variant
+         nod). SVG lives inside .board so it tracks the cells, not a free 45deg line. */
+      .diag {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
         pointer-events: none;
       }
-      .xlines line {
+      .diag line {
         stroke: var(--diag);
         stroke-width: 0.7;
       }
+      /* Left scrim so the grid never fights the title. */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          var(--bg) 34%,
+          rgba(20, 20, 26, 0.72) 52%,
+          rgba(20, 20, 26, 0) 78%
+        );
+      }
       .text {
         position: absolute;
-        left: 42px;
+        left: 44px;
         top: 50%;
         transform: translateY(-50%);
         z-index: 2;
-        width: 220px;
+        max-width: 360px;
       }
       .title {
-        font-size: 54px;
+        font-size: 68px;
         font-weight: 800;
         letter-spacing: -1px;
         color: var(--text);
@@ -121,42 +133,42 @@
       .title .v {
         color: var(--accent);
         display: block;
-        letter-spacing: 5px;
-        font-size: 31px;
+        letter-spacing: 6px;
+        font-size: 40px;
         font-weight: 700;
         margin-top: 6px;
       }
       .tagline {
-        margin-top: 18px;
-        font-size: 16px;
-        line-height: 1.4;
+        margin-top: 20px;
+        font-size: 19px;
+        line-height: 1.35;
         color: var(--muted);
         font-weight: 500;
       }
       .chips {
-        margin-top: 20px;
+        margin-top: 22px;
         display: flex;
-        gap: 7px;
+        gap: 8px;
         flex-wrap: wrap;
       }
       .chip {
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 600;
         color: var(--accent);
         border: 1px solid rgba(109, 179, 255, 0.4);
         border-radius: 999px;
-        padding: 4px 10px;
+        padding: 5px 11px;
       }
     </style>
   </head>
   <body>
     <div class="cover">
       <div class="board" id="board">
-        <svg class="xlines" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg class="diag" viewBox="0 0 100 100" preserveAspectRatio="none">
           <line x1="0" y1="0" x2="100" y2="100" />
-          <line x1="100" y1="0" x2="0" y2="100" />
         </svg>
       </div>
+      <div class="scrim"></div>
       <div class="text">
         <div class="title">Sudoku<span class="v">VARIANTS</span></div>
         <div class="tagline">Classic Sudoku &mdash; plus rules you can mix &amp; match.</div>

@@ -208,5 +208,24 @@
       })();
     </script>
     <script src="../app.js"></script>
+    <!-- SCREENSHOT menu mode (?menu=x,hyper): open the REAL New game menu and
+         click the requested variant rows, so the app's own syncVariantButtons
+         applies the red "warn" generation note when two are selected. -->
+    <script>
+      (function () {
+        const menu = new URLSearchParams(location.search).get("menu");
+        if (!menu) return;
+        const vs = menu.split(",").filter(Boolean);
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            document.getElementById("new-btn").click();
+            vs.forEach(function (v) {
+              const b = document.querySelector('.variant-row[data-variant="' + v + '"]');
+              if (b) b.click();
+            });
+          }, 300);
+        });
+      })();
+    </script>
   </body>
 </html>
