@@ -1,0 +1,226 @@
+<!doctype html>
+<!-- itch cover generator (630x500). Reproducibilan: renderira pravi 9x9 grid
+     u paleti igre + naslov, pa se headless-screenshotira na 630x500.
+     Regeneracija: msedge/chrome --headless --window-size=630,500
+       --screenshot=promo/itch/cover.png  file:///.../promo/make-cover.html
+     (ili posluzi preko lokalnog servera). Vidi promo/itch/README.md. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root {
+        --bg: #14141a;
+        --surface: #1b1b22;
+        --board-bg: #23232c;
+        --line: #34343f;
+        --line-strong: #5a5a6b;
+        --cell: #1f1f27;
+        --cell-sel: #2f4a6b;
+        --cell-same: #3a3550;
+        --given: #e8e8ef;
+        --user: #6db3ff;
+        --accent: #6db3ff;
+        --text: #e8e8ef;
+        --muted: #9a9aae;
+        --diag: rgba(109, 179, 255, 0.35);
+        --window-tint: rgba(160, 130, 240, 0.16);
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 630px;
+        height: 500px;
+        overflow: hidden;
+      }
+      .cover {
+        position: relative;
+        width: 630px;
+        height: 500px;
+        background: radial-gradient(120% 100% at 85% 30%, #20202b 0%, var(--bg) 60%), var(--bg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+        overflow: hidden;
+      }
+      /* Grid bleeds off the right edge, dimmed, behind a scrim so the title reads. */
+      .board {
+        position: absolute;
+        top: 50%;
+        right: -70px;
+        transform: translateY(-50%);
+        width: 430px;
+        height: 430px;
+        display: grid;
+        grid-template-columns: repeat(9, 1fr);
+        grid-template-rows: repeat(9, 1fr);
+        background: var(--line-strong);
+        gap: 1px;
+        border: 2px solid var(--line-strong);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      }
+      .c {
+        background: var(--cell);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--given);
+        position: relative;
+      }
+      .c.bb {
+        box-shadow: inset 0 -2px 0 var(--line-strong);
+      }
+      .c.br {
+        box-shadow: inset -2px 0 0 var(--line-strong);
+      }
+      .c.br.bb {
+        box-shadow:
+          inset -2px 0 0 var(--line-strong),
+          inset 0 -2px 0 var(--line-strong);
+      }
+      .c.user {
+        color: var(--user);
+      }
+      .c.sel {
+        background: var(--cell-sel);
+      }
+      .c.same {
+        background: var(--cell-same);
+      }
+      .c.win {
+        background-image: linear-gradient(var(--window-tint), var(--window-tint));
+      }
+      /* Diagonal accent line (nod to the Diagonal variant). */
+      .diag {
+        position: absolute;
+        top: 50%;
+        right: -70px;
+        transform: translateY(-50%) rotate(45deg);
+        transform-origin: center;
+        width: 600px;
+        height: 3px;
+        background: var(--diag);
+        pointer-events: none;
+      }
+      /* Left scrim so the grid never fights the title. */
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          90deg,
+          var(--bg) 34%,
+          rgba(20, 20, 26, 0.72) 52%,
+          rgba(20, 20, 26, 0) 78%
+        );
+      }
+      .text {
+        position: absolute;
+        left: 44px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 2;
+        max-width: 360px;
+      }
+      .title {
+        font-size: 68px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        color: var(--text);
+        line-height: 0.98;
+      }
+      .title .v {
+        color: var(--accent);
+        display: block;
+        letter-spacing: 6px;
+        font-size: 40px;
+        font-weight: 700;
+        margin-top: 6px;
+      }
+      .tagline {
+        margin-top: 20px;
+        font-size: 19px;
+        line-height: 1.35;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .chips {
+        margin-top: 22px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        border: 1px solid rgba(109, 179, 255, 0.4);
+        border-radius: 999px;
+        padding: 5px 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="cover">
+      <div class="board" id="board"></div>
+      <div class="diag"></div>
+      <div class="scrim"></div>
+      <div class="text">
+        <div class="title">Sudoku<span class="v">VARIANTS</span></div>
+        <div class="tagline">Classic Sudoku &mdash; plus rules you can mix &amp; match.</div>
+        <div class="chips">
+          <span class="chip">Diagonal</span>
+          <span class="chip">Hyper</span>
+          <span class="chip">Jigsaw</span>
+          <span class="chip">+ more</span>
+        </div>
+      </div>
+    </div>
+    <script>
+      // A real solved grid; blank out most, keep some givens (white) + a few
+      // user entries (blue), one selected cell with same-digit highlight.
+      const SOL = [
+        5, 3, 4, 6, 7, 8, 9, 1, 2, 6, 7, 2, 1, 9, 5, 3, 4, 8, 1, 9, 8, 3, 4, 2, 5, 6, 7, 8, 5, 9, 7,
+        6, 1, 4, 2, 3, 4, 2, 6, 8, 5, 3, 7, 9, 1, 7, 1, 3, 9, 2, 4, 8, 5, 6, 9, 6, 1, 5, 3, 7, 2, 8,
+        4, 2, 8, 7, 4, 1, 9, 6, 3, 5, 3, 4, 5, 2, 8, 6, 1, 7, 9,
+      ];
+      // Which cells show a digit at all (a plausible puzzle-in-progress).
+      const SHOWN = new Set([
+        0, 2, 4, 7, 9, 13, 16, 20, 22, 24, 27, 30, 33, 36, 40, 44, 48, 52, 56, 58, 60, 63, 67, 70,
+        72, 74, 78, 80, 11, 38, 42, 65,
+      ]);
+      // Of the shown, these were "entered" by the player (blue).
+      const USER = new Set([11, 38, 42, 65, 22, 58]);
+      const SEL = 40; // selected cell (value 5)
+      const selVal = SOL[SEL];
+      const board = document.getElementById("board");
+      for (let i = 0; i < 81; i++) {
+        const d = document.createElement("div");
+        d.className = "c";
+        const r = Math.floor(i / 9),
+          col = i % 9;
+        if (col % 3 === 2 && col !== 8) d.classList.add("br");
+        if (r % 3 === 2 && r !== 8) d.classList.add("bb");
+        // Hyper windows tint (rows/cols 1-3 and 5-7 in each 3x3 window).
+        const inWin = (a) => a >= 1 && a <= 3;
+        const inWin2 = (a) => a >= 5 && a <= 7;
+        if ((inWin(r) || inWin2(r)) && (inWin(col) || inWin2(col))) d.classList.add("win");
+        if (SHOWN.has(i)) {
+          d.textContent = SOL[i];
+          if (USER.has(i)) d.classList.add("user");
+          if (SOL[i] === selVal && i !== SEL) d.classList.add("same");
+        }
+        if (i === SEL) {
+          d.classList.add("sel");
+          d.textContent = SOL[i];
+          d.classList.add("user");
+        }
+        board.appendChild(d);
+      }
+    </script>
+  </body>
+</html>
