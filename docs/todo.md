@@ -68,7 +68,18 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       (kao jigsaw `regions`). Render: kvadrat (parno) / krug (neparno) u `::before`
       sloju ćelije (skriveno na givens). Gustoća oznaka je knob za ugađanje težine.
 - [ ] Parity (ograničenje parnosti - srodno Even/Odd, procijeniti spajanje)
-- [ ] Kropki (crne/bijele točke između susjeda: omjer 2 / razlika 1)
+- [x] Kropki (crne/bijele točke između susjeda: omjer 2 / razlika 1, v1.25.0).
+      **Casual** izvedba (Vatrin izbor): samo pozitivno - prikazana točka mora
+      vrijediti, odsutnost ne znači ništa (bez negativnog constrainta). Per-puzzle
+      `state.dots = { h, v }` (81-polja 0/1/2), podskup točaka izveden iz rješenja
+      (`deriveDots`, `KROPKI_DENSITY` knob u `sudoku.js`). Bolt-on bez Faza 0: kao
+      evenodd, "kropki" je u `REGION_VARIANTS` ali ne dira units/peers - `isValid`
+      (sudoku.js) provjeri prema popunjenim susjedima, `computeCandidates` + `place`
+      (solver.js) propagiraju kroz sužavanje kandidata (**bez zasebne tehnike**,
+      klasične dovrše - kao Even/Odd). Render: `<span class="kdot">` na bridu vezan uz
+      desnu/donju ćeliju para (stacking iznad ranijeg susjeda), jer su `::before`/
+      `::after` zauzeti parity/color. 1-2 par dobije crnu (omjer provjeren prvo).
+      XV poslije reusea istu brid-infrastrukturu (drugi odnos: zbroj 5/10).
 - [ ] XV (X = zbroj 10, V = zbroj 5 između susjeda)
 
 Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,

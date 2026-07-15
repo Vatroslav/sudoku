@@ -6,7 +6,7 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
   // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "evenodd"];
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "evenodd", "kropki"];
   const VARIANT_LABELS = {
     antiking: "Antiking",
     antiknight: "Antiknight",
@@ -14,6 +14,7 @@
     hyper: "Hyper",
     jigsaw: "Jigsaw",
     evenodd: "Even/Odd",
+    kropki: "Kropki",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -177,6 +178,15 @@
     for (const p of parity) if (p !== 0 && p !== 1 && p !== 2) return false;
     return true;
   }
+  // Kropki: točke su per-puzzle podatak (state.dots = { h, v }, 81-polja 0/1/2).
+  function validDots(dots) {
+    if (!dots || !Array.isArray(dots.h) || !Array.isArray(dots.v)) return false;
+    if (dots.h.length !== 81 || dots.v.length !== 81) return false;
+    for (let i = 0; i < 81; i++) {
+      if (![0, 1, 2].includes(dots.h[i]) || ![0, 1, 2].includes(dots.v[i])) return false;
+    }
+    return true;
+  }
   // Regija ćelije: jigsaw -> state.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
     if (state.variants.includes("jigsaw") && Array.isArray(state.regions))
@@ -320,7 +330,7 @@
   // odustao i koliko je čekao. Čisti se čim ploča sjedne.
   let pendingGen = null;
 
-  function buildState(difficulty, variants, puzzle, solution, techniques, regions, parity) {
+  function buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, dots) {
     state = {
       puzzle,
       solution,
@@ -331,6 +341,7 @@
       variants,
       regions: regions || null,
       parity: parity || null,
+      dots: dots || null,
       techniques: techniques || [],
       gameId: newGameId(),
       playMs: 0,
@@ -359,11 +370,11 @@
   function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques, regions, parity } = Sudoku.generate(
+      const { puzzle, solution, techniques, regions, parity, dots } = Sudoku.generate(
         difficulty,
         variants
       );
-      buildState(difficulty, variants, puzzle, solution, techniques, regions, parity);
+      buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, dots);
     }, 30);
   }
 
@@ -381,8 +392,8 @@
         genWorker.onmessage = (e) => {
           genWorker.terminate();
           genWorker = null;
-          const { puzzle, solution, techniques, regions, parity } = e.data;
-          buildState(difficulty, variants, puzzle, solution, techniques, regions, parity);
+          const { puzzle, solution, techniques, regions, parity, dots } = e.data;
+          buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, dots);
         };
         genWorker.onerror = () => {
           // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
@@ -465,6 +476,12 @@
         if (!validParity(state.parity)) return false;
       } else {
         state.parity = null;
+      }
+      // Kropki: točke moraju biti valjane ({ h, v } 81-polja 0/1/2); inače odbaci.
+      if (state.variants.includes("kropki")) {
+        if (!validDots(state.dots)) return false;
+      } else {
+        state.dots = null;
       }
       return true;
     } catch (e) {
@@ -827,7 +844,8 @@
       state.solution,
       state.variants,
       state.regions,
-      state.parity
+      state.parity,
+      state.dots
     );
     if (!res || res.done) {
       clearHint();
@@ -1062,6 +1080,23 @@
         cell.appendChild(grid);
       } else {
         cell.textContent = "";
+      }
+
+      // Kropki: točke na bridovima. Vežemo ih uz KASNIJE iscrtanu ćeliju (ovu, i) na
+      // lijevom/gornjem bridu prema ranijem susjedu (i-1 / i-9) - tako točka leži iznad
+      // susjeda (siblinzi se crtaju po DOM redu). ::before/::after su zauzeti pa zaseban
+      // span; textContent gore ih pobriše svaki render pa se čisto ponovno postave.
+      if (state.dots) {
+        if (col > 0 && state.dots.h[i - 1]) {
+          const d = document.createElement("span");
+          d.className = "kdot h " + (state.dots.h[i - 1] === 1 ? "white" : "black");
+          cell.appendChild(d);
+        }
+        if (row > 0 && state.dots.v[i - 9]) {
+          const d = document.createElement("span");
+          d.className = "kdot v " + (state.dots.v[i - 9] === 1 ? "white" : "black");
+          cell.appendChild(d);
+        }
       }
     }
 

@@ -19,6 +19,9 @@
   --diag-line: rgba(109, 179, 255, 0.4);
   --window-tint: rgba(160, 130, 240, 0.16);
   --parity: #7a7a8c;
+  --kdot-white: #e8e8ef;
+  --kdot-black: #14141a;
+  --kdot-ring: #b0b1c6;
   --text: #e8e8ef;
   --muted: #8a8a99;
   --depleted: #44444f;
@@ -324,6 +327,39 @@ main {
 }
 .cell.odd::before {
   border-radius: 50%;
+}
+
+/* Kropki: točke na bridovima. Zaseban <span> (::before/::after su zauzeti parity/
+   color), vezan uz desnu/donju ćeliju para pa leži iznad ranije iscrtanog susjeda.
+   Centriran na lijevom (h) / gornjem (v) bridu ćelije = na razmaku prema susjedu.
+   Bijela = puni svijetli disk; crna = tamni disk sa svijetlim prstenom, da se vidi
+   na skoro-crnoj ploči. Boje su knobovi (--kdot-*). */
+.cell .kdot {
+  position: absolute;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  z-index: 4;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+.cell .kdot.h {
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.cell .kdot.v {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+.cell .kdot.white {
+  background: var(--kdot-white);
+  border: 1px solid var(--kdot-black);
+}
+.cell .kdot.black {
+  background: var(--kdot-black);
+  border: 1.5px solid var(--kdot-ring);
 }
 
 .cell.given {

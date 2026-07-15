@@ -143,6 +143,22 @@ const Solver = (() => {
     return true;
   }
 
+  // Kropki točke: { h, v } gdje su h/v 81-polja s 0 (nema) / 1 (bijela) / 2 (crna).
+  function validDots(dots) {
+    if (!dots || !Array.isArray(dots.h) || !Array.isArray(dots.v)) return false;
+    if (dots.h.length !== 81 || dots.v.length !== 81) return false;
+    for (let i = 0; i < 81; i++) {
+      if (![0, 1, 2].includes(dots.h[i]) || ![0, 1, 2].includes(dots.v[i])) return false;
+    }
+    return true;
+  }
+  // Zadovoljava li par a,b prikazanu točku tipa t (1 bijela = uzastopni, 2 crna = omjer 2).
+  function dotOk(a, b, t) {
+    const hi = Math.max(a, b),
+      lo = Math.min(a, b);
+    return t === 2 ? hi === 2 * lo : hi - lo === 1;
+  }
+
   // Kanonski ključ aktivnog skupa (npr. "x+hyper"), "classic" ako je prazan.
   function variantKey(variants) {
     if (typeof variants === "string") variants = variants === "classic" ? [] : [variants];
@@ -186,6 +202,22 @@ const Solver = (() => {
   // Even/Odd: per-puzzle parity maska (0 bez oznake, 1 parno, 2 neparno) ili null.
   // computeCandidates iz označenih praznih ćelija makne kandidate krive parnosti.
   let curParity = null;
+  // Kropki: per-puzzle točke ({ h, v }) ili null. Točke se propagiraju kroz sužavanje
+  // kandidata (ovdje prema popunjenim susjedima, i u place() pri svakom upisu) -
+  // nema zasebne tehnike, klasične dovrše. Samo pozitivno (odsutnost ne ograničava).
+  let curDots = null;
+  // Susjedni bridovi ćelije s prikazanom točkom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
+  function dotEdges(idx) {
+    const out = [];
+    if (!curDots) return out;
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    if (c < 8 && curDots.h[idx]) out.push([idx + 1, curDots.h[idx]]);
+    if (c > 0 && curDots.h[idx - 1]) out.push([idx - 1, curDots.h[idx - 1]]);
+    if (r < 8 && curDots.v[idx]) out.push([idx + 9, curDots.v[idx]]);
+    if (r > 0 && curDots.v[idx - 9]) out.push([idx - 9, curDots.v[idx - 9]]);
+    return out;
+  }
 
   const T_SINGLE = 1,
     T_INTER = 2,
@@ -201,6 +233,11 @@ const Solver = (() => {
         const wantEven = curParity[idx] === 1;
         for (const v of [...s]) if ((v % 2 === 0) !== wantEven) s.delete(v);
       }
+      // Kropki: prema svakom POPUNJENOM susjedu s točkom, zadrži samo vrijednosti
+      // koje zadovoljavaju odnos. (Prazan-prazan par riješi place() kad se jedan upiše.)
+      for (const [nb, t] of dotEdges(idx)) {
+        if (grid[nb] !== 0) for (const v of [...s]) if (!dotOk(v, grid[nb], t)) s.delete(v);
+      }
       cand[idx] = s;
     }
     return cand;
@@ -210,6 +247,11 @@ const Solver = (() => {
     grid[idx] = val;
     cand[idx] = null;
     for (const p of peers[idx]) if (cand[p]) cand[p].delete(val);
+    // Kropki: propagiraj upisanu vrijednost na prazne susjede s točkom (zadrži samo
+    // one koji zadovoljavaju odnos) - dovodi do naked singlea koje klasične uhvate.
+    for (const [nb, t] of dotEdges(idx)) {
+      if (cand[nb]) for (const u of [...cand[nb]]) if (!dotOk(val, u, t)) cand[nb].delete(u);
+    }
   }
 
   // --- Tehnike: svaka vraća true nakon PRVOG napretka (da grading uvijek
@@ -512,12 +554,14 @@ const Solver = (() => {
   // legacy string) aktivnih varijanti; nepoznato => klasik (unatražna
   // kompatibilnost sa spremljenim igrama). regions = jigsaw geometrija (81-polje)
   // ili null; nevaljano se tretira klasično (statični kvadrati). parity = Even/Odd
-  // maska (81-polje 0/1/2) ili null; nevaljano se ignorira.
-  function useVariant(variants, regions, parity) {
+  // maska (81-polje 0/1/2) ili null; nevaljano se ignorira. dots = Kropki točke
+  // ({ h, v }) ili null; nevaljano se ignorira.
+  function useVariant(variants, regions, parity, dots) {
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
     curParity = validParity(parity) ? parity : null;
+    curDots = validDots(dots) ? dots : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
@@ -952,8 +996,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution, variants, regions, parity) {
-    useVariant(variants, regions, parity);
+  function explainNext(values, notes, solution, variants, regions, parity, dots) {
+    useVariant(variants, regions, parity, dots);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -979,9 +1023,9 @@ const Solver = (() => {
 
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
   // regions = jigsaw geometrija (81-polje id-eva) ili null/izostavljeno = klasik.
-  // parity = Even/Odd maska (81-polje 0/1/2) ili null.
-  function solveAndGrade(puzzle, variants, regions, parity) {
-    useVariant(variants, regions, parity);
+  // parity = Even/Odd maska (81-polje 0/1/2) ili null. dots = Kropki točke ({h,v}) ili null.
+  function solveAndGrade(puzzle, variants, regions, parity, dots) {
+    useVariant(variants, regions, parity, dots);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;
