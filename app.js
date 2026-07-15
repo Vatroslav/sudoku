@@ -1086,15 +1086,26 @@
       // lijevom/gornjem bridu prema ranijem susjedu (i-1 / i-9) - tako točka leži iznad
       // susjeda (siblinzi se crtaju po DOM redu). ::before/::after su zauzeti pa zaseban
       // span; textContent gore ih pobriše svaki render pa se čisto ponovno postave.
+      // Točka između DVIJE zadane ćelije je šum (oba broja poznata od početka) - skrij ju.
+      // Na granici bloka (deblja linija) razmak je širi pa točka dobiva `thick` offset.
       if (state.dots) {
-        if (col > 0 && state.dots.h[i - 1]) {
+        const given = (j) => state.puzzle[j] !== 0;
+        if (col > 0 && state.dots.h[i - 1] && !(given(i) && given(i - 1))) {
+          const thick = jigsawMode
+            ? state.regions[i] !== state.regions[i - 1]
+            : col === 3 || col === 6;
           const d = document.createElement("span");
-          d.className = "kdot h " + (state.dots.h[i - 1] === 1 ? "white" : "black");
+          d.className =
+            "kdot h " + (state.dots.h[i - 1] === 1 ? "white" : "black") + (thick ? " thick" : "");
           cell.appendChild(d);
         }
-        if (row > 0 && state.dots.v[i - 9]) {
+        if (row > 0 && state.dots.v[i - 9] && !(given(i) && given(i - 9))) {
+          const thick = jigsawMode
+            ? state.regions[i] !== state.regions[i - 9]
+            : row === 3 || row === 6;
           const d = document.createElement("span");
-          d.className = "kdot v " + (state.dots.v[i - 9] === 1 ? "white" : "black");
+          d.className =
+            "kdot v " + (state.dots.v[i - 9] === 1 ? "white" : "black") + (thick ? " thick" : "");
           cell.appendChild(d);
         }
       }

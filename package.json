@@ -1,6 +1,6 @@
 {
   "name": "sudoku",
-  "version": "1.25.0",
+  "version": "1.25.1",
   "private": true,
   "description": "Offline Sudoku PWA",
   "scripts": {

@@ -353,6 +353,14 @@ main {
   top: 0;
   transform: translate(-50%, -50%);
 }
+/* Granica bloka: razmak je širi (1px board gap + 2px .br/.bb margin + block-line),
+   pa se točka pomakne pola te razlike prema centru šireg razmaka. */
+.cell .kdot.h.thick {
+  left: -1.5px;
+}
+.cell .kdot.v.thick {
+  top: -1.5px;
+}
 .cell .kdot.white {
   background: var(--kdot-white);
   border: 1px solid var(--kdot-black);
