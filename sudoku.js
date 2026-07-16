@@ -423,6 +423,18 @@ const Sudoku = (() => {
     return { regions, jig: { map: regions, cells: regionsToCells(regions) } };
   }
 
+  // Je li varijanta NUŽNA za ovu slagalicu? Ako je ploča jedinstveno rješiva i kao
+  // čisti klasik, varijantna pravila/oznake su dekoracija - igrač ih smije potpuno
+  // ignorirati i svejedno doći do istog rješenja. Aditivne varijante samo SUŽAVAJU
+  // skup rješenja, pa je klasično rješenje (kad je jedinstveno) nužno ono isto:
+  // >1 klasično rješenje znači da varijanta stvarno bira između njih.
+  // Jigsaw je iznimka - ZAMJENJUJE box-jedinice, pa "klasična" verzija te ploče
+  // rješava drugi problem i usporedba nema smisla.
+  function variantNeeded(puzzle, variants, useJig) {
+    if (useJig || !variants.length) return true;
+    return countSolutions(puzzle.slice(), 2, [], null, null, null) > 1;
+  }
+
   // Generira slagalicu tražene težine. Ako u zadanom broju pokušaja ne nađe
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).
   // variants: polje (ili legacy string) aktivnih regijskih varijanti - prazno =
@@ -454,6 +466,9 @@ const Sudoku = (() => {
       const parity = useEven ? deriveParity(solution) : null;
       const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
       const puzzle = dig(solution, target, variants, jig, parity, edges);
+      // Varijanta mora nešto raditi - ploču koju klasika sama jedinstveno rješava
+      // odbaci (provjeri prije gradinga, countSolutions je jeftiniji od solvera).
+      if (!variantNeeded(puzzle, variants, useJig)) continue;
       const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
       if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti

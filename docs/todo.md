@@ -127,6 +127,25 @@ generacija mora dati jedinstveno rješenje):
       regions/parity/dots), i UX (zaseban "Daily" ulaz u meniju, jedan pokušaj po danu?).
       Metrike već nose `variants` u eventima pa se completion po danu vidi bez izmjena.
 
+## Nužnost varijante (v1.28.0)
+
+`variantNeeded` u `sudoku.js`: generator odbacuje slagalicu koju **klasika sama
+jedinistveno rješava** - tamo su varijantna pravila/oznake dekoracija koju igrač
+smije ignorirati. Kriterij je `countSolutions(puzzle, bez varijanti) > 1`:
+aditivne varijante samo sužavaju skup rješenja, pa je klasično rješenje (kad je
+jedinstveno) nužno ono isto. **Jigsaw je izuzet** - zamjenjuje box-jedinice, pa
+"klasična" verzija ploče rješava drugi problem i usporedba nema smisla.
+
+Izmjereno prije/poslije (12 ploča po slučaju):
+
+- XV Normal: nužan u **7/10 → 12/12**. Klasika sama riješi 71% → 62% praznih.
+- Hard je i prije filtera bio 10/10 nužan za sve varijante - tamo filter ništa
+  ne odbacuje, samo garantira. Klasika na Hardu dogura do ~18% praznih (XV),
+  pa oznake trebaš od početka, ne tek na kraju.
+
+Trošak: jedan `countSolutions` po pokušaju, prije gradinga (jeftiniji od solvera).
+Brzina generacije nije mjerljivo pala.
+
 ## Poznato / tehnički dug
 
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
