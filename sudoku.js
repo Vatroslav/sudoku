@@ -77,10 +77,19 @@ const Sudoku = (() => {
 
   // Poznate varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
   // (prazno = classic). Redoslijed je kanonski (za stabilne cache-ključeve i labele).
-  // Većina su regijske (šire units/peers); "evenodd" (parity maska) i "kropki"
-  // (točke na bridovima) su iznimke - ne diraju units/peers, nose per-puzzle podatak
-  // koji provjerava isValid (kao jigsaw regions).
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "evenodd", "kropki"];
+  // Većina su regijske (šire units/peers); "evenodd" (parity maska) te "kropki" i
+  // "xv" (oznake na bridovima) su iznimke - ne diraju units/peers, nose per-puzzle
+  // podatak koji provjerava isValid (kao jigsaw regions).
+  const REGION_VARIANTS = [
+    "antiking",
+    "antiknight",
+    "x",
+    "hyper",
+    "jigsaw",
+    "evenodd",
+    "kropki",
+    "xv",
+  ];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];
@@ -168,8 +177,13 @@ const Sudoku = (() => {
     return regions;
   }
 
-  // Kropki: tip točke između susjeda a,b. 2 = crna (omjer 2, provjeri prvo pa 1-2
-  // dobije crnu), 1 = bijela (uzastopni), 0 = nema odnosa.
+  // --- Brid-oznake (Kropki + XV dijele isti prostor) ---
+  // Tip oznake na bridu: 1 bijela točka (uzastopni), 2 crna točka (omjer 2),
+  // 3 slovo V (zbroj 5), 4 slovo X (zbroj 10). 0 = brid bez oznake.
+  // Jedan brid nosi najviše jednu oznaku - i fizički (točka i slovo bi se
+  // preklopili) i logički (deriveEdges ne dira zauzet brid).
+
+  // Kropki tip para a,b: omjer 2 se provjeri prvo pa 1-2 dobije crnu.
   function dotType(a, b) {
     const hi = Math.max(a, b),
       lo = Math.min(a, b);
@@ -177,22 +191,32 @@ const Sudoku = (() => {
     if (hi - lo === 1) return 1;
     return 0;
   }
-  // Zadovoljava li par a,b prikazanu točku tipa t (1 bijela = uzastopni, 2 crna =
-  // omjer 2). Neovisno o dotType tiebreaku - 1-2 zadovoljava i bijelu i crnu.
-  function dotOk(a, b, t) {
+  // XV tip para a,b: V = zbroj 5, X = zbroj 10 (par ne može biti oboje).
+  function xvType(a, b) {
+    if (a + b === 5) return 3;
+    if (a + b === 10) return 4;
+    return 0;
+  }
+  // Zadovoljava li par a,b prikazanu oznaku tipa t. Neovisno o dotType tiebreaku -
+  // 1-2 zadovoljava i bijelu i crnu.
+  function edgeOk(a, b, t) {
     const hi = Math.max(a, b),
       lo = Math.min(a, b);
-    return t === 2 ? hi === 2 * lo : hi - lo === 1;
+    if (t === 1) return hi - lo === 1;
+    if (t === 2) return hi === 2 * lo;
+    if (t === 3) return a + b === 5;
+    if (t === 4) return a + b === 10;
+    return true;
   }
 
   // variants = normalizirano polje aktivnih regijskih varijanti (vidi normVariants).
   // jig = null | { map: regions, cells: regionCells } - kad je postavljen,
   // box-provjeru zamjenjuje regija ćelije (row/col ostaju).
   // parity = null | 81-polje (0 bez oznake, 1 parno, 2 neparno) - Even/Odd maska.
-  // dots = null | { h: 81-polje, v: 81-polje } - Kropki točke (h[i] = brid i↔i+1,
-  // v[i] = brid i↔i+9; 0 nema / 1 bijela / 2 crna). Samo pozitivno: prikazana točka
-  // mora vrijediti; odsutnost ne ograničava ništa.
-  function isValid(board, idx, val, variants, jig, parity, dots) {
+  // edges = null | { h: 81-polje, v: 81-polje } - Kropki/XV oznake na bridovima
+  // (h[i] = brid i↔i+1, v[i] = brid i↔i+9; tipovi kao u edgeOk). Samo pozitivno:
+  // prikazana oznaka mora vrijediti; odsutnost ne ograničava ništa.
+  function isValid(board, idx, val, variants, jig, parity, edges) {
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -225,24 +249,24 @@ const Sudoku = (() => {
       const even = val % 2 === 0;
       if (parity[idx] === 1 ? !even : even) return false; // 1 = parno, 2 = neparno
     }
-    if (dots) {
-      // Provjeri samo popunjene ortogonalne susjede s prikazanom točkom.
-      if (col < 8 && dots.h[idx] && board[idx + 1] && !dotOk(val, board[idx + 1], dots.h[idx]))
+    if (edges) {
+      // Provjeri samo popunjene ortogonalne susjede s prikazanom oznakom.
+      if (col < 8 && edges.h[idx] && board[idx + 1] && !edgeOk(val, board[idx + 1], edges.h[idx]))
         return false;
       if (
         col > 0 &&
-        dots.h[idx - 1] &&
+        edges.h[idx - 1] &&
         board[idx - 1] &&
-        !dotOk(val, board[idx - 1], dots.h[idx - 1])
+        !edgeOk(val, board[idx - 1], edges.h[idx - 1])
       )
         return false;
-      if (row < 8 && dots.v[idx] && board[idx + 9] && !dotOk(val, board[idx + 9], dots.v[idx]))
+      if (row < 8 && edges.v[idx] && board[idx + 9] && !edgeOk(val, board[idx + 9], edges.v[idx]))
         return false;
       if (
         row > 0 &&
-        dots.v[idx - 9] &&
+        edges.v[idx - 9] &&
         board[idx - 9] &&
-        !dotOk(val, board[idx - 9], dots.v[idx - 9])
+        !edgeOk(val, board[idx - 9], edges.v[idx - 9])
       )
         return false;
     }
@@ -276,14 +300,14 @@ const Sudoku = (() => {
 
   // Broji rješenja (staje na 'limit'). MRV: bira praznu ćeliju s najmanje
   // kandidata -> drastično brže od first-empty backtrackinga.
-  function countSolutions(board, limit, variants, jig, parity, dots) {
+  function countSolutions(board, limit, variants, jig, parity, edges) {
     let bestIdx = -1,
       bestCands = null;
     for (let idx = 0; idx < 81; idx++) {
       if (board[idx] !== 0) continue;
       const cands = [];
       for (let v = 1; v <= 9; v++)
-        if (isValid(board, idx, v, variants, jig, parity, dots)) cands.push(v);
+        if (isValid(board, idx, v, variants, jig, parity, edges)) cands.push(v);
       if (cands.length === 0) return 0;
       if (bestCands === null || cands.length < bestCands.length) {
         bestIdx = idx;
@@ -295,7 +319,7 @@ const Sudoku = (() => {
     let count = 0;
     for (const v of bestCands) {
       board[bestIdx] = v;
-      count += countSolutions(board, limit, variants, jig, parity, dots);
+      count += countSolutions(board, limit, variants, jig, parity, edges);
       board[bestIdx] = 0;
       if (count >= limit) return count;
     }
@@ -304,7 +328,7 @@ const Sudoku = (() => {
 
   // Briše ćelije (bez simetrije, za maksimalan izazov) dok čuva jedinstveno
   // rješenje, do otprilike 'target' zadanih ćelija.
-  function dig(solution, target, variants, jig, parity, dots) {
+  function dig(solution, target, variants, jig, parity, edges) {
     const puzzle = solution.slice();
     let givens = 81;
     for (const idx of shuffle([...Array(81).keys()])) {
@@ -312,7 +336,7 @@ const Sudoku = (() => {
       if (puzzle[idx] === 0) continue;
       const backup = puzzle[idx];
       puzzle[idx] = 0;
-      if (countSolutions(puzzle.slice(), 2, variants, jig, parity, dots) !== 1)
+      if (countSolutions(puzzle.slice(), 2, variants, jig, parity, edges) !== 1)
         puzzle[idx] = backup;
       else givens--;
     }
@@ -337,35 +361,53 @@ const Sudoku = (() => {
     return parity;
   }
 
-  // Kropki (casual): prikaži podskup točaka izvedenih iz rješenja. Skupi sve bridove
-  // gdje odnos postoji (uzastopni/omjer 2), pa otkrij njihov djelić. Samo pozitivno -
-  // odsutnost točke ne znači ništa. KROPKI_DENSITY je raspon (knob, udio kvalificiranih
-  // bridova): gustoća se nasumično bira po generaciji da slagalice variraju.
+  // Kropki i XV (casual): prikaži podskup oznaka izvedenih iz rješenja. Skupi sve
+  // bridove gdje odnos postoji, pa otkrij njihov djelić. Samo pozitivno - odsutnost
+  // oznake ne znači ništa. *_DENSITY je raspon (knob, udio kvalificiranih bridova):
+  // gustoća se nasumično bira po generaciji da slagalice variraju. XV ima veći raspon
+  // jer manje parova kvalificira (zbroj 5/10 = 6 parova, Kropki 11) pa bi ista gustoća
+  // dala premalo oznaka.
   const KROPKI_DENSITY = { min: 0.35, max: 0.55 };
-  function deriveDots(solution) {
-    const h = new Array(81).fill(0),
-      v = new Array(81).fill(0);
-    const cands = [];
+  const XV_DENSITY = { min: 0.45, max: 0.65 };
+
+  // Bridovi gdje typeFn nalazi odnos, kao [os, i, tip]. h[i] = i↔i+1, v[i] = i↔i+9.
+  function edgeCands(solution, typeFn) {
+    const out = [];
     for (let i = 0; i < 81; i++) {
       const c = i % 9,
         r = Math.floor(i / 9);
       if (c < 8) {
-        const t = dotType(solution[i], solution[i + 1]);
-        if (t) cands.push(["h", i, t]);
+        const t = typeFn(solution[i], solution[i + 1]);
+        if (t) out.push(["h", i, t]);
       }
       if (r < 8) {
-        const t = dotType(solution[i], solution[i + 9]);
-        if (t) cands.push(["v", i, t]);
+        const t = typeFn(solution[i], solution[i + 9]);
+        if (t) out.push(["v", i, t]);
       }
     }
-    shuffle(cands);
-    const density = KROPKI_DENSITY.min + Math.random() * (KROPKI_DENSITY.max - KROPKI_DENSITY.min);
-    const count = Math.round(cands.length * density);
-    for (let k = 0; k < count; k++) {
-      const [axis, i, t] = cands[k];
-      if (axis === "h") h[i] = t;
-      else v[i] = t;
-    }
+    return out;
+  }
+
+  // Kropki i XV se natječu za iste bridove (jedini par koji kvalificira za obje je
+  // 2-3: uzastopni I zbroj 5). Kropki bira prvi, XV puni samo slobodne bridove -
+  // casual semantika to podnosi: izgubljena oznaka je oznaka koja se ne prikazuje,
+  // a odsutnost ionako ne znači ništa.
+  function deriveEdges(solution, useKropki, useXv) {
+    const h = new Array(81).fill(0),
+      v = new Array(81).fill(0);
+    const reveal = (cands, dens) => {
+      const free = cands.filter(([axis, i]) => (axis === "h" ? h[i] : v[i]) === 0);
+      shuffle(free);
+      const density = dens.min + Math.random() * (dens.max - dens.min);
+      const count = Math.round(free.length * density);
+      for (let k = 0; k < count; k++) {
+        const [axis, i, t] = free[k];
+        if (axis === "h") h[i] = t;
+        else v[i] = t;
+      }
+    };
+    if (useKropki) reveal(edgeCands(solution, dotType), KROPKI_DENSITY);
+    if (useXv) reveal(edgeCands(solution, xvType), XV_DENSITY);
     return { h, v };
   }
 
@@ -388,9 +430,10 @@ const Sudoku = (() => {
   // dijagonale 1-9), "hyper" (4 prozora 1-9), "antiknight" (isti broj zabranjen
   // na skoku konja), "antiking" (isti broj zabranjen na dijagonalnom susjedu),
   // "evenodd" (djelić ćelija označen parno/neparno), "kropki" (točke na bridovima),
-  // ili kombinacija. Rezultat nosi `regions` (81-polje id-eva regije) kad je jigsaw
-  // aktivan inače `null`, `parity` (81-polje 0/1/2) kad je evenodd aktivan inače
-  // `null`, te `dots` ({ h, v } 81-polja) kad je kropki aktivan inače `null`.
+  // "xv" (slova X/V na bridovima), ili kombinacija. Rezultat nosi `regions` (81-polje
+  // id-eva regije) kad je jigsaw aktivan inače `null`, `parity` (81-polje 0/1/2) kad
+  // je evenodd aktivan inače `null`, te `edges` ({ h, v } 81-polja) kad je kropki
+  // i/ili xv aktivan inače `null`.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
@@ -399,17 +442,19 @@ const Sudoku = (() => {
     const useJig = variants.includes("jigsaw");
     const useEven = variants.includes("evenodd");
     const useKropki = variants.includes("kropki");
+    const useXv = variants.includes("xv");
+    const useEdges = useKropki || useXv;
     let best = null;
 
     for (let a = 0; a < attempts; a++) {
       const { regions, jig } = newRegionCtx(useJig);
       const solution = generateSolution(variants, jig);
       if (!solution) continue; // probijen budžet (loše regije) -> novi pokušaj
-      // Parity/dots se izvode iz rješenja (uvijek konzistentni) pa su aktivni u dig/solveAndGrade.
+      // Parity/edges se izvode iz rješenja (uvijek konzistentni) pa su aktivni u dig/solveAndGrade.
       const parity = useEven ? deriveParity(solution) : null;
-      const dots = useKropki ? deriveDots(solution) : null;
-      const puzzle = dig(solution, target, variants, jig, parity, dots);
-      const res = Solver.solveAndGrade(puzzle, variants, regions, parity, dots);
+      const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
+      const puzzle = dig(solution, target, variants, jig, parity, edges);
+      const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
       if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti
 
@@ -422,7 +467,7 @@ const Sudoku = (() => {
           techniques: res.techniques,
           regions,
           parity,
-          dots,
+          edges,
         };
       }
       if (!best || Math.abs(res.tier - reqTier) < Math.abs(best.tier - reqTier)) {
@@ -434,7 +479,7 @@ const Sudoku = (() => {
           tier: res.tier,
           regions,
           parity,
-          dots,
+          edges,
         };
       }
     }
@@ -448,7 +493,7 @@ const Sudoku = (() => {
         techniques: best.techniques,
         regions: best.regions,
         parity: best.parity,
-        dots: best.dots,
+        edges: best.edges,
       };
     // Krajnji fallback - bilo što rješivo (nove regije za jigsaw, ne recikliraj).
     let ctx, solution;
@@ -457,16 +502,16 @@ const Sudoku = (() => {
       solution = generateSolution(variants, ctx.jig);
     } while (!solution);
     const parity = useEven ? deriveParity(solution) : null;
-    const dots = useKropki ? deriveDots(solution) : null;
+    const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
     return {
-      puzzle: dig(solution, target, variants, ctx.jig, parity, dots),
+      puzzle: dig(solution, target, variants, ctx.jig, parity, edges),
       solution,
       difficulty,
       variants,
       techniques: [],
       regions: ctx.regions,
       parity,
-      dots,
+      edges,
     };
   }
 

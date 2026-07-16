@@ -70,17 +70,28 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 - [ ] Parity (ograničenje parnosti - srodno Even/Odd, procijeniti spajanje)
 - [x] Kropki (crne/bijele točke između susjeda: omjer 2 / razlika 1, v1.25.0).
       **Casual** izvedba (Vatrin izbor): samo pozitivno - prikazana točka mora
-      vrijediti, odsutnost ne znači ništa (bez negativnog constrainta). Per-puzzle
-      `state.dots = { h, v }` (81-polja 0/1/2), podskup točaka izveden iz rješenja
-      (`deriveDots`, `KROPKI_DENSITY` knob u `sudoku.js`). Bolt-on bez Faza 0: kao
-      evenodd, "kropki" je u `REGION_VARIANTS` ali ne dira units/peers - `isValid`
-      (sudoku.js) provjeri prema popunjenim susjedima, `computeCandidates` + `place`
-      (solver.js) propagiraju kroz sužavanje kandidata (**bez zasebne tehnike**,
-      klasične dovrše - kao Even/Odd). Render: `<span class="kdot">` na bridu vezan uz
-      desnu/donju ćeliju para (stacking iznad ranijeg susjeda), jer su `::before`/
-      `::after` zauzeti parity/color. 1-2 par dobije crnu (omjer provjeren prvo).
-      XV poslije reusea istu brid-infrastrukturu (drugi odnos: zbroj 5/10).
-- [ ] XV (X = zbroj 10, V = zbroj 5 između susjeda)
+      vrijediti, odsutnost ne znači ništa (bez negativnog constrainta). Bolt-on bez
+      Faza 0: kao evenodd, "kropki" je u `REGION_VARIANTS` ali ne dira units/peers -
+      `isValid` (sudoku.js) provjeri prema popunjenim susjedima, `computeCandidates` +
+      `place` (solver.js) propagiraju kroz sužavanje kandidata (**bez zasebne
+      tehnike**, klasične dovrše - kao Even/Odd). 1-2 par dobije crnu (omjer provjeren
+      prvo). Podatak i render dijeli s XV - vidi brid-oznake niže.
+- [x] XV (V = zbroj 5, X = zbroj 10 između susjeda, v1.27.0). Casual kao Kropki.
+      Dodavanje je bilo **generalizacija, ne novi kanal**: Kropki `state.dots`
+      (tipovi 0-2) postao je `state.edges` (0 nema / 1 bijela / 2 crna / 3 V / 4 X),
+      pa XV ne uvodi ni jedan novi parametar u `isValid`/`countSolutions`/`dig`/
+      `solveAndGrade`/`explainNext` (već ih je bilo 7 - vidi Faza 0 procjenu gore).
+      `deriveEdges(solution, useKropki, useXv)` + `edgeOk`/`edgeType` u `sudoku.js`;
+      `XV_DENSITY` je zaseban knob i **veći** od Kropki (0.45-0.65 vs 0.35-0.55) jer
+      manje parova kvalificira (zbroj 5/10 = 6 parova, Kropki 11) - mjereno daje
+      12-14 oznaka po ploči. **Jedan brid = jedna oznaka**: fizički (točka i slovo bi
+      se preklopili) i logički (Kropki bira prvi, XV puni slobodne). Jedini par koji
+      kvalificira za obje je 2-3 (uzastopni I zbroj 5); casual semantika to podnosi
+      jer odsutnost ionako ne znači ništa. Render: zajednička klasa `emark` nosi
+      poziciju na bridu, `kdot`/`xmark` izgled. **XV slovo ima neprozirnu podlogu u
+      boji ćelije** - tanki potezi bi se stopili s linijom ploče (pogotovo s debelom
+      granicom bloka), pa slovo reže liniju kao u tiskanim XV slagalicama.
+      Migracija: spremljene Kropki partije (`state.dots`) preuzimaju se u `state.edges`.
 
 Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,
 generacija mora dati jedinstveno rješenje):

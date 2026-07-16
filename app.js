@@ -6,7 +6,16 @@
   const DIFF_LABELS = { normal: "Normal", hard: "Hard" };
   // Regijske varijante mogu se kombinirati. Aktivni skup = polje id-eva (prazno =
   // classic). Redoslijed kanonski, za stabilne labele i usporedbe.
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "evenodd", "kropki"];
+  const REGION_VARIANTS = [
+    "antiking",
+    "antiknight",
+    "x",
+    "hyper",
+    "jigsaw",
+    "evenodd",
+    "kropki",
+    "xv",
+  ];
   const VARIANT_LABELS = {
     antiking: "Antiking",
     antiknight: "Antiknight",
@@ -15,6 +24,7 @@
     jigsaw: "Jigsaw",
     evenodd: "Even/Odd",
     kropki: "Kropki",
+    xv: "XV",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -178,12 +188,14 @@
     for (const p of parity) if (p !== 0 && p !== 1 && p !== 2) return false;
     return true;
   }
-  // Kropki: točke su per-puzzle podatak (state.dots = { h, v }, 81-polja 0/1/2).
-  function validDots(dots) {
-    if (!dots || !Array.isArray(dots.h) || !Array.isArray(dots.v)) return false;
-    if (dots.h.length !== 81 || dots.v.length !== 81) return false;
+  // Kropki/XV: brid-oznake su per-puzzle podatak (state.edges = { h, v }, 81-polja
+  // 0 nema / 1 bijela točka / 2 crna točka / 3 V (zbroj 5) / 4 X (zbroj 10)).
+  function validEdges(edges) {
+    if (!edges || !Array.isArray(edges.h) || !Array.isArray(edges.v)) return false;
+    if (edges.h.length !== 81 || edges.v.length !== 81) return false;
     for (let i = 0; i < 81; i++) {
-      if (![0, 1, 2].includes(dots.h[i]) || ![0, 1, 2].includes(dots.v[i])) return false;
+      if (![0, 1, 2, 3, 4].includes(edges.h[i]) || ![0, 1, 2, 3, 4].includes(edges.v[i]))
+        return false;
     }
     return true;
   }
@@ -330,7 +342,7 @@
   // odustao i koliko je čekao. Čisti se čim ploča sjedne.
   let pendingGen = null;
 
-  function buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, dots) {
+  function buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, edges) {
     state = {
       puzzle,
       solution,
@@ -341,7 +353,7 @@
       variants,
       regions: regions || null,
       parity: parity || null,
-      dots: dots || null,
+      edges: edges || null,
       techniques: techniques || [],
       gameId: newGameId(),
       playMs: 0,
@@ -370,11 +382,11 @@
   function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques, regions, parity, dots } = Sudoku.generate(
+      const { puzzle, solution, techniques, regions, parity, edges } = Sudoku.generate(
         difficulty,
         variants
       );
-      buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, dots);
+      buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, edges);
     }, 30);
   }
 
@@ -392,8 +404,8 @@
         genWorker.onmessage = (e) => {
           genWorker.terminate();
           genWorker = null;
-          const { puzzle, solution, techniques, regions, parity, dots } = e.data;
-          buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, dots);
+          const { puzzle, solution, techniques, regions, parity, edges } = e.data;
+          buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, edges);
         };
         genWorker.onerror = () => {
           // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
@@ -477,11 +489,16 @@
       } else {
         state.parity = null;
       }
-      // Kropki: točke moraju biti valjane ({ h, v } 81-polja 0/1/2); inače odbaci.
-      if (state.variants.includes("kropki")) {
-        if (!validDots(state.dots)) return false;
+      // Migracija: Kropki partije spremljene prije XV-a nose `dots` (tipovi 0-2);
+      // `edges` je isti oblik s proširenim tipovima pa se preuzima kakav jest.
+      if (state.dots && !state.edges) state.edges = state.dots;
+      delete state.dots;
+      // Kropki/XV: brid-oznake moraju biti valjane ({ h, v } 81-polja 0-4); inače
+      // odbaci (solver bi tiho sudio krivo). Bez tih varijanti = null.
+      if (state.variants.includes("kropki") || state.variants.includes("xv")) {
+        if (!validEdges(state.edges)) return false;
       } else {
-        state.dots = null;
+        state.edges = null;
       }
       return true;
     } catch (e) {
@@ -845,7 +862,7 @@
       state.variants,
       state.regions,
       state.parity,
-      state.dots
+      state.edges
     );
     if (!res || res.done) {
       clearHint();
@@ -1082,31 +1099,36 @@
         cell.textContent = "";
       }
 
-      // Kropki: točke na bridovima. Vežemo ih uz KASNIJE iscrtanu ćeliju (ovu, i) na
-      // lijevom/gornjem bridu prema ranijem susjedu (i-1 / i-9) - tako točka leži iznad
+      // Kropki/XV: oznake na bridovima. Vežemo ih uz KASNIJE iscrtanu ćeliju (ovu, i) na
+      // lijevom/gornjem bridu prema ranijem susjedu (i-1 / i-9) - tako oznaka leži iznad
       // susjeda (siblinzi se crtaju po DOM redu). ::before/::after su zauzeti pa zaseban
       // span; textContent gore ih pobriše svaki render pa se čisto ponovno postave.
-      // Točka između DVIJE zadane ćelije je šum (oba broja poznata od početka) - skrij ju.
-      // Na granici bloka (deblja linija) razmak je širi pa točka dobiva `thick` offset.
-      if (state.dots) {
+      // Oznaka između DVIJE zadane ćelije je šum (oba broja poznata od početka) - skrij ju.
+      // Na granici bloka (deblja linija) razmak je širi pa oznaka dobiva `thick` offset.
+      if (state.edges) {
         const given = (j) => state.puzzle[j] !== 0;
-        if (col > 0 && state.dots.h[i - 1] && !(given(i) && given(i - 1))) {
+        // Zajednička klasa `emark` nosi poziciju na bridu; kdot/xmark samo izgled.
+        const mark = (t, axis, thick) => {
+          const el = document.createElement("span");
+          el.className =
+            "emark " +
+            axis +
+            (t <= 2 ? " kdot " + (t === 1 ? "white" : "black") : " xmark") +
+            (thick ? " thick" : "");
+          if (t >= 3) el.textContent = t === 3 ? "V" : "X";
+          cell.appendChild(el);
+        };
+        if (col > 0 && state.edges.h[i - 1] && !(given(i) && given(i - 1))) {
           const thick = jigsawMode
             ? state.regions[i] !== state.regions[i - 1]
             : col === 3 || col === 6;
-          const d = document.createElement("span");
-          d.className =
-            "kdot h " + (state.dots.h[i - 1] === 1 ? "white" : "black") + (thick ? " thick" : "");
-          cell.appendChild(d);
+          mark(state.edges.h[i - 1], "h", thick);
         }
-        if (row > 0 && state.dots.v[i - 9] && !(given(i) && given(i - 9))) {
+        if (row > 0 && state.edges.v[i - 9] && !(given(i) && given(i - 9))) {
           const thick = jigsawMode
             ? state.regions[i] !== state.regions[i - 9]
             : row === 3 || row === 6;
-          const d = document.createElement("span");
-          d.className =
-            "kdot v " + (state.dots.v[i - 9] === 1 ? "white" : "black") + (thick ? " thick" : "");
-          cell.appendChild(d);
+          mark(state.edges.v[i - 9], "v", thick);
         }
       }
     }

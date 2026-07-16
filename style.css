@@ -22,6 +22,7 @@
   --kdot-white: #e8e8ef;
   --kdot-black: #14141a;
   --kdot-ring: #b0b1c6;
+  --xmark: #d8d9e6;
   --text: #e8e8ef;
   --muted: #8a8a99;
   --depleted: #44444f;
@@ -329,37 +330,41 @@ main {
   border-radius: 50%;
 }
 
-/* Kropki: točke na bridovima. Zaseban <span> (::before/::after su zauzeti parity/
+/* Kropki/XV: oznake na bridovima. Zaseban <span> (::before/::after su zauzeti parity/
    color), vezan uz desnu/donju ćeliju para pa leži iznad ranije iscrtanog susjeda.
    Centriran na lijevom (h) / gornjem (v) bridu ćelije = na razmaku prema susjedu.
-   Bijela = puni svijetli disk; crna = tamni disk sa svijetlim prstenom, da se vidi
-   na skoro-crnoj ploči. Boje su knobovi (--kdot-*). */
-.cell .kdot {
+   `emark` nosi samo pozicioniranje; kdot (Kropki) i xmark (XV) izgled. */
+.cell .emark {
   position: absolute;
-  width: 26%;
-  height: 26%;
-  border-radius: 50%;
   z-index: 4;
   pointer-events: none;
   box-sizing: border-box;
 }
-.cell .kdot.h {
+.cell .emark.h {
   left: 0;
   top: 50%;
   transform: translate(-50%, -50%);
 }
-.cell .kdot.v {
+.cell .emark.v {
   left: 50%;
   top: 0;
   transform: translate(-50%, -50%);
 }
 /* Granica bloka: razmak je širi (1px board gap + 2px .br/.bb margin + block-line),
-   pa se točka pomakne pola te razlike prema centru šireg razmaka. */
-.cell .kdot.h.thick {
+   pa se oznaka pomakne pola te razlike prema centru šireg razmaka. */
+.cell .emark.h.thick {
   left: -1.5px;
 }
-.cell .kdot.v.thick {
+.cell .emark.v.thick {
   top: -1.5px;
+}
+
+/* Kropki: bijela = puni svijetli disk; crna = tamni disk sa svijetlim prstenom, da se
+   vidi na skoro-crnoj ploči. Boje su knobovi (--kdot-*). */
+.cell .kdot {
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
 }
 .cell .kdot.white {
   background: var(--kdot-white);
@@ -368,6 +373,25 @@ main {
 .cell .kdot.black {
   background: var(--kdot-black);
   border: 1.5px solid var(--kdot-ring);
+}
+
+/* XV: slovo, ne disk - tanki potezi bi se stopili s linijom ploče (pogotovo na
+   granici bloka), pa slovo nosi neprozirnu podlogu u boji ćelije i tako REŽE liniju
+   ispod sebe, kao u tiskanim XV slagalicama. Podloga je kvadratić s blagim radijusom
+   (ne krug - slovo je šire nego visoko pa bi krug morao biti prevelik). */
+.cell .xmark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42%;
+  height: 34%;
+  padding: 0 1px;
+  border-radius: 2px;
+  background: var(--cell);
+  color: var(--xmark);
+  font-size: clamp(8px, 2.1vmin, 13px);
+  font-weight: 700;
+  line-height: 1;
 }
 
 .cell.given {
