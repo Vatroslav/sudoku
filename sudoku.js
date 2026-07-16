@@ -465,6 +465,61 @@ const Sudoku = (() => {
     return { regions, jig: { map: regions, cells: regionsToCells(regions) } };
   }
 
+  // Suvišne oznake: gustoća raste kako broj zadanih pada, pa ploča na dnu raspona
+  // prikaže SVE što odnos dopušta - ali igraču dobar dio toga ne treba (izmjereno:
+  // 68-80% oznaka se može maknuti a da se ploča i dalje riješi; Even/Odd je znao
+  // isporučiti 64 oznake gdje ih 12 nosi cijeli posao). Isti postupak koji `dig`
+  // radi s brojevima: probaj maknuti svaku, vrati onu bez koje ploča stane.
+  //
+  // Solver rješava deduktivno (tehnike ne pogađaju), pa "rješivo + točno rješenje"
+  // ujedno znači da je rješenje ostalo jedinstveno - zaseban countSolutions ne treba.
+  // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
+  // priuštiti poziv solvera po oznaci.
+  function pruneMarks(puzzle, solution, variants, regions, parity, edges, maxTier) {
+    const cands = [];
+    if (edges)
+      for (let i = 0; i < 81; i++) {
+        if (edges.h[i]) cands.push(["h", i]);
+        if (edges.v[i]) cands.push(["v", i]);
+      }
+    if (parity) for (let i = 0; i < 81; i++) if (parity[i]) cands.push(["p", i]);
+    if (!cands.length) return;
+    const stoji = () => {
+      const r = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
+      return r.solved && r.tier <= maxTier && r.grid.every((v, i) => v === solution[i]);
+    };
+    for (const [kind, i] of shuffle(cands)) {
+      const src = kind === "p" ? parity : edges[kind];
+      const backup = src[i];
+      src[i] = 0;
+      if (!stoji()) src[i] = backup; // bez nje ploča stane -> treba ju
+    }
+  }
+
+  // Očisti suvišne oznake i složi gotovu slagalicu. Tehnike se čitaju NAKON prunea:
+  // ploča bez suvišnih oznaka može tražiti drugu tehniku nego prije (chip u UI-ju
+  // inače prijavljuje tehniku slagalice koja se više ne isporučuje).
+  //
+  // Prune ide SAMO na Hard s varijantama. Na Normalu ploča ima 34 zadana broja pa ju
+  // klasika nosi gotovo cijelu - prune tamo ispravno zaključi da je skoro svaka
+  // oznaka suvišna i ostavi ih 2. Formalno točno (varijanta je i dalje nužna), ali
+  // ploča s dva X-a ne izgleda kao XV slagalica. Normal zato drži baznu gustoću:
+  // tamo su oznake dodatak, na Hardu nose rješenje.
+  function finish(puzzle, solution, difficulty, variants, regions, parity, edges, maxTier, prune) {
+    if (prune) pruneMarks(puzzle, solution, variants, regions, parity, edges, maxTier);
+    const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
+    return {
+      puzzle,
+      solution,
+      difficulty,
+      variants,
+      techniques: res.techniques || [],
+      regions,
+      parity,
+      edges,
+    };
+  }
+
   // Je li varijanta NUŽNA za ovu slagalicu? Ako je ploča jedinstveno rješiva i kao
   // čisti klasik, varijantna pravila/oznake su dekoracija - igrač ih smije potpuno
   // ignorirati i svejedno doći do istog rješenja. Aditivne varijante samo SUŽAVAJU
@@ -533,16 +588,17 @@ const Sudoku = (() => {
       // težinu nosi broj zadanih brojeva. Classic zadržava točan tier - tamo je
       // tehnika jedina os težine.
       if (spread ? res.tier <= reqTier : res.tier === reqTier) {
-        return {
+        return finish(
           puzzle,
           solution,
           difficulty,
           variants,
-          techniques: res.techniques,
           regions,
           parity,
           edges,
-        };
+          reqTier,
+          spread
+        );
       }
       if (!best || Math.abs(res.tier - reqTier) < Math.abs(best.tier - reqTier)) {
         best = {
@@ -558,17 +614,20 @@ const Sudoku = (() => {
       }
     }
 
+    // Nema ploče traženog tiera - vrati najbližu nađenu. Prune smije do njenog
+    // tiera (ne do reqTier): ploča je već izabrana kao najbliža, ne pogoršavaj ju.
     if (best)
-      return {
-        puzzle: best.puzzle,
-        solution: best.solution,
+      return finish(
+        best.puzzle,
+        best.solution,
         difficulty,
         variants,
-        techniques: best.techniques,
-        regions: best.regions,
-        parity: best.parity,
-        edges: best.edges,
-      };
+        best.regions,
+        best.parity,
+        best.edges,
+        Math.max(reqTier, best.tier),
+        spread
+      );
     // Krajnji fallback - bilo što rješivo (nove regije za jigsaw, ne recikliraj).
     // Ide na vrh raspona (najviše zadanih, bazna gustoća): ovo je zadnja linija
     // obrane, tu se ne riskira ploča koju igrač ne može riješiti.
@@ -579,16 +638,20 @@ const Sudoku = (() => {
     } while (!solution);
     const parity = useEven ? deriveParity(solution) : null;
     const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
-    return {
-      puzzle: dig(solution, topTarget, variants, ctx.jig, parity, edges),
+    const puzzle = dig(solution, topTarget, variants, ctx.jig, parity, edges);
+    // Ovdje ploča nije prošla grading, pa prune ide s najvišim dopuštenim tierom.
+    // Ako ni tako nije rješiva, `stoji()` je uvijek false i nijedna oznaka ne pada.
+    return finish(
+      puzzle,
       solution,
       difficulty,
       variants,
-      techniques: [],
-      regions: ctx.regions,
+      ctx.regions,
       parity,
       edges,
-    };
+      Solver.T_ADVANCED,
+      spread
+    );
   }
 
   return { generate, isValid, normVariants, generateRegions };

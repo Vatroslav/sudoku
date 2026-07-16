@@ -176,6 +176,29 @@ Izmjereno (12 partija, pravi `generate("hard", ...)`), raspon zadanih:
 | Kropki    | 10-28   | Diagonal  | 26-28   |
 | Even/Odd  | 14-27   | Classic   | 28      |
 
+### Suvišne oznake (v1.29.1)
+
+Vatrina zamjerka nakon prve odigrane Kropki+XV partije s 12 brojeva: "bilo je
+redundantnih hintova". Točno - puna gustoća na dnu raspona prikaže SVE što odnos
+dopušta, a izmjereno je **68-80% oznaka suvišno** (jedna ploča: 69 oznaka uz 10
+brojeva, dovoljna 21). `pruneMarks` radi isto što `dig` radi s brojevima: probaj
+maknuti svaku oznaku, vrati onu bez koje ploča stane. Kriterij je `solveAndGrade`,
+ne `countSolutions` - solver rješava deduktivno (tehnike ne pogađaju), pa "rješivo +
+točno rješenje" ujedno znači da je rješenje ostalo jedinstveno.
+
+Rezultat (Hard): Even/Odd 55 -> 9, Kropki 29 -> 13, XV 20 -> 6, Kropki+XV 44 -> 18.
+Brzina nije mjerljivo pala - prune ide JEDNOM na gotovoj ploči, ne u generacijskoj
+petlji, pa si smije priuštiti poziv solvera po oznaci.
+
+**Prune ide samo na Hard s varijantama.** Na Normalu (34 zadana) klasika nosi ploču
+gotovo cijelu, pa prune ispravno zaključi da je skoro svaka oznaka suvišna i ostavi
+ih **2** - formalno točno (varijanta je i dalje nužna), ali ploča s dva X-a ne izgleda
+kao XV slagalica. Normal zato drži baznu gustoću (XV ~14, Kropki ~22): tamo su oznake
+dodatak, na Hardu nose rješenje.
+
+Tehnike se čitaju NAKON prunea (`finish`) - ploča bez suvišnih oznaka može tražiti
+drugu tehniku nego prije, inače chip u UI-ju prijavljuje slagalicu koja se ne isporučuje.
+
 Metodologija mjerenja minimuma (skripte u scratchpadu, nisu u repou) - **dvije greške
 koje se ne smiju ponoviti**:
 
