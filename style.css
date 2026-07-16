@@ -19,6 +19,7 @@
   --diag-line: rgba(109, 179, 255, 0.4);
   --window-tint: rgba(160, 130, 240, 0.16);
   --parity: #7a7a8c;
+  --thermo: #3f3f4d;
   --kdot-white: #e8e8ef;
   --kdot-black: #14141a;
   --kdot-ring: #b0b1c6;
@@ -328,6 +329,50 @@ main {
 }
 .cell.odd::before {
   border-radius: 50%;
+}
+
+/* Thermo: tuba. Ista razina kao parity ::before (z-index -1: iznad boje/highlighta
+   ćelije, ispod znamenke), ali u spanovima - ::before/::after su zauzeti, a tuba
+   ionako treba dva segmenta po ćeliji (na skretanju).
+
+   Svaka ćelija crta polovicu segmenta: pilula od svog središta prema susjedu, s
+   3px preko granice. Suprotna polovica dolazi iz susjeda i preklapa se u razmaku,
+   pa je tuba neprekinuta i preko debele granice bloka. Zaobljeni krajevi na
+   skretanju daju zaobljen kut, a na spoju polovica se ne vide (ista boja).
+
+   Duljina je 50% ŠIRINE ćelije - okomiti segment bi trebao 50% visine, ali ćelije
+   su kvadratne do na 2px .br/.bb margine, što 3px prelaska pokrije. */
+.cell .thermo-seg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(50% + 3px);
+  height: 26%;
+  border-radius: 999px;
+  background: var(--thermo);
+  /* Rotacija oko lijevog ruba pilule; on nakon translate leži točno u središtu
+     ćelije, pa segment izlazi iz središta pod kutom --a (JS ga računa). */
+  transform-origin: 0 50%;
+  transform: translate(0, -50%) rotate(var(--a));
+  z-index: -1;
+  pointer-events: none;
+}
+/* Dijagonalni korak: središte->kut je √2 puta dulje od središte->brid. */
+.cell .thermo-seg.diag {
+  width: calc(70.7% + 3px);
+}
+/* Kuglica = dno tube. Osjetno šira od tube da se čita na prvi pogled tko je bulb.
+   Centriranje kao parity ::before (inset:0 + margin:auto). */
+.cell .thermo-bulb {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 58%;
+  height: 58%;
+  border-radius: 50%;
+  background: var(--thermo);
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* Kropki/XV: oznake na bridovima. Zaseban <span> (::before/::after su zauzeti parity/

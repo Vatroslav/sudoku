@@ -75,11 +75,57 @@ const Sudoku = (() => {
     kingPeers.push(list);
   }
 
+  // Thermo: tuba se grana po potezu kralja (8 susjeda) - smije skretati i dijagonalno.
+  const thermoNeighbors = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    for (let dr = -1; dr <= 1; dr++)
+      for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const nr = r + dr,
+          nc = c + dc;
+        if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
+      }
+    thermoNeighbors.push(list);
+  }
+
+  // Thermo: raspon [lo,hi] dopušten na poziciji p termometra. Dva izvora, oba nužna:
+  //   1. POZICIJA sama - ispod p je p strogo manjih, iznad njega path.length-1-p
+  //      strogo većih, pa vrijednost ne može biti bilo koja (bulb duljine 4 je <= 6).
+  //      Vrijedi i na praznoj ploči - odatle Thermo vuče najveći dio snage.
+  //   2. Svaki POPUNJEN član tube - svaki korak duž nje vrijedi barem 1.
+  // Zajedno su ekvivalent "strogo raste", samo izraženo kao granice (solver tako
+  // može odmah rezati kandidate umjesto da provjerava par po par).
+  function thermoRange(board, path, p) {
+    let lo = p + 1,
+      hi = 9 - (path.length - 1 - p);
+    for (let q = 0; q < path.length; q++) {
+      const b = board[path[q]];
+      if (!b || q === p) continue;
+      if (q < p) lo = Math.max(lo, b + (p - q));
+      else hi = Math.min(hi, b - (q - p));
+    }
+    return [lo, hi];
+  }
+
+  // Indeks ćelija -> { path, pos }. Termometri se ne preklapaju pa je po ćeliji
+  // najviše jedan. Predizračunato jer ga isValid zove u vrućoj petlji - isti odnos
+  // kao regions -> jig.
+  function prepThermos(thermos) {
+    if (!thermos || !thermos.length) return null;
+    const at = new Array(81).fill(null);
+    for (const path of thermos)
+      for (let p = 0; p < path.length; p++) at[path[p]] = { path, pos: p };
+    return at;
+  }
+
   // Poznate varijante koje se mogu kombinirati. Aktivni skup = polje ovih id-eva
   // (prazno = classic). Redoslijed je kanonski (za stabilne cache-ključeve i labele).
-  // Većina su regijske (šire units/peers); "evenodd" (parity maska) te "kropki" i
-  // "xv" (oznake na bridovima) su iznimke - ne diraju units/peers, nose per-puzzle
-  // podatak koji provjerava isValid (kao jigsaw regions).
+  // Većina su regijske (šire units/peers); "evenodd" (parity maska), "kropki" i
+  // "xv" (oznake na bridovima) te "thermo" (termometri) su iznimke - ne diraju
+  // units/peers, nose per-puzzle podatak koji provjerava isValid (kao jigsaw regions).
   const REGION_VARIANTS = [
     "antiking",
     "antiknight",
@@ -89,6 +135,7 @@ const Sudoku = (() => {
     "evenodd",
     "kropki",
     "xv",
+    "thermo",
   ];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -216,7 +263,8 @@ const Sudoku = (() => {
   // edges = null | { h: 81-polje, v: 81-polje } - Kropki/XV oznake na bridovima
   // (h[i] = brid i↔i+1, v[i] = brid i↔i+9; tipovi kao u edgeOk). Samo pozitivno:
   // prikazana oznaka mora vrijediti; odsutnost ne ograničava ništa.
-  function isValid(board, idx, val, variants, jig, parity, edges) {
+  // thm = null | 81-polje { path, pos } (vidi prepThermos) - Thermo tube.
+  function isValid(board, idx, val, variants, jig, parity, edges, thm) {
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -270,6 +318,11 @@ const Sudoku = (() => {
       )
         return false;
     }
+    if (thm && thm[idx]) {
+      const { path, pos } = thm[idx];
+      const [lo, hi] = thermoRange(board, path, pos);
+      if (val < lo || val > hi) return false;
+    }
     return true;
   }
 
@@ -300,14 +353,14 @@ const Sudoku = (() => {
 
   // Broji rješenja (staje na 'limit'). MRV: bira praznu ćeliju s najmanje
   // kandidata -> drastično brže od first-empty backtrackinga.
-  function countSolutions(board, limit, variants, jig, parity, edges) {
+  function countSolutions(board, limit, variants, jig, parity, edges, thm) {
     let bestIdx = -1,
       bestCands = null;
     for (let idx = 0; idx < 81; idx++) {
       if (board[idx] !== 0) continue;
       const cands = [];
       for (let v = 1; v <= 9; v++)
-        if (isValid(board, idx, v, variants, jig, parity, edges)) cands.push(v);
+        if (isValid(board, idx, v, variants, jig, parity, edges, thm)) cands.push(v);
       if (cands.length === 0) return 0;
       if (bestCands === null || cands.length < bestCands.length) {
         bestIdx = idx;
@@ -319,7 +372,7 @@ const Sudoku = (() => {
     let count = 0;
     for (const v of bestCands) {
       board[bestIdx] = v;
-      count += countSolutions(board, limit, variants, jig, parity, edges);
+      count += countSolutions(board, limit, variants, jig, parity, edges, thm);
       board[bestIdx] = 0;
       if (count >= limit) return count;
     }
@@ -328,7 +381,7 @@ const Sudoku = (() => {
 
   // Briše ćelije (bez simetrije, za maksimalan izazov) dok čuva jedinstveno
   // rješenje, do otprilike 'target' zadanih ćelija.
-  function dig(solution, target, variants, jig, parity, edges) {
+  function dig(solution, target, variants, jig, parity, edges, thm) {
     const puzzle = solution.slice();
     let givens = 81;
     for (const idx of shuffle([...Array(81).keys()])) {
@@ -336,7 +389,7 @@ const Sudoku = (() => {
       if (puzzle[idx] === 0) continue;
       const backup = puzzle[idx];
       puzzle[idx] = 0;
-      if (countSolutions(puzzle.slice(), 2, variants, jig, parity, edges) !== 1)
+      if (countSolutions(puzzle.slice(), 2, variants, jig, parity, edges, thm) !== 1)
         puzzle[idx] = backup;
       else givens--;
     }
@@ -422,6 +475,66 @@ const Sudoku = (() => {
     return { h, v };
   }
 
+  // Thermo: termometar je put ćelija (bulb prvi) duž kojeg vrijednosti STROGO rastu.
+  //
+  // Doc (dorada-varijante.md) Thermo svrstava u "geometrija-first, najteže" jer
+  // pretpostavlja setup() koji složi tube PRIJE rješenja - tada moraš naći rješenje
+  // koje ih zadovoljava. Ovdje ide obrnuto, isto kao Kropki/XV/Even-Odd: rješenje
+  // prvo, tuba se IZVEDE iz njega. Šetnja koja uvijek korača na susjeda veće
+  // vrijednosti ne može proizvesti nemoguć termometar, pa generator ostaje netaknut.
+  // Klasifikacija u docu je starija od derive pipelinea.
+  //
+  // Šetnja prirodno kreće iz niskih vrijednosti (iz 9 se nema kamo) - to je točno
+  // ono što treba, bulb je najmanji. Startovi koji ne dogurju do THERMO_LEN.min se
+  // odbace.
+  const THERMO_LEN = { min: 3, max: 5 };
+  // Gustoća je udio od MAX_THERMOS (ostale varijante broje udio kvalificiranih
+  // ćelija/bridova; kod tube je prirodna jedinica sam termometar).
+  const MAX_THERMOS = 12;
+  const THERMO_DENSITY = { min: 0.3, max: 0.5 };
+  // Najmanje tuba koje prune smije ostaviti. Bez toga ploča na VRHU Hard raspona
+  // (28 zadanih, boost 0) ostane s 1-2 termometra - izmjereno 12/30 ploča: klasika
+  // ju s toliko brojeva nosi gotovo cijelu, pa prune ispravno zaključi da je skoro
+  // svaka tuba suvišna. Formalno je ploča i dalje Thermo (variantNeeded jamči da
+  // barem jedna nešto radi), ali s jednom cijevi ne IZGLEDA tako.
+  //
+  // Isti argument kojim doc isključuje prune na Normalu ("ploča s dva X-a ne izgleda
+  // kao XV slagalica"), samo primijenjen na vrh raspona umjesto na težinu. Kod tube
+  // je oštriji nego kod točke: termometar je strukturni objekt i jedan usamljen se
+  // čita kao greška, a ne kao rijetka oznaka. Cijena je nešto suvišnih tuba na
+  // pločama s puno zadanih - na dnu raspona (gdje tube nose rješenje) granica se ne
+  // dosegne pa prune tamo radi puni posao.
+  const THERMO_KEEP_MIN = 4;
+  function deriveThermos(solution, boost = 0) {
+    const want = Math.round(MAX_THERMOS * pickDensity(scaled(THERMO_DENSITY, boost)));
+    // Termometri se NE preklapaju: dvije tube kroz istu ćeliju su i za oko i za
+    // render (segment po ćeliji) nered, a dobiju se i bez toga.
+    const used = new Array(81).fill(false);
+    const thermos = [];
+    for (const start of shuffle([...Array(81).keys()])) {
+      if (thermos.length >= want) break;
+      if (used[start]) continue;
+      const maxLen =
+        THERMO_LEN.min + Math.floor(Math.random() * (THERMO_LEN.max - THERMO_LEN.min + 1));
+      const path = [start];
+      let cur = start;
+      while (path.length < maxLen) {
+        // Strogi rast jamči da se ćelija ne može ponoviti (vrijednost bi morala biti
+        // veća od same sebe) - zato provjera samo protiv tuđih tuba.
+        const up = shuffle(
+          thermoNeighbors[cur].filter((n) => !used[n] && solution[n] > solution[cur])
+        );
+        if (!up.length) break;
+        cur = up[0];
+        path.push(cur);
+      }
+      if (path.length < THERMO_LEN.min) continue;
+      for (const i of path) used[i] = true;
+      thermos.push(path);
+    }
+    return thermos;
+  }
+
   const TARGET = { normal: 34, hard: 28 };
   const REQ_TIER = { normal: Solver.T_SINGLE, hard: Solver.T_INTER };
   const MAX_ATTEMPTS = { normal: 120, hard: 200 };
@@ -444,6 +557,7 @@ const Sudoku = (() => {
   const STRENGTH = {
     kropki: 18,
     evenodd: 15,
+    thermo: 12,
     xv: 10,
     hyper: 8,
     antiknight: 6,
@@ -475,7 +589,7 @@ const Sudoku = (() => {
   // ujedno znači da je rješenje ostalo jedinstveno - zaseban countSolutions ne treba.
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
-  function pruneMarks(puzzle, solution, variants, regions, parity, edges, maxTier) {
+  function pruneMarks(puzzle, solution, variants, regions, parity, edges, thermos, maxTier) {
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -483,16 +597,27 @@ const Sudoku = (() => {
         if (edges.v[i]) cands.push(["v", i]);
       }
     if (parity) for (let i = 0; i < 81; i++) if (parity[i]) cands.push(["p", i]);
+    // Thermo: jedinica je CIJELA tuba. Skraćivanje termometra nije micanje oznake
+    // nego druga slagalica - pozicijski raspon svake ćelije ovisi o duljini tube
+    // (vidi thermoRange), pa kraća tuba mijenja i ono što je ostalo.
+    if (thermos) for (const t of thermos) cands.push(["t", t]);
     if (!cands.length) return;
     const stoji = () => {
-      const r = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
+      const r = Solver.solveAndGrade(puzzle, variants, regions, parity, edges, thermos);
       return r.solved && r.tier <= maxTier && r.grid.every((v, i) => v === solution[i]);
     };
-    for (const [kind, i] of shuffle(cands)) {
+    for (const [kind, ref] of shuffle(cands)) {
+      if (kind === "t") {
+        if (thermos.length <= THERMO_KEEP_MIN) continue; // vidi THERMO_KEEP_MIN
+        const k = thermos.indexOf(ref);
+        thermos.splice(k, 1);
+        if (!stoji()) thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        continue;
+      }
       const src = kind === "p" ? parity : edges[kind];
-      const backup = src[i];
-      src[i] = 0;
-      if (!stoji()) src[i] = backup; // bez nje ploča stane -> treba ju
+      const backup = src[ref];
+      src[ref] = 0;
+      if (!stoji()) src[ref] = backup; // bez nje ploča stane -> treba ju
     }
   }
 
@@ -505,9 +630,20 @@ const Sudoku = (() => {
   // oznaka suvišna i ostavi ih 2. Formalno točno (varijanta je i dalje nužna), ali
   // ploča s dva X-a ne izgleda kao XV slagalica. Normal zato drži baznu gustoću:
   // tamo su oznake dodatak, na Hardu nose rješenje.
-  function finish(puzzle, solution, difficulty, variants, regions, parity, edges, maxTier, prune) {
-    if (prune) pruneMarks(puzzle, solution, variants, regions, parity, edges, maxTier);
-    const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
+  function finish(
+    puzzle,
+    solution,
+    difficulty,
+    variants,
+    regions,
+    parity,
+    edges,
+    thermos,
+    maxTier,
+    prune
+  ) {
+    if (prune) pruneMarks(puzzle, solution, variants, regions, parity, edges, thermos, maxTier);
+    const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges, thermos);
     return {
       puzzle,
       solution,
@@ -517,6 +653,7 @@ const Sudoku = (() => {
       regions,
       parity,
       edges,
+      thermos,
     };
   }
 
@@ -529,7 +666,7 @@ const Sudoku = (() => {
   // rješava drugi problem i usporedba nema smisla.
   function variantNeeded(puzzle, variants, useJig) {
     if (useJig || !variants.length) return true;
-    return countSolutions(puzzle.slice(), 2, [], null, null, null) > 1;
+    return countSolutions(puzzle.slice(), 2, [], null, null, null, null) > 1;
   }
 
   // Generira slagalicu tražene težine. Ako u zadanom broju pokušaja ne nađe
@@ -542,7 +679,8 @@ const Sudoku = (() => {
   // "xv" (slova X/V na bridovima), ili kombinacija. Rezultat nosi `regions` (81-polje
   // id-eva regije) kad je jigsaw aktivan inače `null`, `parity` (81-polje 0/1/2) kad
   // je evenodd aktivan inače `null`, te `edges` ({ h, v } 81-polja) kad je kropki
-  // i/ili xv aktivan inače `null`.
+  // i/ili xv aktivan inače `null`, te `thermos` (polje putova ćelija, bulb prvi)
+  // kad je thermo aktivan inače `null`.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
@@ -553,6 +691,7 @@ const Sudoku = (() => {
     const useKropki = variants.includes("kropki");
     const useXv = variants.includes("xv");
     const useEdges = useKropki || useXv;
+    const useThermo = variants.includes("thermo");
     // Raspon zadanih brojeva vrijedi samo za Hard s varijantama - Normal drži
     // svoju razinu, a Classic nema oznaka koje bi manjak brojeva nadoknadile.
     const spread = difficulty === "hard" && variants.length > 0;
@@ -570,14 +709,16 @@ const Sudoku = (() => {
       const { regions, jig } = newRegionCtx(useJig);
       const solution = generateSolution(variants, jig);
       if (!solution) continue; // probijen budžet (loše regije) -> novi pokušaj
-      // Parity/edges se izvode iz rješenja (uvijek konzistentni) pa su aktivni u dig/solveAndGrade.
+      // Parity/edges/thermos se izvode iz rješenja (uvijek konzistentni) pa su aktivni u dig/solveAndGrade.
       const parity = useEven ? deriveParity(solution, boost) : null;
       const edges = useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null;
-      const puzzle = dig(solution, target, variants, jig, parity, edges);
+      const thermos = useThermo ? deriveThermos(solution, boost) : null;
+      const thm = prepThermos(thermos);
+      const puzzle = dig(solution, target, variants, jig, parity, edges, thm);
       // Varijanta mora nešto raditi - ploču koju klasika sama jedinstveno rješava
       // odbaci (provjeri prije gradinga, countSolutions je jeftiniji od solvera).
       if (!variantNeeded(puzzle, variants, useJig)) continue;
-      const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges);
+      const res = Solver.solveAndGrade(puzzle, variants, regions, parity, edges, thermos);
       if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti
 
@@ -596,6 +737,7 @@ const Sudoku = (() => {
           regions,
           parity,
           edges,
+          thermos,
           reqTier,
           spread
         );
@@ -610,6 +752,7 @@ const Sudoku = (() => {
           regions,
           parity,
           edges,
+          thermos,
         };
       }
     }
@@ -625,6 +768,7 @@ const Sudoku = (() => {
         best.regions,
         best.parity,
         best.edges,
+        best.thermos,
         Math.max(reqTier, best.tier),
         spread
       );
@@ -638,7 +782,8 @@ const Sudoku = (() => {
     } while (!solution);
     const parity = useEven ? deriveParity(solution) : null;
     const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
-    const puzzle = dig(solution, topTarget, variants, ctx.jig, parity, edges);
+    const thermos = useThermo ? deriveThermos(solution) : null;
+    const puzzle = dig(solution, topTarget, variants, ctx.jig, parity, edges, prepThermos(thermos));
     // Ovdje ploča nije prošla grading, pa prune ide s najvišim dopuštenim tierom.
     // Ako ni tako nije rješiva, `stoji()` je uvijek false i nijedna oznaka ne pada.
     return finish(
@@ -649,6 +794,7 @@ const Sudoku = (() => {
       ctx.regions,
       parity,
       edges,
+      thermos,
       Solver.T_ADVANCED,
       spread
     );

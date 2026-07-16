@@ -154,6 +154,48 @@ const Solver = (() => {
     }
     return true;
   }
+  // Thermo: polje putova (bulb prvi), svaki put = ćelije koje se dodiruju potezom
+  // kralja. Iz spremljene igre dolazi neprovjeren, pa se validira kao regions/edges.
+  // Preklop tuba se odbija - generator ga ne radi, a render i thermoRange računaju
+  // s najviše jednim termometrom po ćeliji.
+  function validThermos(thermos) {
+    if (!Array.isArray(thermos)) return false;
+    const seen = new Set();
+    for (const path of thermos) {
+      if (!Array.isArray(path) || path.length < 2 || path.length > 9) return false;
+      for (let p = 0; p < path.length; p++) {
+        const i = path[p];
+        if (!Number.isInteger(i) || i < 0 || i > 80 || seen.has(i)) return false;
+        seen.add(i);
+        if (p === 0) continue;
+        const a = path[p - 1];
+        if (Math.abs(Math.floor(i / 9) - Math.floor(a / 9)) > 1 || Math.abs((i % 9) - (a % 9)) > 1)
+          return false;
+      }
+    }
+    return true;
+  }
+  // Indeks ćelija -> { path, pos } (najviše jedan termometar po ćeliji).
+  function prepThermos(thermos) {
+    const at = new Array(81).fill(null);
+    for (const path of thermos)
+      for (let p = 0; p < path.length; p++) at[path[p]] = { path, pos: p };
+    return at;
+  }
+  // Raspon [lo,hi] dopušten na poziciji p termometra. Mora se poklapati sa sudoku.js
+  // thermoRange (generator i solver dijele definiciju odnosa).
+  function thermoRange(grid, path, p) {
+    let lo = p + 1,
+      hi = 9 - (path.length - 1 - p);
+    for (let q = 0; q < path.length; q++) {
+      const b = grid[path[q]];
+      if (!b || q === p) continue;
+      if (q < p) lo = Math.max(lo, b + (p - q));
+      else hi = Math.min(hi, b - (q - p));
+    }
+    return [lo, hi];
+  }
+
   // Zadovoljava li par a,b prikazanu oznaku tipa t. Mora se poklapati sa sudoku.js
   // edgeOk (generator i solver dijele definiciju odnosa).
   function edgeOk(a, b, t) {
@@ -214,6 +256,10 @@ const Solver = (() => {
   // upisu) - nema zasebne tehnike, klasične dovrše. Samo pozitivno (odsutnost ne
   // ograničava).
   let curEdges = null;
+  // Thermo: per-puzzle indeks ćelija -> { path, pos } ili null. Kao Kropki/XV nema
+  // zasebne tehnike - tuba samo steže kandidate (computeCandidates iz pozicije i
+  // popunjenih članova, place() pri svakom upisu), klasične tehnike dovrše.
+  let curThermos = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -246,6 +292,14 @@ const Solver = (() => {
       for (const [nb, t] of markedEdges(idx)) {
         if (grid[nb] !== 0) for (const v of [...s]) if (!edgeOk(v, grid[nb], t)) s.delete(v);
       }
+      // Thermo: pozicija na tubi sama reže kandidate i na praznoj ploči (3. ćelija
+      // termometra duljine 4 ne može biti manja od 3 ni veća od 8), a popunjeni
+      // članovi tube raspon dodatno stegnu.
+      if (curThermos && curThermos[idx]) {
+        const { path, pos } = curThermos[idx];
+        const [lo, hi] = thermoRange(grid, path, pos);
+        for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+      }
       cand[idx] = s;
     }
     return cand;
@@ -259,6 +313,18 @@ const Solver = (() => {
     // one koji zadovoljavaju odnos) - dovodi do naked singlea koje klasične uhvate.
     for (const [nb, t] of markedEdges(idx)) {
       if (cand[nb]) for (const u of [...cand[nb]]) if (!edgeOk(val, u, t)) cand[nb].delete(u);
+    }
+    // Thermo: upis stegne raspon svih praznih ćelija SVOJE tube, ne samo susjednih -
+    // svaki korak duž tube vrijedi barem 1, pa 7 na poziciji 2 ostavlja poziciji 0
+    // najviše 5. Ta udaljena posljedica je ono što tubi daje snagu.
+    if (curThermos && curThermos[idx]) {
+      const { path } = curThermos[idx];
+      for (let q = 0; q < path.length; q++) {
+        const j = path[q];
+        if (!cand[j]) continue;
+        const [lo, hi] = thermoRange(grid, path, q);
+        for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
+      }
     }
   }
 
@@ -563,13 +629,15 @@ const Solver = (() => {
   // kompatibilnost sa spremljenim igrama). regions = jigsaw geometrija (81-polje)
   // ili null; nevaljano se tretira klasično (statični kvadrati). parity = Even/Odd
   // maska (81-polje 0/1/2) ili null; nevaljano se ignorira. edges = Kropki/XV
-  // brid-oznake ({ h, v }) ili null; nevaljano se ignorira.
-  function useVariant(variants, regions, parity, edges) {
+  // brid-oznake ({ h, v }) ili null; nevaljano se ignorira. thermos = Thermo tube
+  // (polje putova) ili null; nevaljano se ignorira.
+  function useVariant(variants, regions, parity, edges, thermos) {
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
     curParity = validParity(parity) ? parity : null;
     curEdges = validEdges(edges) ? edges : null;
+    curThermos = validThermos(thermos) ? prepThermos(thermos) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
@@ -1004,8 +1072,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution, variants, regions, parity, edges) {
-    useVariant(variants, regions, parity, edges);
+  function explainNext(values, notes, solution, variants, regions, parity, edges, thermos) {
+    useVariant(variants, regions, parity, edges, thermos);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -1032,8 +1100,9 @@ const Solver = (() => {
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
   // regions = jigsaw geometrija (81-polje id-eva) ili null/izostavljeno = klasik.
   // parity = Even/Odd maska (81-polje 0/1/2) ili null. edges = Kropki/XV oznake ({h,v}) ili null.
-  function solveAndGrade(puzzle, variants, regions, parity, edges) {
-    useVariant(variants, regions, parity, edges);
+  // thermos = Thermo tube (polje putova, bulb prvi) ili null.
+  function solveAndGrade(puzzle, variants, regions, parity, edges, thermos) {
+    useVariant(variants, regions, parity, edges, thermos);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;

@@ -15,6 +15,7 @@
     "evenodd",
     "kropki",
     "xv",
+    "thermo",
   ];
   const VARIANT_LABELS = {
     antiking: "Antiking",
@@ -25,6 +26,7 @@
     evenodd: "Even/Odd",
     kropki: "Kropki",
     xv: "XV",
+    thermo: "Thermo",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -199,6 +201,26 @@
     }
     return true;
   }
+  // Thermo: tube su per-puzzle podatak (state.thermos = polje putova ćelija, bulb
+  // prvi, susjedi po potezu kralja). Preklop se odbija - render crta najviše jedan
+  // segment po smjeru i računa s jednim termometrom po ćeliji.
+  function validThermos(thermos) {
+    if (!Array.isArray(thermos)) return false;
+    const seen = new Set();
+    for (const path of thermos) {
+      if (!Array.isArray(path) || path.length < 2 || path.length > 9) return false;
+      for (let p = 0; p < path.length; p++) {
+        const i = path[p];
+        if (!Number.isInteger(i) || i < 0 || i > 80 || seen.has(i)) return false;
+        seen.add(i);
+        if (p === 0) continue;
+        const a = path[p - 1];
+        if (Math.abs(Math.floor(i / 9) - Math.floor(a / 9)) > 1 || Math.abs((i % 9) - (a % 9)) > 1)
+          return false;
+      }
+    }
+    return true;
+  }
   // Regija ćelije: jigsaw -> state.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
     if (state.variants.includes("jigsaw") && Array.isArray(state.regions))
@@ -342,7 +364,17 @@
   // odustao i koliko je čekao. Čisti se čim ploča sjedne.
   let pendingGen = null;
 
-  function buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, edges) {
+  function buildState(
+    difficulty,
+    variants,
+    puzzle,
+    solution,
+    techniques,
+    regions,
+    parity,
+    edges,
+    thermos
+  ) {
     state = {
       puzzle,
       solution,
@@ -354,6 +386,7 @@
       regions: regions || null,
       parity: parity || null,
       edges: edges || null,
+      thermos: thermos || null,
       techniques: techniques || [],
       gameId: newGameId(),
       playMs: 0,
@@ -382,11 +415,21 @@
   function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques, regions, parity, edges } = Sudoku.generate(
+      const { puzzle, solution, techniques, regions, parity, edges, thermos } = Sudoku.generate(
         difficulty,
         variants
       );
-      buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, edges);
+      buildState(
+        difficulty,
+        variants,
+        puzzle,
+        solution,
+        techniques,
+        regions,
+        parity,
+        edges,
+        thermos
+      );
     }, 30);
   }
 
@@ -404,8 +447,18 @@
         genWorker.onmessage = (e) => {
           genWorker.terminate();
           genWorker = null;
-          const { puzzle, solution, techniques, regions, parity, edges } = e.data;
-          buildState(difficulty, variants, puzzle, solution, techniques, regions, parity, edges);
+          const { puzzle, solution, techniques, regions, parity, edges, thermos } = e.data;
+          buildState(
+            difficulty,
+            variants,
+            puzzle,
+            solution,
+            techniques,
+            regions,
+            parity,
+            edges,
+            thermos
+          );
         };
         genWorker.onerror = () => {
           // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
@@ -499,6 +552,13 @@
         if (!validEdges(state.edges)) return false;
       } else {
         state.edges = null;
+      }
+      // Thermo: tube moraju biti valjane (putovi susjednih ćelija, bez preklopa);
+      // inače odbaci (solver bi tiho sudio krivo). Bez thermo varijante = null.
+      if (state.variants.includes("thermo")) {
+        if (!validThermos(state.thermos)) return false;
+      } else {
+        state.thermos = null;
       }
       return true;
     } catch (e) {
@@ -862,7 +922,8 @@
       state.variants,
       state.regions,
       state.parity,
-      state.edges
+      state.edges,
+      state.thermos
     );
     if (!res || res.done) {
       clearHint();
@@ -1004,6 +1065,14 @@
     // Jigsaw: ploča dobiva klasu za deblje/svjetlije granice regija (vidi CSS).
     boardEl.classList.toggle("jigsaw", jigsawMode);
 
+    // Thermo: indeks ćelija -> { path, pos } za ovaj render. Tube su nepromjenjive
+    // tijekom partije, ali render se zove na svaki potez - 81 unosa je jeftinije od
+    // pretrage po putovima za svaku ćeliju.
+    const thermoAt = new Array(81).fill(null);
+    if (Array.isArray(state.thermos))
+      for (const path of state.thermos)
+        for (let p = 0; p < path.length; p++) thermoAt[path[p]] = { path, pos: p };
+
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
     const selSet = new Set(selList);
@@ -1097,6 +1166,40 @@
         cell.appendChild(grid);
       } else {
         cell.textContent = "";
+      }
+
+      // Thermo: tuba. Prva oznaka koja NE stane u ćeliju - ide u zasebne spanove sa
+      // z-indexom -1 (isti sloj kao parity ::before: iznad boje/highlighta ćelije,
+      // ispod znamenke). Jedan board-level SVG preko ploče bi bio čišći, ali ne ide:
+      // ćelije imaju neprozirnu pozadinu pa bi ih SVG ispod bio nevidljiv, a iznad
+      // bi prekrio znamenke.
+      //
+      // Zato svaka ćelija crta SVOJU polovicu svakog segmenta - od svog središta
+      // prema susjedu na tubi, s prelaskom od 3px preko granice. Dvije polovice se
+      // preklope u razmaku (i na debeloj granici bloka, gdje je razmak 3px) pa je
+      // tuba neprekinuta bez računanja točnih razmaka. Prelazak ne smije biti veći:
+      // ćelija se cijela iscrtava iznad ranije iscrtanih susjeda, pa bi dulji
+      // segment prekrio susjedovu znamenku. Na 3px dohvati samo njegov rub.
+      if (thermoAt[i]) {
+        const { path, pos } = thermoAt[i];
+        // Kuglica = dno tube (najmanji broj). Crta se preko početka segmenta.
+        if (pos === 0) {
+          const bulb = document.createElement("span");
+          bulb.className = "thermo-bulb";
+          cell.appendChild(bulb);
+        }
+        for (const q of [pos - 1, pos + 1]) {
+          if (q < 0 || q >= path.length) continue;
+          const j = path[q];
+          const seg = document.createElement("span");
+          seg.className = "thermo-seg";
+          const dr = Math.floor(j / 9) - row;
+          const dc = (j % 9) - col;
+          // Kut prema susjedu; dijagonalni segment je za faktor √2 dulji.
+          seg.style.setProperty("--a", `${(Math.atan2(dr, dc) * 180) / Math.PI}deg`);
+          if (dr && dc) seg.classList.add("diag");
+          cell.appendChild(seg);
+        }
       }
 
       // Kropki/XV: oznake na bridovima. Vežemo ih uz KASNIJE iscrtanu ćeliju (ovu, i) na

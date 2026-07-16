@@ -8,6 +8,14 @@ varijanti (`state.variants`, npr. `["x","hyper"]`): `sudoku.js` (`isValid`) i `s
 registry - kad broj varijanti naraste (ili kad zatreba `setup`/`deriveClues`), procijeniti
 isplati li se Faza 0 refaktor iz doca.
 
+**Otvoreno: `clues` objekt umjesto pozicijskih parametara.** `isValid` ih ima 8
+(`board, idx, val, variants, jig, parity, edges, thm`), svaki od zadnjih četiri smije
+biti null. Thermo je namjerno dodan kao 8. parametar, ne kroz refaktor - miješati novu
+varijantu i refaktor jezgre znači da se kod regresije ne zna tko ju je uzrokovao.
+Sljedeći put: skupiti `parity`/`edges`/`thermos` u jedan `clues` objekt (mehanički,
+ali dira sva 4 filea + save migraciju), čime svaka buduća derivacijska varijanta dodaje
+**nula** parametara. Napraviti to PRIJE Palindromea, ne zajedno s njim.
+
 ## Metrike (blocker za launch na itch)
 
 - [x] **Anonimni event tracking - klijent** (v1.21.0). `metrics.js` (`Metrics.track`),
@@ -67,7 +75,10 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       ćelije, parity se provlači kroz `dig`/`countSolutions`/`solveAndGrade`/`explainNext`
       (kao jigsaw `regions`). Render: kvadrat (parno) / krug (neparno) u `::before`
       sloju ćelije (skriveno na givens). Gustoća oznaka je knob za ugađanje težine.
-- [ ] Parity (ograničenje parnosti - srodno Even/Odd, procijeniti spajanje)
+- [x] ~~Parity~~ - **nije zasebna varijanta.** Bila je na popisu iz originalne
+      wish-liste, ali "parity constraint" znači točno ono što Even/Odd radi (oznaka
+      koja fiksira parnost ćelije) - `deriveParity` je to. Nema se što spajati,
+      stavka je zatvorena kao pokrivena.
 - [x] Kropki (crne/bijele točke između susjeda: omjer 2 / razlika 1, v1.25.0).
       **Casual** izvedba (Vatrin izbor): samo pozitivno - prikazana točka mora
       vrijediti, odsutnost ne znači ništa (bez negativnog constrainta). Bolt-on bez
@@ -93,11 +104,17 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       granicom bloka), pa slovo reže liniju kao u tiskanim XV slagalicama.
       Migracija: spremljene Kropki partije (`state.dots`) preuzimaju se u `state.edges`.
 
+- [x] Thermo (vrijednosti rastu duž termometra, v1.30.0). **Nije ispala
+      geometrija-first** - vidi zasebnu sekciju niže.
+
 Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,
 generacija mora dati jedinstveno rješenje):
 
-- [ ] Thermo (vrijednosti rastu duž termometra)
-- [ ] Palindrome (linija čita isto u oba smjera)
+- [ ] Palindrome (linija čita isto u oba smjera). Kao i Thermo, kandidat za
+      derive-first: iz gotovog rješenja tražiti put čije se vrijednosti zrcale.
+      Teže od Thermo šetnje (uvjet veže parove s oba kraja puta, ne susjedni korak),
+      ali i dalje jeftinije od `setup`-prvo pristupa. Render nasljeđuje Thermo
+      segmente (`thermo-seg`) - linija je ista mašinerija bez kuglice.
 - [ ] Clone (dvije regije dijele isti raspored)
 - [ ] Killer (kavezi sa zadanim zbrojem - traži vlastiti generator geometrije, zadnji)
 
@@ -210,6 +227,71 @@ koje se ne smiju ponoviti**:
    ograničene kombinacije poput antiknight+x). Pravi `generate` tada uzme svježe regije
    i pokuša ponovno; mjerač koji taj `null` broji kao neuspjeh lažno optuži Jigsaw da
    "ne prolazi ni na 28".
+
+## Thermo (v1.30.0)
+
+**Doc je Thermo krivo procijenio.** [dorada-varijante.md](dorada-varijante.md) ga
+svrstava u "geometrija-first, najteže" jer pretpostavlja `setup()` koji složi tube
+PRIJE rješenja - tada moraš naći rješenje koje ih zadovoljava, što jest istraživački
+problem. Ali derive pipeline (izgrađen za Even/Odd, Kropki, XV) radi obrnuto:
+rješenje prvo, oznaka se IZVEDE iz njega. `deriveThermos` je šetnja koja uvijek
+korača na susjeda veće vrijednosti (potez kralja) - ne može proizvesti nemoguć
+termometar, pa je generator ostao netaknut. **Klasifikacija u docu je starija od
+derive pipelinea; isto vrijedi za Palindrome.**
+
+Ispao je najjeftiniji od svih varijanti: **prosjek 40ms, max 155ms** po Hard partiji
+(usporedba: XV je znao 23s prije floora, hyper ~10.6s).
+
+`thermoRange(board, path, p)` je jezgra i dijele ju `sudoku.js` i `solver.js` (kao
+`edgeOk`). Vraća `[lo,hi]` iz dva izvora:
+
+1. **Pozicija sama** - ispod p je p strogo manjih, iznad `len-1-p` strogo većih.
+   Vrijedi i na praznoj ploči (3. ćelija tube duljine 4 je 3-8). Odatle Thermo vuče
+   većinu snage i zato mu `dig` doguraj do **17 zadanih** (STRENGTH 12).
+2. **Popunjeni članovi tube** - svaki korak duž nje vrijedi barem 1, pa 7 na poziciji
+   2 ostavlja poziciji 0 najviše 5. `place()` tu posljedicu propagira na CIJELU tubu,
+   ne samo na susjeda.
+
+Zajedno su ekvivalent "strogo raste", samo kao granice - solver tako reže kandidate
+odmah umjesto par-po-par. Zasebne tehnike nema (kao Kropki/XV, klasične dovrše).
+
+### Prune floor (`THERMO_KEEP_MIN`)
+
+Izmjereno **12/30 Hard ploča ostalo s ≤2 tube** (jedna ploča: 28 zadanih, 1 tuba).
+Uzrok nije Thermo nego prune na VRHU raspona: s 28 zadanih klasika nosi ploču gotovo
+cijelu, pa prune ispravno zaključi da je skoro svaka tuba suvišna. To je **isti
+argument kojim je prune isključen na Normalu** ("ploča s dva X-a ne izgleda kao XV
+slagalica"), samo vrijedi i na vrhu Hard raspona - pravilo "prune samo na Hardu" je
+pisano s dna raspona na umu.
+
+Kod tube je oštriji nego kod točke: termometar je strukturni objekt i jedan usamljen
+se čita kao greška. Zato prune ne smije ispod 4 tube. Poslije: **0/30 ploča s ≤2
+tube**, raspon 4-8 tuba (12-29 ćelija). Na dnu raspona granica se ne dosegne (tube
+tamo nose rješenje) pa prune radi puni posao - 11 -> 6.
+
+**Isto vrijedi vjerojatno i za XV/Kropki na 28 zadanih** - nije mjereno, ali mehanizam
+je isti. Ako Vatra ikad javi "Hard XV ploča ima samo par oznaka", uzrok je ovdje.
+
+### Render: prva oznaka koja ne stane u ćeliju
+
+Sve dosadašnje oznake staju unutar ćelije (parity `::before`, brid-oznake `emark`).
+Tuba ide preko više njih, i to je bio jedini stvarno nov dio posla.
+
+**Jedan SVG preko ploče ne ide** iako bi bio čišći: ćelije imaju NEPROZIRNU pozadinu
+(`--cell`), pa bi SVG ispod njih bio nevidljiv, a iznad bi prekrio znamenke. Znamenka
+je unutar ćelije koja ima `isolation: isolate` - nijedan susjedni element ne može se
+ugurati između pozadine ćelije i njenog teksta.
+
+Zato **svaka ćelija crta SVOJU polovicu segmenta**: pilula (`span.thermo-seg`,
+`z-index: -1` = isti sloj kao parity, iznad highlighta i ispod znamenke) od svog
+središta prema susjedu, rotirana `transform-origin: 0 50%` oko točke koja nakon
+`translate` leži u središtu ćelije. Dvije polovice se preklope u razmaku pa je tuba
+neprekinuta i preko debele granice bloka, **bez računanja točnih razmaka** (koji nisu
+uniformni - `.br`/`.bb` nose 2px marginu).
+
+**Prelazak preko granice je 3px i ne smije biti veći**: ćelija se cijela iscrtava
+iznad ranije iscrtanih susjeda (DOM red), pa bi dulji segment prekrio susjedovu
+znamenku. Na 3px dohvati samo njegov rub, a znamenka je centrirana.
 
 ## Poznato / tehnički dug
 
