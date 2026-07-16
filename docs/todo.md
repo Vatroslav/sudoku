@@ -146,6 +146,48 @@ Izmjereno prije/poslije (12 ploča po slučaju):
 Trošak: jedan `countSolutions` po pokušaju, prije gradinga (jeftiniji od solvera).
 Brzina generacije nije mjerljivo pala.
 
+## Raspon zadanih brojeva na Hardu (v1.29.0)
+
+**Hard s varijantama više nema fiksnih 28 zadanih** - target se bira po pokušaju iz
+raspona, pa partije variraju (Vatrin zahtjev: "nekad 28, nekad 20, nekad 12, nekad 8").
+Normal i Classic su netaknuti (Classic nema oznaka koje bi manjak brojeva nadoknadile,
+i dokazano ne postoji ispod 17 zadanih).
+
+**Gustoća oznaka prati broj zadanih** (`scaled`/`boost` u `sudoku.js`): 0 na vrhu
+raspona (bazni raspon, kao dosad), 1 na dnu (sve kvalificirane oznake). Bez toga niski
+targeti nisu rješivi - informacija mora doći odnekud.
+
+**Tier je za Hard s varijantama samo gornja granica** (`res.tier <= reqTier` umjesto
+`===`). Ploča s malo zadanih rješava se pretežno oznakama pa joj klasične tehnike
+ispadnu trivijalne (tier-1) - traži li se točan tier, takva ploča se baca kao
+"prelagana" iako je najviše varijantna. Težinu na Hardu s varijantama nosi broj
+zadanih; Classic zadržava točan tier (tamo je tehnika jedina os težine).
+
+**Dno raspona je PO VARIJANTI** (`STRENGTH`/`floorFor`), ne jedinstveno. Ispod svog
+minimuma varijanta ne da rješivu ploču, a `dig` to otkrije tek nakon što iskopa do
+zida jedinstvenosti - najskuplja operacija koju imamo. S jedinstvenim dnom od 8 XV je
+trošio **23s po partiji**; s floorom po varijanti **0.0s**.
+
+Izmjereno (12 partija, pravi `generate("hard", ...)`), raspon zadanih:
+
+| varijanta | zadanih | varijanta | zadanih |
+| --------- | ------- | --------- | ------- |
+| Kropki+XV | 6-26    | XV        | 19-28   |
+| Kropki    | 10-28   | Diagonal  | 26-28   |
+| Even/Odd  | 14-27   | Classic   | 28      |
+
+Metodologija mjerenja minimuma (skripte u scratchpadu, nisu u repou) - **dvije greške
+koje se ne smiju ponoviti**:
+
+1. Mjeriti STVARNI givens gotove ploče, ne zadani target. `dig` stane čim jedinstvenost
+   pukne, pa nizak target znaci samo "kopaj koliko mozes" - ploča svejedno ispadne s
+   ~24 broja. Prvo mjerenje je zbog toga tvrdilo "Classic min 8" (nemoguće - dokazani
+   zid je 17).
+2. `generateSolution` vrati `null` kad `fillBoard` probije budžet (jigsaw, gusto
+   ograničene kombinacije poput antiknight+x). Pravi `generate` tada uzme svježe regije
+   i pokuša ponovno; mjerač koji taj `null` broji kao neuspjeh lažno optuži Jigsaw da
+   "ne prolazi ni na 28".
+
 ## Poznato / tehnički dug
 
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).

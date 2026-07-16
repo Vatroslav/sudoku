@@ -343,17 +343,29 @@ const Sudoku = (() => {
     return puzzle;
   }
 
+  // Gustoća oznaka prati broj zadanih brojeva: informacija mora doći odnekud.
+  // `boost` je 0 kad ploča ima pun broj zadanih (oznake rijetke, bazni raspon) do
+  // 1 kad je ploča na dnu raspona (sve kvalificirane oznake prikazane). Bez toga
+  // niski targeti ne bi bili rješivi - izmjereno: XV s baznom gustoćom ne ide
+  // ispod ~22 zadanih, s punom do ~18, a Kropki+XV s punom do ~4.
+  function scaled(base, boost) {
+    return {
+      min: base.min + (1 - base.min) * boost,
+      max: base.max + (1 - base.max) * boost,
+    };
+  }
+  const pickDensity = (d) => d.min + Math.random() * (d.max - d.min);
+
   // Even/Odd: djelić ćelija nosi oznaku parnosti izvedenu iz rješenja (kvadrat =
   // parno, krug = neparno u UI-ju). Oznake su aktivne u countSolutions/dig pa daju
   // logičku snagu (smiju se maknuti dodatni zadani brojevi uz jedinstvenost).
-  // PARITY_DENSITY je raspon (knob): gustoća se nasumično bira po generaciji da
-  // slagalice variraju. Više oznaka = lakše, premalo = ne osjeti se.
+  // PARITY_DENSITY je bazni raspon (knob): gustoća se nasumično bira po generaciji
+  // da slagalice variraju. Više oznaka = lakše, premalo = ne osjeti se.
   const PARITY_DENSITY = { min: 0.24, max: 0.38 };
-  function deriveParity(solution) {
+  function deriveParity(solution, boost = 0) {
     const parity = new Array(81).fill(0);
     const idxs = shuffle([...Array(81).keys()]);
-    const density = PARITY_DENSITY.min + Math.random() * (PARITY_DENSITY.max - PARITY_DENSITY.min);
-    const count = Math.round(81 * density);
+    const count = Math.round(81 * pickDensity(scaled(PARITY_DENSITY, boost)));
     for (let k = 0; k < count; k++) {
       const i = idxs[k];
       parity[i] = solution[i] % 2 === 0 ? 1 : 2; // 1 = parno, 2 = neparno
@@ -392,14 +404,13 @@ const Sudoku = (() => {
   // 2-3: uzastopni I zbroj 5). Kropki bira prvi, XV puni samo slobodne bridove -
   // casual semantika to podnosi: izgubljena oznaka je oznaka koja se ne prikazuje,
   // a odsutnost ionako ne znači ništa.
-  function deriveEdges(solution, useKropki, useXv) {
+  function deriveEdges(solution, useKropki, useXv, boost = 0) {
     const h = new Array(81).fill(0),
       v = new Array(81).fill(0);
-    const reveal = (cands, dens) => {
+    const reveal = (cands, base) => {
       const free = cands.filter(([axis, i]) => (axis === "h" ? h[i] : v[i]) === 0);
       shuffle(free);
-      const density = dens.min + Math.random() * (dens.max - dens.min);
-      const count = Math.round(free.length * density);
+      const count = Math.round(free.length * pickDensity(scaled(base, boost)));
       for (let k = 0; k < count; k++) {
         const [axis, i, t] = free[k];
         if (axis === "h") h[i] = t;
@@ -414,6 +425,37 @@ const Sudoku = (() => {
   const TARGET = { normal: 34, hard: 28 };
   const REQ_TIER = { normal: Solver.T_SINGLE, hard: Solver.T_INTER };
   const MAX_ATTEMPTS = { normal: 120, hard: 200 };
+
+  // Hard s varijantama: broj zadanih brojeva se bira po pokušaju iz raspona, umjesto
+  // fiksnih 28 - tako partije variraju (nekad ploča s 28 brojeva i rijetkim oznakama,
+  // nekad s 12 i gusto posuta). Classic nema oznaka koje bi manjak brojeva
+  // nadoknadile (i dokazano ne postoji ispod 17 zadanih) - ostaje na fiksnih 28.
+  //
+  // Dno raspona MORA biti po varijanti, ne jedinstveno: ispod svog minimuma
+  // varijanta ne da rješivu ploču, a `dig` to otkrije tek nakon što iskopa do zida
+  // jedinstvenosti - najskuplja operacija koju imamo. S jedinstvenim dnom od 8 XV
+  // je trošio 23s po partiji (pola pokušaja bačeno), umjesto 0.2s.
+  //
+  // STRENGTH = koliko varijanta "vrijedi" u zadanim brojevima: izmjereni minimum
+  // za varijantu samu, oduzet od 28 (Kropki sam ~10 zadanih -> vrijedi 18).
+  // Kombinacija zbraja snage. Gruba aproksimacija - izmjereno odstupa ±2-4 - ali
+  // ovo je samo donja granica raspona, pa preciznost nije bitna: ako je dno malo
+  // prenisko, poneki pokušaj propadne; ako je previsoko, izgubi se dio raspona.
+  const STRENGTH = {
+    kropki: 18,
+    evenodd: 15,
+    xv: 10,
+    hyper: 8,
+    antiknight: 6,
+    jigsaw: 6,
+    x: 2,
+    antiking: 2,
+  };
+  const FLOOR_MIN = 4;
+  function floorFor(variants, top) {
+    const s = variants.reduce((a, v) => a + (STRENGTH[v] || 0), 0);
+    return Math.max(FLOOR_MIN, top - s);
+  }
 
   // Za jigsaw partiju: svježe regije + jig kontekst po pokušaju (raznolikost i
   // bijeg iz eventualno lošeg rasporeda). Non-jigsaw -> { regions: null, jig: null }.
@@ -449,22 +491,33 @@ const Sudoku = (() => {
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
-    const target = TARGET[difficulty] || 34;
+    const topTarget = TARGET[difficulty] || 34;
     const attempts = MAX_ATTEMPTS[difficulty] || 150;
     const useJig = variants.includes("jigsaw");
     const useEven = variants.includes("evenodd");
     const useKropki = variants.includes("kropki");
     const useXv = variants.includes("xv");
     const useEdges = useKropki || useXv;
+    // Raspon zadanih brojeva vrijedi samo za Hard s varijantama - Normal drži
+    // svoju razinu, a Classic nema oznaka koje bi manjak brojeva nadoknadile.
+    const spread = difficulty === "hard" && variants.length > 0;
+    const floor = spread ? floorFor(variants, topTarget) : topTarget;
     let best = null;
 
     for (let a = 0; a < attempts; a++) {
+      // Novi target po pokušaju - tako partije variraju umjesto da svaka ima isti
+      // broj zadanih. Pokušaj koji ipak propadne sljedeći put izvuče drugi broj.
+      const target = spread
+        ? floor + Math.floor(Math.random() * (topTarget - floor + 1))
+        : topTarget;
+      // Što manje zadanih brojeva, to gušće oznake (0 na vrhu raspona, 1 na dnu).
+      const boost = spread && topTarget > floor ? (topTarget - target) / (topTarget - floor) : 0;
       const { regions, jig } = newRegionCtx(useJig);
       const solution = generateSolution(variants, jig);
       if (!solution) continue; // probijen budžet (loše regije) -> novi pokušaj
       // Parity/edges se izvode iz rješenja (uvijek konzistentni) pa su aktivni u dig/solveAndGrade.
-      const parity = useEven ? deriveParity(solution) : null;
-      const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
+      const parity = useEven ? deriveParity(solution, boost) : null;
+      const edges = useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null;
       const puzzle = dig(solution, target, variants, jig, parity, edges);
       // Varijanta mora nešto raditi - ploču koju klasika sama jedinstveno rješava
       // odbaci (provjeri prije gradinga, countSolutions je jeftiniji od solvera).
@@ -473,7 +526,13 @@ const Sudoku = (() => {
       if (!res.solved) continue; // traži tehniku koju nemamo -> preskoči
       if (res.grid.some((v, i) => v !== solution[i])) continue; // sigurnosna provjera ispravnosti
 
-      if (res.tier === reqTier) {
+      // Ploča s malo zadanih brojeva rješava se pretežno oznakama, pa joj klasične
+      // tehnike ispadnu trivijalne (tier-1) - traži li se TOČAN tier, takva se ploča
+      // baca kao "prelagana" iako je najviše varijantna. Zato je za Hard s
+      // varijantama tier samo gornja granica (bez X-Winga, Vatrina definicija), a
+      // težinu nosi broj zadanih brojeva. Classic zadržava točan tier - tamo je
+      // tehnika jedina os težine.
+      if (spread ? res.tier <= reqTier : res.tier === reqTier) {
         return {
           puzzle,
           solution,
@@ -511,6 +570,8 @@ const Sudoku = (() => {
         edges: best.edges,
       };
     // Krajnji fallback - bilo što rješivo (nove regije za jigsaw, ne recikliraj).
+    // Ide na vrh raspona (najviše zadanih, bazna gustoća): ovo je zadnja linija
+    // obrane, tu se ne riskira ploča koju igrač ne može riješiti.
     let ctx, solution;
     do {
       ctx = newRegionCtx(useJig);
@@ -519,7 +580,7 @@ const Sudoku = (() => {
     const parity = useEven ? deriveParity(solution) : null;
     const edges = useEdges ? deriveEdges(solution, useKropki, useXv) : null;
     return {
-      puzzle: dig(solution, target, variants, ctx.jig, parity, edges),
+      puzzle: dig(solution, topTarget, variants, ctx.jig, parity, edges),
       solution,
       difficulty,
       variants,
