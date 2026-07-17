@@ -365,6 +365,9 @@
   let pendingGen = null;
 
   function buildState(difficulty, variants, puzzle, solution, techniques, clues) {
+    // Auto-start (početna Classic Normal) čeka prvi potez prije nego se broji kao
+    // game_started; namjerni start (izbor u meniju) broji se odmah (vidi track niže).
+    const wasAuto = !!(pendingGen && pendingGen.auto);
     state = {
       puzzle,
       solution,
@@ -392,6 +395,8 @@
       activeNote: null,
       colorMode: false,
       solved: false,
+      // Auto-start čeka prvi potez; save() niže ga persistira pa preživi reload.
+      startPending: wasAuto,
     };
     history = [];
     clearHint();
@@ -401,9 +406,11 @@
     pendingGen = null;
     activeSince = null;
     clockStart();
-    // Start se broji tek kad ploča stvarno postoji - generiranje koje korisnik
-    // prekine Cancelom nije odigrana partija i ne smije razvodniti completion rate.
-    track("game_started", gameFacts());
+    // Start se broji tek kad ploča stvarno postoji (Cancel na generiranju nije
+    // partija). Auto-pokrenuta početna Classic Normal partija se NE broji dok je
+    // korisnik ne dotakne - inače svaki posjet napuhne Classic Normal i pokvari
+    // completion. Namjerni start (izbor u meniju) se broji odmah.
+    if (!wasAuto) track("game_started", gameFacts());
   }
 
   function generateSync(difficulty, variants) {
@@ -414,9 +421,11 @@
     }, 30);
   }
 
-  function newGame(difficulty, variants) {
+  function newGame(difficulty, variants, auto) {
     variants = normVariants(variants);
-    pendingGen = { difficulty, variants, at: Date.now() };
+    // auto = pokrenuto automatski (početna Classic Normal na app open), ne izborom
+    // korisnika. Takva partija se ne broji kao game_started dok je se ne odigra.
+    pendingGen = { difficulty, variants, at: Date.now(), auto: !!auto };
     loadingOverlay.classList.remove("hidden");
     if (genWorker) {
       genWorker.terminate();
@@ -603,6 +612,12 @@
     // Potez = unos broja (i njegovo poništavanje ponovnim istim brojem). Bilješke,
     // boje i Erase se ne broje - mjerimo koliko je unosa trebalo do rješenja.
     state.moves = (state.moves || 0) + 1;
+    // Prvi potez na auto-pokrenutoj početnoj partiji: TU se ona broji kao start
+    // (dotad je bila samo ponuđena, ne odigrana). Šalje se jednom po partiji.
+    if (state.startPending) {
+      state.startPending = false;
+      track("game_started", gameFacts());
+    }
     if (state.values[idx] === n) {
       state.values[idx] = 0; // ponovni isti broj briše
       return true;
@@ -1452,7 +1467,7 @@
       }
     } else {
       track("app_opened", { resumed: false });
-      newGame("normal");
+      newGame("normal", [], true);
     }
   }
 
