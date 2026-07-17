@@ -8,13 +8,31 @@ varijanti (`state.variants`, npr. `["x","hyper"]`): `sudoku.js` (`isValid`) i `s
 registry - kad broj varijanti naraste (ili kad zatreba `setup`/`deriveClues`), procijeniti
 isplati li se Faza 0 refaktor iz doca.
 
-**Otvoreno: `clues` objekt umjesto pozicijskih parametara.** `isValid` ih ima 8
-(`board, idx, val, variants, jig, parity, edges, thm`), svaki od zadnjih četiri smije
-biti null. Thermo je namjerno dodan kao 8. parametar, ne kroz refaktor - miješati novu
-varijantu i refaktor jezgre znači da se kod regresije ne zna tko ju je uzrokovao.
-Sljedeći put: skupiti `parity`/`edges`/`thermos` u jedan `clues` objekt (mehanički,
-ali dira sva 4 filea + save migraciju), čime svaka buduća derivacijska varijanta dodaje
-**nula** parametara. Napraviti to PRIJE Palindromea, ne zajedno s njim.
+**Riješeno: `clues` objekt umjesto pozicijskih parametara** (refaktor, bez bumpa -
+dokazano bez promjene ponašanja).
+`isValid` je imao 8 parametara (`board, idx, val, variants, jig, parity, edges, thm`);
+sada su svi per-puzzle podaci u jednom `clues` objektu, pa ih `isValid` ima 5
+(`board, idx, val, variants, clues`) i svaka buduća derivacijska varijanta dodaje
+**nula** parametara.
+
+- **`prepClues` je jedino mjesto koje gradi clues.** Nosi i wire polja
+  (`regions`/`parity`/`edges`/`thermos` - idu u `state` i localStorage) i izvedene
+  brze oblike (`jig`/`thm` - `isValid` ih gleda u vrućoj petlji). Izvedeno se NE
+  sprema; slaže se iz wire polja pri svakoj gradnji.
+- **Zamka kod prunea:** `pruneMarks` mijenja `clues.thermos` (wire lista), pa mora u
+  koraku osvježiti izvedeni `clues.thm` - inače solver reže kandidate po staroj listi
+  tuba. Isti oprez vrijedi za svaku buduću varijantu koja mijenja svoju wire listu
+  nakon gradnje clues.
+- **Migracija:** partije spremljene prije clues objekta nose oznake na vrhu `state`-a
+  (a Kropki prije XV-a još i pod imenom `dots`); `load()` ih preuzima u `state.clues`.
+- **Dokaz mehaničnosti:** regresijska mreža sa zasijanim RNG-om (96 ploča) dala je
+  bajt-identičan ispis prije i poslije - puzzle, solution, tehnike, sve izvedene
+  oznake. Za idući refaktor jezgre: isti pristup (zasij `Math.random`, snimi ploče
+  prije, usporedi poslije) - ako je mehaničko, mora biti bajt-identično.
+
+Namjerno je napravljen ODVOJENO od Thermo i PRIJE Palindromea: Thermo je zato bio dodan
+kao 8. pozicijski parametar (ne kroz refaktor), da se kod regresije ne miješa nova
+varijanta i refaktor jezgre.
 
 ## Metrike (blocker za launch na itch)
 
