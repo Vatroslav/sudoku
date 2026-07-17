@@ -327,6 +327,32 @@ koraku nisu savršeno kolinearne. Ortogonalni koraci mjere identično s krpama i
 
 Palindrome nasljeđuje ovu mašineriju (ista linija bez kuglice) - i uštip i lijek.
 
+#### Spoj u središtu ćelije (v1.30.2)
+
+Kut je bio popravljen, a Vatra je javio "i dalje je problem". Bio je u pravu i uzrok je
+bio **drugdje nego što je prva dijagnoza tvrdila**: ne na granici ćelija nego u njihovom
+SREDIŠTU. Segmenti kreću iz središta, a zaobljeni vrh pilule tamo dolazi u **točku** -
+pa se tuba stanji na svakom vrhu puta:
+
+| slučaj                    | spoj pokriven | širina u središtu (nominalno 10.75px) |
+| ------------------------- | ------------- | ------------------------------------- |
+| kraj tube (zadnja ćelija) | 42%           | **0.00** (šiljak umjesto kraja)       |
+| ravni prolaz              | 58%           | 6.25                                  |
+| skretanje (lakat)         | 56-87%        | 7.50-13.00                            |
+| kuglica                   | 100%          | uredno                                |
+
+Kuglica je jedina bila čista - 58% je šire od tube pa je spoj pokrivala slučajno. Lijek
+je `span.thermo-joint`: disk promjera tube u središtu svake ćelije koja nije kuglica.
+To je točno ono što SVG dobije besplatno s `round` linejoinom i linecapom. Poslije:
+**svi spojevi 100%**, kraj tube 11.00px.
+
+**Zašto prva dijagnoza nije uhvatila ovo**: mjerilo se hit-testom oko SREDIŠTA GRANICE
+između dvije ćelije (±10px), a središta ćelija su ~20px dalje - sonda ih nikad nije
+dotakla. Uštip na kutu (11 → 7px) bio je stvaran i popravak stoji, ali nije bio ono
+najvidljivije. Druga zamka: hit-test nad glifom znamenke vraća `.cell`, ne pilulu ispod
+nje (tekst je inline sadržaj ćelije), pa je prvo mjerenje spojeva lažno prijavilo 0% za
+svaku ćeliju sa znamenkom. Mjeriti tubu tek nakon što se znamenke maknu iz DOM-a.
+
 ## Poznato / tehnički dug
 
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).

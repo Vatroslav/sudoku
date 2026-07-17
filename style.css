@@ -401,6 +401,22 @@ main {
   top: calc(100% + var(--gy) / 2);
 }
 
+/* Spoj u središtu ćelije. Segmenti kreću IZ središta, a zaobljeni vrh pilule tamo
+   dolazi u TOČKU - pa se tuba na svakom vrhu stanji (izmjereno: 10.75px -> 0-7px), na
+   skretanju vanjski kut ostane odgrizen, a zadnja ćelija tube završi šiljkom umjesto
+   zaobljeno. Disk promjera tube popuni spoj - isto što SVG dobije s round linejoinom
+   i linecapom. Centriranje kao .thermo-bulb (inset:0 + margin:auto). */
+.cell .thermo-joint {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: var(--thermo);
+  z-index: -1;
+  pointer-events: none;
+}
 /* Kuglica = dno tube. Osjetno šira od tube da se čita na prvi pogled tko je bulb.
    Centriranje kao parity ::before (inset:0 + margin:auto). */
 .cell .thermo-bulb {

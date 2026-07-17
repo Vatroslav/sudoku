@@ -1237,6 +1237,13 @@
           const bulb = document.createElement("span");
           bulb.className = "thermo-bulb";
           cell.appendChild(bulb);
+        } else {
+          // Spoj u središtu: segmenti kreću IZ središta pa im zaobljeni vrh tamo dođe
+          // u točku - bez diska tuba se na svakom vrhu stanji (vidi CSS). Kuglica taj
+          // posao odradi sama (šira je od tube) pa joj spoj ne treba.
+          const joint = document.createElement("span");
+          joint.className = "thermo-joint";
+          cell.appendChild(joint);
         }
         for (const q of [pos - 1, pos + 1]) {
           if (q < 0 || q >= path.length) continue;
