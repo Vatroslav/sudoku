@@ -9,64 +9,69 @@ po kojoj težini, te koliko ih se riješi. Bez toga launch na itch nema signal k
 li itko igru.
 
 Isti obrazac kao **Left-right onwards** (`~/github/left-right-onwards-web/metrics`) -
-postupak je opisan u `~/github/game-development/telemetrija.md`.
+opći postupak je u `~/github/game-development/telemetrija.md`. Apps Script kod je
+verzioniran ovdje i sinkan **claspom** - ne lijepiti ručno u editor.
 
-## Fileovi
+## Fileovi (`apps-script/`)
 
-| file                               | uloga                                                      |
-| ---------------------------------- | ---------------------------------------------------------- |
-| [`apps-script.gs`](apps-script.gs) | collector: `doPost` upisuje event kao red u Sheet          |
-| [`dashboard.gs`](dashboard.gs)     | dashboard: `doGet` + `getData` (agregati, filter `my ids`) |
-| [`Index.html`](Index.html)         | dashboard frontend (grafovi)                               |
+| file                                            | uloga                                                       |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| [`Code.js`](apps-script/Code.js)                | collector: `doPost` upisuje event kao red u Sheet           |
+| [`dashboard.js`](apps-script/dashboard.js)      | dashboard: `doGet` + `getData` (agregati, filter `my ids`)  |
+| [`Index.html`](apps-script/Index.html)          | dashboard frontend (grafovi)                                |
+| [`appsscript.json`](apps-script/appsscript.json)| manifest (webapp: execute as me, access anyone)             |
 
-Collector i dashboard dijele **isti Apps Script projekt**: `dashboard.gs` koristi
-`SHEET_ID` / `SHEET_NAME` iz `apps-script.gs` i **ne smije ih redeklarirati**
-(`const` duplikat ruši cijeli projekt). U editoru se HTML file mora zvati `Index`
-(bez ekstenzije) - `doGet` ga traži po tom imenu.
+Lokalno su `.js`, gore su `.gs` - clasp konvertira u oba smjera. HTML file se u
+editoru zove `Index` (bez ekstenzije), `doGet` ga traži po tom imenu.
 
-## Postavljanje (jednokratno)
+Collector i dashboard dijele **isti Apps Script projekt**: `dashboard.js` koristi
+`SHEET_ID` / `SHEET_NAME` iz `Code.js` i **ne smije ih redeklarirati** (`const`
+duplikat ruši cijeli projekt).
 
-1. **Sheet**: novi Google Sheet, tab preimenuj u `events`. Header skripta doda
-   **automatski** (bold + zamrznut) kad je Sheet prazan - ne treba ručno. Iz URL-a
-   Sheeta uzmi ID (`/d/<ID>/edit`).
-2. **Apps Script**: u Sheetu Extensions → Apps Script. Zalijepi
-   [`apps-script.gs`](apps-script.gs), upiši `SHEET_ID`. Spremi.
-3. **Deploy**: Deploy → New deployment → tip **Web app**. Execute as **Me**,
-   Who has access **Anyone**. Kopiraj Web app URL (završava na `/exec`).
-4. **Igra**: upiši taj URL u [`../metrics.js`](../metrics.js) → `METRICS_URL`.
-   Dok je prazno, tracking je isključen (no-op) i igra radi normalno.
+## clasp workflow
 
-Sheet je zaseban od LRO-ovog (druge kolone, druga igra) - ne dijeliti endpoint.
+Auth (`~/.clasprc.json`) je vezan na **flamefame@gmail.com** - Sheet i skripta žive
+na tom računu. Isti račun kao LRO.
 
-## Dashboard (jednokratno)
+```bash
+cd metrics/apps-script
+clasp status    # sto bi se pushalo
+clasp push      # posalji izmjene u projekt (HEAD)
+```
 
-Collector već upisuje evente; dashboard ih samo čita i crta. Kod je u repou
-(`dashboard.gs` + `Index.html`), postavlja se u **isti** Apps Script projekt kao
-collector, ali se deploya kao **zaseban** Web app.
+Ako `clasp push` javi problem s permisijama: `clasp login` na flamefame i na consent
+ekranu **označiti checkboxove** (bez toga login "uspije" ali token nosi samo profil).
+Traži i uključen Apps Script API: <https://script.google.com/home/usersettings>
 
-1. **Kod**: u istom Apps Script projektu New file → Script, nazovi `dashboard`,
-   zalijepi [`dashboard.gs`](dashboard.gs). Zatim New file → HTML, nazovi `Index`
-   (točno tako, bez `.html`), zalijepi [`Index.html`](Index.html). Spremi.
-   - `dashboard.gs` **ne** deklarira `SHEET_ID` / `SHEET_NAME` - nasljeđuje ih iz
-     `apps-script.gs` (Code.gs). Ako collector file ima placeholder umjesto pravog
-     `SHEET_ID`, upiši pravi ID tamo (ne u dashboard).
-2. **`my ids` tab** (preporučeno): u Sheetu dodaj tab `my ids`, u kolonu A od reda 2
-   zalijepi vlastite `session` id-eve (iz `sudoku_sid` u localStorageu, ili iz
-   `session` kolone Sheeta za svoje partije). `getData` ih dinamički preskače, pa
-   vlastito testiranje ne ulazi u brojke. Bez taba dashboard i dalje radi (filtrira
-   samo `env=prod`).
-3. **Deploy**: Deploy → New deployment → **Web app**, Execute as **Me**, Who has
-   access **Anyone**. Taj `.../exec` URL je dashboard - radi u svakom browseru, bez
-   logina. To je **novi** deployment, ne diraj collectorov (njegov URL je u igri).
+### push ≠ live
 
-### push ≠ live (kad mijenjaš dashboard)
+Web app servira **deployanu verziju**, ne HEAD. `clasp push` sam po sebi ne mijenja
+ono što javni URL-ovi vraćaju.
 
-Web app servira **zamrznutu deployanu verziju**, ne zadnji spremljeni kod. Nakon
-izmjene `dashboard.gs` / `Index.html`: Deploy → Manage deployments → uredi dashboard
-deployment → **New version** (ili `@HEAD` deployment za brzu probu). Sam Save ne
-osvježava javni URL.
+```bash
+clasp list-deployments               # popis + koja verzija je na kojem
+clasp update-deployment <id>         # tek OVO osvjezava javni URL (redeploy)
+clasp create-deployment -d "opis"    # novi deployment (npr. za dashboard)
+```
 
-### Dva pravila (ista kao LRO)
+## Deploymenti
+
+- **collector** (`@4`, id `AKfycbydNb2L5QtAqMrRyD7QBRpMNjOM06OTmNXWlUo-PrDinyVttSelQEz9Cjsrf6LEQ7ju`) -
+  URL je u [`../metrics.js`](../metrics.js) → `METRICS_URL`. Radi; **ne dirati** bez
+  razloga (redeploy = rizik da tracking stane).
+- **dashboard** (`@5`, "Sudoku dashboard v1") - javni dashboard URL:
+  <https://script.google.com/macros/s/AKfycbxZ8JLov_Q9l2WqnpWEFNHhHp_Eykc33IDynS0toBsNlJhq40J7NJm9EGTreU9dZ9Mi/exec>
+  Izmjene dashboarda traže `clasp push` **i** `clasp update-deployment` tog id-a.
+- **@HEAD** - dev deployment, uvijek najnoviji kod. Dobar za probu prije redeploya.
+
+## `my ids` tab (filtar vlastitih partija)
+
+U Sheetu tab `my ids`, kolona A od reda 2 = vlastiti `session` id-evi (iz
+`sudoku_sid` u localStorageu, ili iz `session` kolone Sheeta za svoje partije).
+`getData` ih dinamički preskače, pa vlastito testiranje ne ulazi u brojke. Bez taba
+dashboard i dalje radi (filtrira samo `env=prod`).
+
+## Dva pravila (ista kao LRO)
 
 - **`getData` vraća samo agregate.** URL je javan (Access: Anyone) - tko ga ima,
   vidi sve što `getData` vrati. Brojevi, postoci, distribucije: da. Sirovi session
@@ -74,7 +79,7 @@ osvježava javni URL.
 - **Vlastite partije se filtriraju** - `env=prod` (miče dev) + tab `my ids`
   (miče vlastito testiranje na produ). Bez toga vlastito igranje izgleda kao promet.
 
-### Što crta
+## Što dashboard crta
 
 - **KPI** - sesije, započete/riješene partije, completion %, medijan vremena, otvaranja.
 - **Aktivnost po danu** - sesije i započete partije, + tablica (otvaranja, riješeno,
@@ -86,6 +91,17 @@ osvježava javni URL.
 
 Sve **po partiji, ne po sesiji** (`gameId` veže start↔solve): session je per-browser
 i preživi restart, pa jedna sesija drži više partija - miješanje daje krive brojke.
+
+## Collector od nule (ako ikad treba novi Sheet)
+
+1. **Sheet**: novi Google Sheet, tab preimenuj u `events`. Header skripta doda
+   **automatski** (bold + zamrznut) kad je Sheet prazan. Iz URL-a Sheeta uzmi ID
+   (`/d/<ID>/edit`).
+2. **Kod**: upiši novi `SHEET_ID` u `apps-script/Code.js`, `clasp push`.
+3. **Deploy**: `clasp create-deployment -d "collector"`. Taj `.../exec` URL ide u
+   [`../metrics.js`](../metrics.js) → `METRICS_URL`. Dok je prazno, tracking je no-op.
+
+Sheet je zaseban od LRO-ovog (druge kolone, druga igra) - ne dijeliti endpoint.
 
 ## Okruženja (dev vs prod)
 
