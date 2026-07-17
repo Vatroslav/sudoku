@@ -1,0 +1,873 @@
+<!doctype html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --bg: #eef2f0;
+        --panel: #ffffff;
+        --panel-2: #f6f9f7;
+        --border: #d9e1dd;
+        --text: #0f1c1a;
+        --muted: #5a6b66;
+        --faint: #8b9c97;
+        --accent: #0d8e7f;
+        --accent-soft: rgba(13, 142, 127, 0.13);
+        --amber: #b0700f;
+        --amber-soft: rgba(176, 112, 15, 0.15);
+        --danger: #bf4230;
+        --danger-soft: rgba(191, 66, 48, 0.13);
+        --grid: rgba(15, 28, 26, 0.07);
+        --shadow: 0 1px 2px rgba(15, 28, 26, 0.05), 0 8px 24px rgba(15, 28, 26, 0.05);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0c1211;
+          --panel: #141d1b;
+          --panel-2: #101817;
+          --border: #253331;
+          --text: #e9f1ee;
+          --muted: #8ba099;
+          --faint: #64766f;
+          --accent: #38c7b2;
+          --accent-soft: rgba(56, 199, 178, 0.15);
+          --amber: #e3ad55;
+          --amber-soft: rgba(227, 173, 85, 0.15);
+          --danger: #e8705c;
+          --danger-soft: rgba(232, 112, 92, 0.15);
+          --grid: rgba(233, 241, 238, 0.07);
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+      }
+      :root[data-theme="light"] {
+        --bg: #eef2f0;
+        --panel: #ffffff;
+        --panel-2: #f6f9f7;
+        --border: #d9e1dd;
+        --text: #0f1c1a;
+        --muted: #5a6b66;
+        --faint: #8b9c97;
+        --accent: #0d8e7f;
+        --accent-soft: rgba(13, 142, 127, 0.13);
+        --amber: #b0700f;
+        --amber-soft: rgba(176, 112, 15, 0.15);
+        --danger: #bf4230;
+        --danger-soft: rgba(191, 66, 48, 0.13);
+        --grid: rgba(15, 28, 26, 0.07);
+        --shadow: 0 1px 2px rgba(15, 28, 26, 0.05), 0 8px 24px rgba(15, 28, 26, 0.05);
+      }
+      :root[data-theme="dark"] {
+        --bg: #0c1211;
+        --panel: #141d1b;
+        --panel-2: #101817;
+        --border: #253331;
+        --text: #e9f1ee;
+        --muted: #8ba099;
+        --faint: #64766f;
+        --accent: #38c7b2;
+        --accent-soft: rgba(56, 199, 178, 0.15);
+        --amber: #e3ad55;
+        --amber-soft: rgba(227, 173, 85, 0.15);
+        --danger: #e8705c;
+        --danger-soft: rgba(232, 112, 92, 0.15);
+        --grid: rgba(233, 241, 238, 0.07);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 30px rgba(0, 0, 0, 0.35);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+      }
+      body,
+      .page {
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 34px 26px 60px;
+        color: var(--text);
+        background: var(--bg);
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono {
+        font-family:
+          ui-monospace, "SF Mono", "Cascadia Code", "Segoe UI Mono", Menlo, Consolas, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---- masthead ---- */
+      .masthead {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 16px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 26px;
+      }
+      .brand {
+        font-size: 25px;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+      }
+      .brand .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+      }
+      .masthead .meta {
+        margin-left: auto;
+        font-size: 12px;
+        letter-spacing: 0.03em;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      .lede {
+        flex-basis: 100%;
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        max-width: 74ch;
+      }
+      .lede b {
+        color: var(--text);
+        font-weight: 600;
+      }
+      .sheet-link {
+        color: var(--accent);
+        font-weight: 600;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .sheet-link:hover {
+        text-decoration-thickness: 2px;
+      }
+      .sheet-link:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 3px;
+      }
+
+      /* ---- KPI row ---- */
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+        margin-bottom: 22px;
+      }
+      .kpi {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 15px 13px;
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 0;
+      }
+      .kpi .label {
+        font-size: 10.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        line-height: 1.25;
+      }
+      .kpi .val {
+        font-size: 30px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+        line-height: 1;
+        color: var(--text);
+      }
+      .kpi .sub {
+        font-size: 11px;
+        color: var(--faint);
+      }
+      .kpi.accent .val {
+        color: var(--accent);
+      }
+
+      /* ---- layout grid ---- */
+      .row {
+        display: grid;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .row.two {
+        grid-template-columns: 1.15fr 1fr;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 20px 20px;
+        box-shadow: var(--shadow);
+        min-width: 0;
+      }
+      .card > h2 {
+        margin: 0 0 2px;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .card > .desc {
+        margin: 0 0 16px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      /* ---- daily grouped bars ---- */
+      .daily-chart {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        align-items: end;
+        gap: 10px;
+        height: 150px;
+        padding-top: 8px;
+        border-bottom: 1px solid var(--border);
+      }
+      .day {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        height: 100%;
+        gap: 4px;
+      }
+      .bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 3px;
+        height: 100%;
+        width: 100%;
+        justify-content: center;
+      }
+      .bar {
+        width: 15px;
+        border-radius: 3px 3px 0 0;
+        position: relative;
+        min-height: 2px;
+        transition: filter 0.15s;
+      }
+      .bar.s {
+        background: var(--accent);
+      }
+      .bar.r {
+        background: var(--amber);
+      }
+      .bar .n {
+        position: absolute;
+        top: -15px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: var(--muted);
+        font-family: ui-monospace, Menlo, monospace;
+      }
+      .bar.zero {
+        min-height: 0;
+        height: 2px !important;
+        background: repeating-linear-gradient(
+          90deg,
+          var(--border),
+          var(--border) 3px,
+          transparent 3px,
+          transparent 6px
+        );
+        border-radius: 0;
+      }
+      .day .dlab {
+        font-size: 10.5px;
+        color: var(--faint);
+        font-family: ui-monospace, Menlo, monospace;
+      }
+      .legend {
+        display: flex;
+        gap: 16px;
+        margin-top: 12px;
+        font-size: 12px;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .swatch {
+        width: 11px;
+        height: 11px;
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .sw-s {
+        background: var(--accent);
+      }
+      .sw-r {
+        background: var(--amber);
+      }
+
+      table.dtab {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+        font-size: 12.5px;
+      }
+      table.dtab th,
+      table.dtab td {
+        text-align: right;
+        padding: 6px 8px;
+        border-top: 1px solid var(--border);
+      }
+      table.dtab th {
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        border-top: none;
+      }
+      table.dtab td:first-child,
+      table.dtab th:first-child {
+        text-align: left;
+      }
+      table.dtab .num {
+        font-family: ui-monospace, Menlo, monospace;
+      }
+      table.dtab .muted {
+        color: var(--faint);
+      }
+
+      /* ---- funnel / distribution rows ---- */
+      .frow {
+        display: grid;
+        grid-template-columns: 92px 1fr 48px;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        font-size: 12.5px;
+      }
+      .frow .flab {
+        color: var(--muted);
+      }
+      .ftrack {
+        background: var(--panel-2);
+        border-radius: 5px;
+        height: 22px;
+        overflow: hidden;
+      }
+      .ffill {
+        height: 100%;
+        border-radius: 5px;
+        min-width: 2px;
+      }
+      .ffill.a {
+        background: var(--accent);
+      }
+      .ffill.b {
+        background: var(--amber);
+      }
+      .frow .fval {
+        font-family: ui-monospace, Menlo, monospace;
+        color: var(--text);
+        text-align: right;
+      }
+      .rate-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 8px;
+        padding: 7px 11px;
+        background: var(--accent-soft);
+        border-radius: 8px;
+        font-size: 12.5px;
+        color: var(--text);
+      }
+      .rate-note b {
+        color: var(--accent);
+      }
+
+      /* ---- variant rows ---- */
+      .vrow {
+        margin-bottom: 12px;
+      }
+      .vrow .vhead {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 4px;
+      }
+      .vrow .vname {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .vrow .vstart {
+        font-size: 11.5px;
+        color: var(--faint);
+        font-family: ui-monospace, Menlo, monospace;
+      }
+      .vtrack {
+        background: var(--panel-2);
+        border-radius: 5px;
+        height: 16px;
+        overflow: hidden;
+        position: relative;
+      }
+      .vfill {
+        height: 100%;
+        background: var(--accent-soft);
+        border-radius: 5px;
+        min-width: 2px;
+      }
+      .vsolved {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: var(--accent);
+        border-radius: 5px 0 0 5px;
+        min-width: 2px;
+      }
+      .vmeta {
+        display: flex;
+        gap: 14px;
+        margin-top: 4px;
+        font-size: 11.5px;
+        color: var(--muted);
+        flex-wrap: wrap;
+      }
+      .vmeta b {
+        color: var(--text);
+        font-family: ui-monospace, Menlo, monospace;
+        font-weight: 600;
+      }
+      .vmeta .warn b {
+        color: var(--danger);
+      }
+
+      footer {
+        margin-top: 30px;
+        padding-top: 18px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--faint);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      footer code {
+        font-family: ui-monospace, Menlo, monospace;
+        color: var(--muted);
+        background: var(--panel-2);
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+
+      .status {
+        padding: 13px 16px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 18px;
+      }
+      .status.error {
+        color: var(--danger);
+        border-color: var(--danger);
+        background: var(--danger-soft);
+      }
+      .status.hidden {
+        display: none;
+      }
+
+      @media (max-width: 860px) {
+        .kpis {
+          grid-template-columns: repeat(3, 1fr);
+        }
+        .row.two {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 520px) {
+        .kpis {
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .page {
+          padding: 22px 15px 44px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="masthead">
+        <div class="brand"><span class="dot"></span>Sudoku Telemetrija</div>
+        <div class="meta" id="meta">prod &middot; učitavam…</div>
+        <p class="lede" id="lede">
+          Uživo iz Google Sheeta. Osvježi stranicu za nove podatke. Metrike se računaju
+          <b>po partiji</b> (ne po sesiji) i samo za <b>prod</b> promet.
+        </p>
+      </header>
+
+      <div id="status" class="status">Učitavam podatke iz Sheeta…</div>
+
+      <section class="kpis" id="kpis"></section>
+
+      <div class="row two">
+        <section class="card">
+          <h2>Aktivnost po danu</h2>
+          <p class="desc">Aktivne sesije i započete partije, prod.</p>
+          <div class="daily-chart" id="dailyChart"></div>
+          <div class="legend">
+            <span><i class="swatch sw-s"></i> Sesije</span>
+            <span><i class="swatch sw-r"></i> Partija započeto</span>
+          </div>
+          <div style="overflow-x: auto"><table class="dtab" id="dailyTable"></table></div>
+        </section>
+
+        <section class="card">
+          <h2>Obujam partija</h2>
+          <p class="desc">Od otvaranja igre do riješene ploče. Completion je ključni signal.</p>
+          <div id="funnel"></div>
+          <div class="rate-note" id="rateNote"></div>
+        </section>
+      </div>
+
+      <div class="row two">
+        <section class="card">
+          <h2>Po težini</h2>
+          <p class="desc">Normal vs Hard: koliko se započne, koliko riješi, koliko košta.</p>
+          <table class="dtab" id="diffTable"></table>
+        </section>
+
+        <section class="card">
+          <h2>Po varijanti</h2>
+          <p class="desc">
+            Što ljudi biraju (širina = započeto) i koliko dovrše (puna traka = riješeno).
+          </p>
+          <div id="variants"></div>
+        </section>
+      </div>
+
+      <footer>
+        <span>Sudoku &middot; uživo iz Sheeta, tab <code id="footTab">events</code></span>
+        <span>Filtar: <code>env = prod</code> + <code>my ids</code></span>
+      </footer>
+    </div>
+
+    <script>
+      var VARIANT_LABELS = {
+        antiking: "Antiking",
+        antiknight: "Antiknight",
+        x: "Diagonal",
+        hyper: "Hyper",
+        jigsaw: "Jigsaw",
+        evenodd: "Even/Odd",
+        kropki: "Kropki",
+        xv: "XV",
+        thermo: "Thermo",
+      };
+
+      function variantName(key) {
+        if (!key || key === "classic") return "Classic";
+        return String(key)
+          .split("+")
+          .map(function (code) {
+            return VARIANT_LABELS[code] || code;
+          })
+          .join(" + ");
+      }
+
+      // ms -> "M:SS" (npr. 3:45). 0 / neispravno -> crtica.
+      function fmtTime(ms) {
+        if (!ms || ms < 0) return "&ndash;";
+        var s = Math.round(ms / 1000);
+        var m = Math.floor(s / 60);
+        var r = s % 60;
+        return m + ":" + (r < 10 ? "0" : "") + r;
+      }
+
+      function dash(v) {
+        return v == null ? '<span class="muted">&ndash;</span>' : v;
+      }
+
+      function boot() {
+        google.script.run.withSuccessHandler(onData).withFailureHandler(onErr).getData();
+      }
+      function onErr(e) {
+        var s = document.getElementById("status");
+        s.className = "status error";
+        s.textContent = "Greška pri čitanju Sheeta: " + (e && e.message ? e.message : e);
+      }
+      function onData(data) {
+        try {
+          render(data);
+          document.getElementById("status").className = "status hidden";
+        } catch (err) {
+          onErr(err);
+        }
+      }
+
+      function render(data) {
+        var k = data.kpis;
+        document.getElementById("meta").innerHTML = "prod &middot; osvježeno " + data.generatedAt;
+        if (data.sheetUrl) {
+          document.getElementById("lede").innerHTML =
+            'Uživo iz Google Sheeta <a class="sheet-link" href="' +
+            data.sheetUrl +
+            '" target="_blank" rel="noopener">&laquo;Sudoku metrics&raquo;</a> (' +
+            k.days +
+            " dana podataka). Osvježi stranicu za nove. Metrike se računaju <b>po partiji</b> " +
+            "i samo za <b>prod</b> promet.";
+        }
+        if (data.sheetName) document.getElementById("footTab").textContent = data.sheetName;
+
+        // ---- KPIs ----
+        var kpis = [
+          { label: "Sesija (ukupno)", val: k.sessions, sub: "aktivnih uređaja", accent: true },
+          { label: "Partija započeto", val: k.started, sub: "game_started" },
+          { label: "Riješeno", val: k.solved, sub: "game_solved" },
+          { label: "Completion", val: k.completionPct + "%", sub: "riješeno / započeto" },
+          { label: "Medijan vrijeme", val: fmtTime(k.medianSolveMs), sub: "po riješenoj partiji" },
+          { label: "Otvaranja", val: k.opened, sub: "app_opened" },
+        ];
+        document.getElementById("kpis").innerHTML = kpis
+          .map(function (x) {
+            return (
+              '<div class="kpi' +
+              (x.accent ? " accent" : "") +
+              '"><div class="label">' +
+              x.label +
+              '</div><div class="val mono">' +
+              x.val +
+              '</div><div class="sub">' +
+              x.sub +
+              "</div></div>"
+            );
+          })
+          .join("");
+
+        // ---- Aktivnost po danu ----
+        var daily = data.daily;
+        var vals = [];
+        daily.forEach(function (d) {
+          vals.push(d.s);
+          if (d.st != null) vals.push(d.st);
+        });
+        var maxDaily = Math.max.apply(null, vals.concat([1]));
+        document.getElementById("dailyChart").innerHTML = daily
+          .map(function (d) {
+            var sH = (d.s / maxDaily) * 100;
+            var sBar =
+              '<div class="bar s" style="height:' +
+              sH +
+              '%"><span class="n">' +
+              d.s +
+              "</span></div>";
+            var stBar;
+            if (d.st == null) stBar = '<div class="bar r zero"></div>';
+            else {
+              var stH = (d.st / maxDaily) * 100;
+              stBar =
+                '<div class="bar r" style="height:' +
+                stH +
+                '%"><span class="n">' +
+                d.st +
+                "</span></div>";
+            }
+            return (
+              '<div class="day"><div class="bars">' +
+              sBar +
+              stBar +
+              '</div><div class="dlab">' +
+              d.d +
+              "</div></div>"
+            );
+          })
+          .join("");
+
+        var t = { s: 0, o: 0, st: 0, so: 0, c: 0 };
+        var bodyRows = daily
+          .map(function (d) {
+            t.s += d.s;
+            t.o += d.o || 0;
+            t.st += d.st || 0;
+            t.so += d.so || 0;
+            t.c += d.c || 0;
+            return (
+              "<tr><td>" +
+              d.d +
+              '</td><td class="num">' +
+              d.s +
+              '</td><td class="num">' +
+              dash(d.o) +
+              '</td><td class="num">' +
+              dash(d.st) +
+              '</td><td class="num">' +
+              dash(d.so) +
+              '</td><td class="num">' +
+              dash(d.c) +
+              "</td></tr>"
+            );
+          })
+          .join("");
+        document.getElementById("dailyTable").innerHTML =
+          "<thead><tr><th>Datum</th><th>Sesije</th><th>Otvaranja</th><th>Započeto</th>" +
+          "<th>Riješeno</th><th>Odustalo</th></tr></thead><tbody>" +
+          bodyRows +
+          "</tbody><tfoot><tr><td><b>Ukupno</b></td>" +
+          '<td class="num"><b>' +
+          t.s +
+          '</b></td><td class="num"><b>' +
+          t.o +
+          '</b></td><td class="num"><b>' +
+          t.st +
+          '</b></td><td class="num"><b>' +
+          t.so +
+          '</b></td><td class="num"><b>' +
+          t.c +
+          "</b></td></tr></tfoot>";
+
+        // ---- Obujam partija (funnel) ----
+        var f = data.funnel;
+        var fMax = Math.max(f.opened, f.started, f.solved, 1);
+        var frows = [
+          { lab: "Otvaranja", val: f.opened, cls: "a" },
+          { lab: "Započeto", val: f.started, cls: "a" },
+          { lab: "Riješeno", val: f.solved, cls: "b" },
+        ];
+        document.getElementById("funnel").innerHTML = frows
+          .map(function (r) {
+            var w = (r.val / fMax) * 100;
+            return (
+              '<div class="frow"><span class="flab">' +
+              r.lab +
+              '</span><div class="ftrack"><div class="ffill ' +
+              r.cls +
+              '" style="width:' +
+              w +
+              '%"></div></div><span class="fval">' +
+              r.val +
+              "</span></div>"
+            );
+          })
+          .join("");
+        document.getElementById("rateNote").innerHTML =
+          "Completion: <b>" +
+          k.completionPct +
+          "%</b>&nbsp; započetih partija je riješeno (" +
+          f.solved +
+          " / " +
+          f.started +
+          ").";
+
+        // ---- Po težini ----
+        var diff = data.difficulty;
+        var diffLabels = { normal: "Normal", hard: "Hard" };
+        if (!diff.length) {
+          document.getElementById("diffTable").innerHTML =
+            '<tbody><tr><td class="muted">Još nema podataka.</td></tr></tbody>';
+        } else {
+          var diffBody = diff
+            .map(function (d) {
+              return (
+                "<tr><td>" +
+                (diffLabels[d.key] || d.key) +
+                '</td><td class="num">' +
+                d.started +
+                '</td><td class="num">' +
+                d.solved +
+                '</td><td class="num">' +
+                (d.completionPct == null ? dash(null) : d.completionPct + "%") +
+                '</td><td class="num">' +
+                fmtTime(d.medianMs) +
+                '</td><td class="num">' +
+                d.medianHints +
+                "</td></tr>"
+              );
+            })
+            .join("");
+          document.getElementById("diffTable").innerHTML =
+            "<thead><tr><th>Težina</th><th>Započeto</th><th>Riješeno</th><th>Compl.</th>" +
+            "<th>Med. vrijeme</th><th>Med. hints</th></tr></thead><tbody>" +
+            diffBody +
+            "</tbody>";
+        }
+
+        // ---- Po varijanti ----
+        var vs = data.variants;
+        var vMax = Math.max.apply(
+          null,
+          vs
+            .map(function (v) {
+              return v.started;
+            })
+            .concat([1])
+        );
+        if (!vs.length) {
+          document.getElementById("variants").innerHTML = '<p class="desc">Još nema podataka.</p>';
+        } else {
+          document.getElementById("variants").innerHTML = vs
+            .map(function (v) {
+              var w = (v.started / vMax) * 100;
+              var solvedW = v.started ? (v.solved / v.started) * w : 0;
+              var comp = v.completionPct == null ? "&ndash;" : v.completionPct + "%";
+              var warnCompl = v.completionPct != null && v.completionPct < 40 ? " warn" : "";
+              return (
+                '<div class="vrow"><div class="vhead"><span class="vname">' +
+                variantName(v.key) +
+                '</span><span class="vstart">' +
+                v.started +
+                " započeto</span></div>" +
+                '<div class="vtrack"><div class="vfill" style="width:' +
+                w +
+                '%"></div><div class="vsolved" style="width:' +
+                solvedW +
+                '%"></div></div>' +
+                '<div class="vmeta"><span class="' +
+                warnCompl.trim() +
+                '">Completion <b>' +
+                comp +
+                "</b></span><span>Med. vrijeme <b>" +
+                fmtTime(v.medianMs) +
+                "</b></span><span>Med. hints <b>" +
+                v.medianHints +
+                "</b></span></div></div>"
+              );
+            })
+            .join("");
+        }
+      }
+
+      if (document.readyState !== "loading") boot();
+      else window.addEventListener("DOMContentLoaded", boot);
+    </script>
+  </body>
+</html>

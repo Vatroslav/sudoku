@@ -1,11 +1,28 @@
 # Sudoku metrike (game_started / game_solved)
 
-Anoniman event tracking iz igre → Google Apps Script → Google Sheet. Bez PII
-(samo anoniman per-browser id, verzija, težina, varijante). Klijent: [`../metrics.js`](../metrics.js).
+Anoniman event tracking iz igre → Google Apps Script → Google Sheet, plus live
+dashboard nad tim podacima. Bez PII (samo anoniman per-browser id, verzija, težina,
+varijante). Klijent: [`../metrics.js`](../metrics.js).
 
 Cilj: znati koliko se partija pokrene, kakvih (classic / varijanta / kombinacija) i
 po kojoj težini, te koliko ih se riješi. Bez toga launch na itch nema signal koristi
 li itko igru.
+
+Isti obrazac kao **Left-right onwards** (`~/github/left-right-onwards-web/metrics`) -
+postupak je opisan u `~/github/game-development/telemetrija.md`.
+
+## Fileovi
+
+| file                               | uloga                                                      |
+| ---------------------------------- | ---------------------------------------------------------- |
+| [`apps-script.gs`](apps-script.gs) | collector: `doPost` upisuje event kao red u Sheet          |
+| [`dashboard.gs`](dashboard.gs)     | dashboard: `doGet` + `getData` (agregati, filter `my ids`) |
+| [`Index.html`](Index.html)         | dashboard frontend (grafovi)                               |
+
+Collector i dashboard dijele **isti Apps Script projekt**: `dashboard.gs` koristi
+`SHEET_ID` / `SHEET_NAME` iz `apps-script.gs` i **ne smije ih redeklarirati**
+(`const` duplikat ruši cijeli projekt). U editoru se HTML file mora zvati `Index`
+(bez ekstenzije) - `doGet` ga traži po tom imenu.
 
 ## Postavljanje (jednokratno)
 
@@ -20,6 +37,55 @@ li itko igru.
    Dok je prazno, tracking je isključen (no-op) i igra radi normalno.
 
 Sheet je zaseban od LRO-ovog (druge kolone, druga igra) - ne dijeliti endpoint.
+
+## Dashboard (jednokratno)
+
+Collector već upisuje evente; dashboard ih samo čita i crta. Kod je u repou
+(`dashboard.gs` + `Index.html`), postavlja se u **isti** Apps Script projekt kao
+collector, ali se deploya kao **zaseban** Web app.
+
+1. **Kod**: u istom Apps Script projektu New file → Script, nazovi `dashboard`,
+   zalijepi [`dashboard.gs`](dashboard.gs). Zatim New file → HTML, nazovi `Index`
+   (točno tako, bez `.html`), zalijepi [`Index.html`](Index.html). Spremi.
+   - `dashboard.gs` **ne** deklarira `SHEET_ID` / `SHEET_NAME` - nasljeđuje ih iz
+     `apps-script.gs` (Code.gs). Ako collector file ima placeholder umjesto pravog
+     `SHEET_ID`, upiši pravi ID tamo (ne u dashboard).
+2. **`my ids` tab** (preporučeno): u Sheetu dodaj tab `my ids`, u kolonu A od reda 2
+   zalijepi vlastite `session` id-eve (iz `sudoku_sid` u localStorageu, ili iz
+   `session` kolone Sheeta za svoje partije). `getData` ih dinamički preskače, pa
+   vlastito testiranje ne ulazi u brojke. Bez taba dashboard i dalje radi (filtrira
+   samo `env=prod`).
+3. **Deploy**: Deploy → New deployment → **Web app**, Execute as **Me**, Who has
+   access **Anyone**. Taj `.../exec` URL je dashboard - radi u svakom browseru, bez
+   logina. To je **novi** deployment, ne diraj collectorov (njegov URL je u igri).
+
+### push ≠ live (kad mijenjaš dashboard)
+
+Web app servira **zamrznutu deployanu verziju**, ne zadnji spremljeni kod. Nakon
+izmjene `dashboard.gs` / `Index.html`: Deploy → Manage deployments → uredi dashboard
+deployment → **New version** (ili `@HEAD` deployment za brzu probu). Sam Save ne
+osvježava javni URL.
+
+### Dva pravila (ista kao LRO)
+
+- **`getData` vraća samo agregate.** URL je javan (Access: Anyone) - tko ga ima,
+  vidi sve što `getData` vrati. Brojevi, postoci, distribucije: da. Sirovi session
+  id-evi: nikad.
+- **Vlastite partije se filtriraju** - `env=prod` (miče dev) + tab `my ids`
+  (miče vlastito testiranje na produ). Bez toga vlastito igranje izgleda kao promet.
+
+### Što crta
+
+- **KPI** - sesije, započete/riješene partije, completion %, medijan vremena, otvaranja.
+- **Aktivnost po danu** - sesije i započete partije, + tablica (otvaranja, riješeno,
+  odustalo). Dani prije uvođenja pojedinog eventa su crtica, ne nula (nije se mjerilo).
+- **Obujam partija** - otvaranje → započeto → riješeno, s completion stopom.
+- **Po težini** - Normal vs Hard: koliko se započne/riješi, medijan vremena i hintova.
+- **Po varijanti** - popularnost (širina = započeto) i dovršenost (puna traka =
+  riješeno); niska completion je crvena (varijanta pretežak/frustrira).
+
+Sve **po partiji, ne po sesiji** (`gameId` veže start↔solve): session je per-browser
+i preživi restart, pa jedna sesija drži više partija - miješanje daje krive brojke.
 
 ## Okruženja (dev vs prod)
 
