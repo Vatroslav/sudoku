@@ -82,7 +82,10 @@ clasp create-deployment -d "opis"    # novi deployment (npr. za dashboard)
 - **Obujam partija** - otvaranje → započeto → riješeno, s completion stopom.
 - **Po težini** - Normal vs Hard: koliko se započne/riješi, medijan vremena i hintova.
 - **Po varijanti** - popularnost (širina = započeto) i dovršenost (puna traka =
-  riješeno); niska completion je crvena (varijanta pretežak/frustrira).
+  riješeno) po kombinaciji; niska completion je crvena (varijanta pretežak/frustrira).
+- **Pokretanja po varijanti (pojedinačno)** - bubble chart: veličina mjehura ∝ broj
+  partija koje uključuju svaku pojedinu varijantu (Classic = bez varijante). Kombinacija
+  se broji u svaku svoju varijantu, pa se mjehurići preklapaju (presence, ne zbroj).
 
 Sve **po partiji, ne po sesiji** (`gameId` veže start↔solve): session je per-browser
 i preživi restart, pa jedna sesija drži više partija - miješanje daje krive brojke.
@@ -118,18 +121,23 @@ brojke. Dev evente ne brišemo, korisni su za provjeru da tracking uopće radi.
 
 ## Eventi
 
-| event            | payload                                                                          | kada                              |
-| ---------------- | -------------------------------------------------------------------------------- | --------------------------------- |
-| `app_opened`     | `{ resumed }` (+ `gameId/difficulty/variants/solved` ako je nastavljena partija) | svako otvaranje igre              |
-| `game_started`   | `{ gameId, difficulty, variants }`                                               | ploča generirana i prikazana      |
-| `game_solved`    | `{ gameId, difficulty, variants, playMs, moves, hints }`                         | zadnja ćelija točna (win overlay) |
-| `game_cancelled` | `{ difficulty, variants, waitedMs }`                                             | Cancel na generiranju             |
+| event            | payload                                                                          | kada                                           |
+| ---------------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `app_opened`     | `{ resumed }` (+ `gameId/difficulty/variants/solved` ako je nastavljena partija) | svako otvaranje igre                           |
+| `game_started`   | `{ gameId, difficulty, variants }`                                               | namjerni start odmah; auto-start na prvi potez |
+| `game_solved`    | `{ gameId, difficulty, variants, playMs, moves, hints }`                         | zadnja ćelija točna (win overlay)              |
+| `game_cancelled` | `{ difficulty, variants, waitedMs }`                                             | Cancel na generiranju                          |
 
 - `app_opened` je jedini trag povratnika: tko nastavi spremljenu partiju ne generira
   novu ploču, pa bez ovoga ne proizvede nijedan event. Bez njega su sesije i povrati
   nevidljivi, a nema ni nazivnika za ostale brojke.
 - `game_started` se šalje tek kad ploča stvarno postoji - generiranje koje korisnik
   prekine **Cancelom nije partija** i ne broji se (inače bi razvodnilo completion rate).
+- **Auto-start se broji tek na prvi potez.** Igra se na svjež posjet automatski
+  pokrene na Classic Normal - to nije korisnikov izbor, pa `game_started` za tu
+  partiju čeka prvi upisani broj. Bez toga bi svaki posjet napuhao Classic Normal i
+  pokvario mu completion. Namjerni start (izbor u meniju) šalje se odmah. Posljedica:
+  `otvaranja − započeto` u lijevku = koliko ljudi upali igru pa ne odigra ništa.
 - `game_cancelled` mjeri odustajanje od spore HARD generacije varijanti (poznati
   tehnički dug): `waitedMs` je koliko je čekao prije nego je prekinuo.
 - `playMs` je **igrano** vrijeme - sat teče samo dok je kartica vidljiva, pa partija

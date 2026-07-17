@@ -40,7 +40,8 @@ function getData() {
   var firstDay = {}; // event -> najraniji dan (honest null prije uvođenja eventa)
   var solveMsAll = []; // playMs riješenih (za medijan vremena)
   var byDiff = {}; // 'normal'/'hard' -> { started, solved, ms:[], hints:[] }
-  var byVar = {}; // variantKey -> { started, solved, ms:[], hints:[] }
+  var byVar = {}; // variantKey (kombinacija) -> { started, solved, ms:[], hints:[] }
+  var singles = {}; // 'classic' + svaka pojedinacna varijanta -> broj partija koje je ukljucuju
 
   var bucket = function (map, k) {
     if (!map[k]) map[k] = { started: 0, solved: 0, ms: [], hints: [] };
@@ -89,6 +90,15 @@ function getData() {
     if (event === "game_started") {
       if (difficulty) bucket(byDiff, difficulty).started++;
       bucket(byVar, vkey).started++;
+      // Pojedinačne varijante: kombinacija (x+hyper) se broji u SVAKU svoju varijantu,
+      // classic = bez varijante. Preklapaju se namjerno (presence count, ne zbroj).
+      if (!variants) singles.classic = (singles.classic || 0) + 1;
+      else
+        String(variants)
+          .split("+")
+          .forEach(function (code) {
+            if (code) singles[code] = (singles[code] || 0) + 1;
+          });
     } else if (event === "game_solved") {
       pushNum(solveMsAll, playMs);
       if (difficulty) {
@@ -139,6 +149,14 @@ function getData() {
       return b.started - a.started || b.solved - a.solved;
     });
 
+  var singlesArr = Object.keys(singles)
+    .map(function (k) {
+      return { key: k, started: singles[k] };
+    })
+    .sort(function (a, b) {
+      return b.started - a.started;
+    });
+
   return {
     generatedAt: Utilities.formatDate(new Date(), tz, "dd.MM.yyyy HH:mm"),
     sheetUrl: ss.getUrl(),
@@ -157,6 +175,7 @@ function getData() {
     funnel: { opened: opened, started: started, solved: solved },
     difficulty: difficulty,
     variants: variants,
+    singles: singlesArr,
   };
 }
 
@@ -199,5 +218,6 @@ function emptyPayload_(ss, tz) {
     funnel: { opened: 0, started: 0, solved: 0 },
     difficulty: [],
     variants: [],
+    singles: [],
   };
 }
