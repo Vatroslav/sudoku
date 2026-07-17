@@ -3,9 +3,10 @@
 // globale iz collectora (const duplikat ruši cijeli projekt). Deploy kao ZASEBAN Web
 // app (Execute as: Me, Access: Anyone) -> taj .../exec URL je dashboard.
 //
-// Dva pravila (ista kao LRO):
+// Pravila:
 //  - getData vraća SAMO agregate. URL je javan; sirovi session id-evi nikad van.
-//  - Vlastite partije se filtriraju: env='prod' + tab "my ids" (dinamički).
+//  - Filtar je samo env='prod' (miče dev/localhost). Vlastite partije se NE
+//    filtriraju - Vatra je ovdje standardni igrač, ne testni šum (za razliku od LRO).
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile("Index")
@@ -19,18 +20,6 @@ function getData() {
   var sh = ss.getSheetByName(SHEET_NAME);
   var last = sh ? sh.getLastRow() : 0;
   if (!sh || last < 2) return emptyPayload_(ss, tz);
-
-  // Isključi vlastite partije - tab "my ids", kolona A od reda 2. Dinamički
-  // (sinkano sa Sheetom): nova vlastita sesija = jedan redak, bez diranja koda.
-  var excl = {};
-  var midSh = ss.getSheetByName("my ids");
-  if (midSh && midSh.getLastRow() >= 2) {
-    var idVals = midSh.getRange(2, 1, midSh.getLastRow() - 1, 1).getValues();
-    for (var e = 0; e < idVals.length; e++) {
-      var id = String(idVals[e][0]).trim();
-      if (id) excl[id] = 1;
-    }
-  }
 
   // A:O = ts, session, version, env, event, game_id, difficulty, variants,
   //       payload, client_ts, play_ms, moves, hints, waited_ms, resumed
@@ -72,7 +61,6 @@ function getData() {
     var hints = rows[i][12];
 
     if (env !== "prod") continue;
-    if (excl[String(session).trim()]) continue;
     if (!(ts instanceof Date)) continue;
 
     var key = dayKey(ts);

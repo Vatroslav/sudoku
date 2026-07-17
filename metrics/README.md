@@ -14,12 +14,12 @@ verzioniran ovdje i sinkan **claspom** - ne lijepiti ručno u editor.
 
 ## Fileovi (`apps-script/`)
 
-| file                                            | uloga                                                       |
-| ----------------------------------------------- | ----------------------------------------------------------- |
-| [`Code.js`](apps-script/Code.js)                | collector: `doPost` upisuje event kao red u Sheet           |
-| [`dashboard.js`](apps-script/dashboard.js)      | dashboard: `doGet` + `getData` (agregati, filter `my ids`)  |
-| [`Index.html`](apps-script/Index.html)          | dashboard frontend (grafovi)                                |
-| [`appsscript.json`](apps-script/appsscript.json)| manifest (webapp: execute as me, access anyone)             |
+| file                                             | uloga                                                      |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| [`Code.js`](apps-script/Code.js)                 | collector: `doPost` upisuje event kao red u Sheet          |
+| [`dashboard.js`](apps-script/dashboard.js)       | dashboard: `doGet` + `getData` (agregati, filter `my ids`) |
+| [`Index.html`](apps-script/Index.html)           | dashboard frontend (grafovi)                               |
+| [`appsscript.json`](apps-script/appsscript.json) | manifest (webapp: execute as me, access anyone)            |
 
 Lokalno su `.js`, gore su `.gs` - clasp konvertira u oba smjera. HTML file se u
 editoru zove `Index` (bez ekstenzije), `doGet` ga traži po tom imenu.
@@ -64,20 +64,15 @@ clasp create-deployment -d "opis"    # novi deployment (npr. za dashboard)
   Izmjene dashboarda traže `clasp push` **i** `clasp update-deployment` tog id-a.
 - **@HEAD** - dev deployment, uvijek najnoviji kod. Dobar za probu prije redeploya.
 
-## `my ids` tab (filtar vlastitih partija)
-
-U Sheetu tab `my ids`, kolona A od reda 2 = vlastiti `session` id-evi (iz
-`sudoku_sid` u localStorageu, ili iz `session` kolone Sheeta za svoje partije).
-`getData` ih dinamički preskače, pa vlastito testiranje ne ulazi u brojke. Bez taba
-dashboard i dalje radi (filtrira samo `env=prod`).
-
-## Dva pravila (ista kao LRO)
+## Pravila
 
 - **`getData` vraća samo agregate.** URL je javan (Access: Anyone) - tko ga ima,
   vidi sve što `getData` vrati. Brojevi, postoci, distribucije: da. Sirovi session
   id-evi: nikad.
-- **Vlastite partije se filtriraju** - `env=prod` (miče dev) + tab `my ids`
-  (miče vlastito testiranje na produ). Bez toga vlastito igranje izgleda kao promet.
+- **Filtar je samo `env=prod`** (miče dev/localhost). Za razliku od LRO-a, vlastite
+  partije se **ne** filtriraju - Vatra je i ovdje standardni igrač (stvarno igranje,
+  ne testni šum), pa je njegov promet legitiman. Ako ikad zatreba maknuti spam
+  sesiju, `my ids` tab u LRO getData-i je referenca.
 
 ## Što dashboard crta
 
