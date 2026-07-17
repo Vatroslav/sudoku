@@ -361,6 +361,46 @@ main {
 .cell .thermo-seg.diag {
   width: calc(70.7% + 3px);
 }
+/* Dijagonalni kut: ćelija sa strane crta komad tube koji bi inače pojela (vidi
+   komentar uz thermoCorners u app.js). Obrez na vlastitu ćeliju je ono što komad
+   drži podalje od susjedovih bilješki - zato zaseban omotač s overflow:hidden, a ne
+   pilula koja viri iz ćelije kao .thermo-seg. */
+.cell .thermo-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+.cell .thermo-clip > span {
+  position: absolute;
+  /* Dulja nego što rupa traži: višak ionako padne izvan obreza, a ravni dio pilule
+     (bez zaobljenog kraja) tako pokrije rupu punom debljinom. Debljina = .thermo-seg. */
+  width: 60%;
+  height: 26%;
+  border-radius: 999px;
+  background: var(--thermo);
+  /* left/top dolje ciljaju središte križa razmaka (kut ćelije ± pola razmaka),
+     translate na njega dovede središte pilule, pa je rotacija poravna s tubom. */
+  transform: translate(-50%, -50%) rotate(var(--a));
+}
+.cell .thermo-clip.tl > span {
+  left: calc(var(--gx) / -2);
+  top: calc(var(--gy) / -2);
+}
+.cell .thermo-clip.tr > span {
+  left: calc(100% + var(--gx) / 2);
+  top: calc(var(--gy) / -2);
+}
+.cell .thermo-clip.bl > span {
+  left: calc(var(--gx) / -2);
+  top: calc(100% + var(--gy) / 2);
+}
+.cell .thermo-clip.br > span {
+  left: calc(100% + var(--gx) / 2);
+  top: calc(100% + var(--gy) / 2);
+}
+
 /* Kuglica = dno tube. Osjetno šira od tube da se čita na prvi pogled tko je bulb.
    Centriranje kao parity ::before (inset:0 + margin:auto). */
 .cell .thermo-bulb {

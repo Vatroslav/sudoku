@@ -1073,6 +1073,56 @@
       for (const path of state.thermos)
         for (let p = 0; p < path.length; p++) thermoAt[path[p]] = { path, pos: p };
 
+    // Thermo: krpanje dijagonalnog kuta. Dvije dijagonalne ćelije dodiruju se samo u
+    // TOČKI, pa polovice segmenata ne mogu same iscrtati tubu preko kuta: tik uz kut
+    // bokovi pilule prelaze u dvije ćelije SA STRANE, a barem jedna od njih crta se
+    // kasnije pa taj dio pojede svojom neprozirnom pozadinom - tuba se na kutu vidno
+    // stanji (izmjereno 11px -> 7px).
+    //
+    // Unutar VLASTITE ćelije segment nitko ne pojede (kutije ćelija se ne preklapaju),
+    // pa krpa treba samo dvjema ćelijama sa strane - onima koje same nisu na tubi.
+    // Svaka nacrta svoj komad tube obrezan na sebe (.thermo-clip): obrez je ono što ga
+    // drži izvan susjedovih bilješki, a ostaje ispod vlastite znamenke.
+    //
+    // Sidro komada je središte križa razmaka (kut + pola razmaka), a NE kut same
+    // ćelije: kutovi četiriju ćelija razmaknuti su za razmak (3px na granici bloka),
+    // pa bi pilula usidrena na vlastiti kut legla pokraj osi tube i tuba bi se na kutu
+    // podebljala umjesto stanjila.
+    const thermoCorners = new Array(81).fill(null);
+    const addCorner = (i, corner, ang, gx, gy) => {
+      const list = thermoCorners[i] || (thermoCorners[i] = []);
+      if (!list.some((p) => p.corner === corner && p.ang === ang))
+        list.push({ corner, ang, gx, gy });
+    };
+    if (Array.isArray(state.thermos))
+      for (const path of state.thermos)
+        for (let p = 1; p < path.length; p++) {
+          const a = path[p - 1];
+          const b = path[p];
+          const dr = Math.floor(b / 9) - Math.floor(a / 9);
+          const dc = (b % 9) - (a % 9);
+          if (!dr || !dc) continue; // samo dijagonalni korak dodiruje kut
+          // q = gornja-lijeva ćelija kvadrata 2×2 oko kuta. Razmake čitamo iz istog
+          // pravila koje ćeliji q daje .br/.bb (2px linija + 1px razmak = 3px).
+          const q = Math.min(Math.floor(a / 9), Math.floor(b / 9)) * 9 + Math.min(a % 9, b % 9);
+          const gx = (jigsawMode ? state.regions[q] !== state.regions[q + 1] : (q % 9) % 3 === 2)
+            ? 3
+            : 1;
+          const gy = (
+            jigsawMode ? state.regions[q] !== state.regions[q + 9] : Math.floor(q / 9) % 3 === 2
+          )
+            ? 3
+            : 1;
+          // Krpaju ćelije s DRUGE dijagonale kvadrata - one kroz koje tuba ne prolazi.
+          if (dr === dc) {
+            addCorner(q + 1, "bl", 45, gx, gy);
+            addCorner(q + 9, "tr", 45, gx, gy);
+          } else {
+            addCorner(q, "br", -45, gx, gy);
+            addCorner(q + 10, "tl", -45, gx, gy);
+          }
+        }
+
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
     const selSet = new Set(selList);
@@ -1201,6 +1251,20 @@
           cell.appendChild(seg);
         }
       }
+
+      // Thermo: komad tube preko dijagonalnog kuta, obrezan na ovu ćeliju (vidi
+      // komentar uz thermoCorners). Crta ga ćelija kroz koju tuba ne prolazi.
+      if (thermoCorners[i])
+        for (const { corner, ang, gx, gy } of thermoCorners[i]) {
+          const clip = document.createElement("span");
+          clip.className = "thermo-clip " + corner;
+          const pill = document.createElement("span");
+          pill.style.setProperty("--a", `${ang}deg`);
+          pill.style.setProperty("--gx", `${gx}px`);
+          pill.style.setProperty("--gy", `${gy}px`);
+          clip.appendChild(pill);
+          cell.appendChild(clip);
+        }
 
       // Kropki/XV: oznake na bridovima. Vežemo ih uz KASNIJE iscrtanu ćeliju (ovu, i) na
       // lijevom/gornjem bridu prema ranijem susjedu (i-1 / i-9) - tako oznaka leži iznad
