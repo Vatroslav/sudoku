@@ -293,6 +293,40 @@ uniformni - `.br`/`.bb` nose 2px marginu).
 iznad ranije iscrtanih susjeda (DOM red), pa bi dulji segment prekrio susjedovu
 znamenku. Na 3px dohvati samo njegov rub, a znamenka je centrirana.
 
+#### Dijagonalni prijelaz (v1.30.1)
+
+Vatrina zamjerka: "linije imaju prekid kad prelaze u druge ćelije dijagonalno".
+Polovice segmenata rade samo za ORTOGONALNI korak, gdje susjedi dijele cijeli brid.
+Dijagonalne ćelije dodiruju se **samo u točki**, pa tik uz kut bokovi pilule nužno
+prelaze u dvije ćelije SA STRANE - a barem jedna od njih crta se kasnije i pojede ih
+svojom neprozirnom pozadinom. Izmjereno hit-testom po osi tube: **11px → 7px** (uštip
+36%). Ortogonalni korak drži 11px i preko debele granice bloka, pa problem nije u
+duljini ni u razmacima.
+
+Krpaju **dvije ćelije sa strane** - one s druge dijagonale kvadrata 2×2, kroz koje
+tuba ne prolazi. Svaka nacrta svoj komad tube obrezan na vlastitu ćeliju
+(`span.thermo-clip`, `overflow: hidden`). Dvije stvari koje nisu očite:
+
+1. **A i B ne trebaju krpu.** Kutije ćelija se ne preklapaju, pa segment unutar
+   VLASTITE ćelije nitko ne pojede - jedu se samo bokovi koji su izašli van.
+2. **Obrez nije kozmetika nego uvjet.** Neobrezana krpa dosegne ~9.6px od kuta i
+   prekrije susjedovu kutnu bilješku (znamenka je centrirana i ostaje čista, ali
+   bilješke idu u 3×3 rešetku po ćeliji). Obrezana ne može izaći iz svoje ćelije, a
+   `z-index: -1` je drži ispod vlastite znamenke i bilješki.
+
+**Sidro je središte križa razmaka (kut ± pola razmaka), ne kut same ćelije.** Kutovi
+četiriju ćelija razmaknuti su za razmak (3px na granici bloka), pa pilula usidrena na
+vlastiti kut legne pokraj osi tube - prvi pokušaj je uštip zamijenio **podebljanjem na
+15px**, jednako vidljivim. Razmak (`--gx`/`--gy`, 1px ili 3px) čita se iz istog pravila
+koje ćeliji daje `.br`/`.bb`, pa vrijedi i za jigsaw granice.
+
+Mjereno nakon fixa (svih 5 dijagonalnih koraka): **11.25-12.5px** uz ortogonalnu
+kontrolu 10.75-11px. Ostatak odstupanja (~1px) je postojeći dug per-ćelija pristupa -
+`.br`/`.bb` margine čine ćelije ne-kvadratnima pa polovice segmenata ni na ortogonalnom
+koraku nisu savršeno kolinearne. Ortogonalni koraci mjere identično s krpama i bez njih.
+
+Palindrome nasljeđuje ovu mašineriju (ista linija bez kuglice) - i uštip i lijek.
+
 ## Poznato / tehnički dug
 
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
