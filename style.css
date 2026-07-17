@@ -755,6 +755,27 @@ main {
   text-align: left;
   margin: 0 0 10px;
 }
+/* Random prečac: nasumično odabere 1 ili 2 varijante i označi ih u listi ispod.
+   Dashed accent rub ga odvaja od solid variant-row-ova (prečac, ne toggle). */
+.random-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--board-bg);
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  padding: 11px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.random-btn:active {
+  background: var(--cell-sel);
+}
 .menu-variant {
   display: flex;
   flex-direction: column;

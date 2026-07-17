@@ -1370,6 +1370,18 @@
       hint.classList.toggle("warn", menuVariants.length > 1);
     }
   }
+  // Random prečac: nasumično odabere 1 ili 2 varijante (nikad Classic - poanta je
+  // dati varijantu). 50/50 jedna ili kombinacija dviju; unutar MAX_VARIANTS capa.
+  // Ne pokreće igru ni ne dira težinu - samo popuni selekciju, korisnik bira Normal/Hard.
+  function randomVariants() {
+    const pool = REGION_VARIANTS.slice();
+    const count = Math.min(Math.random() < 0.5 ? 1 : 2, MAX_VARIANTS);
+    const picked = [];
+    for (let k = 0; k < count && pool.length; k++) {
+      picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+    }
+    return normVariants(picked);
+  }
   function openMenu() {
     if (state && state.variants) menuVariants = normVariants(state.variants);
     syncVariantButtons();
@@ -1383,6 +1395,10 @@
   function bind() {
     document.getElementById("new-btn").addEventListener("click", openMenu);
     document.getElementById("menu-cancel").addEventListener("click", closeMenu);
+    document.getElementById("menu-random").addEventListener("click", () => {
+      menuVariants = randomVariants();
+      syncVariantButtons();
+    });
     document.getElementById("undo-btn").addEventListener("click", undo);
     document.getElementById("erase-btn").addEventListener("click", erase);
     document.getElementById("notes-btn").addEventListener("click", toggleNotes);
