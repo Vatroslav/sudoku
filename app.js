@@ -173,7 +173,7 @@
     kingPeers.push(list);
   }
 
-  // Jigsaw: geometrija regija je per-puzzle podatak (state.regions, 81-polje
+  // Jigsaw: geometrija regija je per-puzzle podatak (state.clues.regions, 81-polje
   // id-eva 0-8). Validacija oblika (za odbacivanje korumpiranog spremljenog savea).
   function validRegions(regions) {
     if (!Array.isArray(regions) || regions.length !== 81) return false;
@@ -184,13 +184,13 @@
     }
     return counts.every((c) => c === 9);
   }
-  // Even/Odd: parity maska je per-puzzle podatak (state.parity, 81-polje 0/1/2).
+  // Even/Odd: parity maska je per-puzzle podatak (state.clues.parity, 81-polje 0/1/2).
   function validParity(parity) {
     if (!Array.isArray(parity) || parity.length !== 81) return false;
     for (const p of parity) if (p !== 0 && p !== 1 && p !== 2) return false;
     return true;
   }
-  // Kropki/XV: brid-oznake su per-puzzle podatak (state.edges = { h, v }, 81-polja
+  // Kropki/XV: brid-oznake su per-puzzle podatak (state.clues.edges = { h, v }, 81-polja
   // 0 nema / 1 bijela točka / 2 crna točka / 3 V (zbroj 5) / 4 X (zbroj 10)).
   function validEdges(edges) {
     if (!edges || !Array.isArray(edges.h) || !Array.isArray(edges.v)) return false;
@@ -201,7 +201,7 @@
     }
     return true;
   }
-  // Thermo: tube su per-puzzle podatak (state.thermos = polje putova ćelija, bulb
+  // Thermo: tube su per-puzzle podatak (state.clues.thermos = polje putova ćelija, bulb
   // prvi, susjedi po potezu kralja). Preklop se odbija - render crta najviše jedan
   // segment po smjeru i računa s jednim termometrom po ćeliji.
   function validThermos(thermos) {
@@ -221,10 +221,10 @@
     }
     return true;
   }
-  // Regija ćelije: jigsaw -> state.regions[idx], inače klasični 3×3 kvadrat.
+  // Regija ćelije: jigsaw -> state.clues.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
-    if (state.variants.includes("jigsaw") && Array.isArray(state.regions))
-      return state.regions[idx];
+    if (state.variants.includes("jigsaw") && Array.isArray(state.clues.regions))
+      return state.clues.regions[idx];
     return Math.floor(Math.floor(idx / 9) / 3) * 3 + Math.floor((idx % 9) / 3);
   }
 
@@ -364,17 +364,7 @@
   // odustao i koliko je čekao. Čisti se čim ploča sjedne.
   let pendingGen = null;
 
-  function buildState(
-    difficulty,
-    variants,
-    puzzle,
-    solution,
-    techniques,
-    regions,
-    parity,
-    edges,
-    thermos
-  ) {
+  function buildState(difficulty, variants, puzzle, solution, techniques, clues) {
     state = {
       puzzle,
       solution,
@@ -383,10 +373,14 @@
       colors: Array.from({ length: 81 }, () => []),
       difficulty,
       variants,
-      regions: regions || null,
-      parity: parity || null,
-      edges: edges || null,
-      thermos: thermos || null,
+      // Sve per-puzzle oznake u jednom objektu - isti oblik koji vraća Sudoku.generate
+      // i koji prima Solver, pa ide ravno u localStorage bez prepakiravanja.
+      clues: {
+        regions: (clues && clues.regions) || null,
+        parity: (clues && clues.parity) || null,
+        edges: (clues && clues.edges) || null,
+        thermos: (clues && clues.thermos) || null,
+      },
       techniques: techniques || [],
       gameId: newGameId(),
       playMs: 0,
@@ -415,21 +409,8 @@
   function generateSync(difficulty, variants) {
     // Odgoda da se spinner stigne iscrtati prije sinkronog generiranja.
     setTimeout(() => {
-      const { puzzle, solution, techniques, regions, parity, edges, thermos } = Sudoku.generate(
-        difficulty,
-        variants
-      );
-      buildState(
-        difficulty,
-        variants,
-        puzzle,
-        solution,
-        techniques,
-        regions,
-        parity,
-        edges,
-        thermos
-      );
+      const { puzzle, solution, techniques, clues } = Sudoku.generate(difficulty, variants);
+      buildState(difficulty, variants, puzzle, solution, techniques, clues);
     }, 30);
   }
 
@@ -447,18 +428,8 @@
         genWorker.onmessage = (e) => {
           genWorker.terminate();
           genWorker = null;
-          const { puzzle, solution, techniques, regions, parity, edges, thermos } = e.data;
-          buildState(
-            difficulty,
-            variants,
-            puzzle,
-            solution,
-            techniques,
-            regions,
-            parity,
-            edges,
-            thermos
-          );
+          const { puzzle, solution, techniques, clues } = e.data;
+          buildState(difficulty, variants, puzzle, solution, techniques, clues);
         };
         genWorker.onerror = () => {
           // Worker pao (npr. blokiran importScripts) - padni na sinkrono.
@@ -528,37 +499,45 @@
       // Migracija: stare spremljene igre imaju string `variant`, nove `variants`.
       state.variants = normVariants(state.variants !== undefined ? state.variants : state.variant);
       delete state.variant;
+      // Migracija: partije spremljene prije clues objekta nose oznake na vrhu statea
+      // (a Kropki prije XV-a još i pod imenom `dots` - `edges` je isti oblik s
+      // proširenim tipovima pa se preuzima kakav jest).
+      if (!state.clues)
+        state.clues = {
+          regions: state.regions,
+          parity: state.parity,
+          edges: state.edges || state.dots,
+          thermos: state.thermos,
+        };
+      for (const k of ["regions", "parity", "edges", "thermos", "dots"]) delete state[k];
+      const clues = state.clues;
       // Jigsaw: regions mora biti valjan (81, id-evi 0-8, svaki 9x). Korumpiran
       // save s jigsaw variants odbaci (solver bi tiho sudio krivo). Non-jigsaw = null.
       if (state.variants.includes("jigsaw")) {
-        if (!validRegions(state.regions)) return false;
+        if (!validRegions(clues.regions)) return false;
       } else {
-        state.regions = null;
+        clues.regions = null;
       }
       // Even/Odd: parity maska mora biti valjana (81-polje 0/1/2). Isto kao jigsaw -
       // korumpiran save odbaci; non-evenodd = null.
       if (state.variants.includes("evenodd")) {
-        if (!validParity(state.parity)) return false;
+        if (!validParity(clues.parity)) return false;
       } else {
-        state.parity = null;
+        clues.parity = null;
       }
-      // Migracija: Kropki partije spremljene prije XV-a nose `dots` (tipovi 0-2);
-      // `edges` je isti oblik s proširenim tipovima pa se preuzima kakav jest.
-      if (state.dots && !state.edges) state.edges = state.dots;
-      delete state.dots;
       // Kropki/XV: brid-oznake moraju biti valjane ({ h, v } 81-polja 0-4); inače
       // odbaci (solver bi tiho sudio krivo). Bez tih varijanti = null.
       if (state.variants.includes("kropki") || state.variants.includes("xv")) {
-        if (!validEdges(state.edges)) return false;
+        if (!validEdges(clues.edges)) return false;
       } else {
-        state.edges = null;
+        clues.edges = null;
       }
       // Thermo: tube moraju biti valjane (putovi susjednih ćelija, bez preklopa);
       // inače odbaci (solver bi tiho sudio krivo). Bez thermo varijante = null.
       if (state.variants.includes("thermo")) {
-        if (!validThermos(state.thermos)) return false;
+        if (!validThermos(clues.thermos)) return false;
       } else {
-        state.thermos = null;
+        clues.thermos = null;
       }
       return true;
     } catch (e) {
@@ -682,9 +661,10 @@
       targets.add(i * 9 + col);
     }
     // Box/regija: jigsaw čisti cijelu regiju ćelije, inače klasični 3×3 kvadrat.
-    if (state.variants.includes("jigsaw") && Array.isArray(state.regions)) {
-      const rid = state.regions[idx];
-      for (let t = 0; t < 81; t++) if (state.regions[t] === rid) targets.add(t);
+    if (state.variants.includes("jigsaw") && Array.isArray(state.clues.regions)) {
+      const regions = state.clues.regions;
+      const rid = regions[idx];
+      for (let t = 0; t < 81; t++) if (regions[t] === rid) targets.add(t);
     } else {
       const boxRow = Math.floor(row / 3) * 3;
       const boxCol = Math.floor(col / 3) * 3;
@@ -920,10 +900,7 @@
       state.notes,
       state.solution,
       state.variants,
-      state.regions,
-      state.parity,
-      state.edges,
-      state.thermos
+      state.clues
     );
     if (!res || res.done) {
       clearHint();
@@ -1050,7 +1027,9 @@
     const hyperMode = state.variants.includes("hyper");
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
-    const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(state.regions);
+    // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
+    const { regions, parity, edges, thermos } = state.clues;
+    const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");
@@ -1069,8 +1048,8 @@
     // tijekom partije, ali render se zove na svaki potez - 81 unosa je jeftinije od
     // pretrage po putovima za svaku ćeliju.
     const thermoAt = new Array(81).fill(null);
-    if (Array.isArray(state.thermos))
-      for (const path of state.thermos)
+    if (Array.isArray(thermos))
+      for (const path of thermos)
         for (let p = 0; p < path.length; p++) thermoAt[path[p]] = { path, pos: p };
 
     // Thermo: krpanje dijagonalnog kuta. Dvije dijagonalne ćelije dodiruju se samo u
@@ -1094,8 +1073,8 @@
       if (!list.some((p) => p.corner === corner && p.ang === ang))
         list.push({ corner, ang, gx, gy });
     };
-    if (Array.isArray(state.thermos))
-      for (const path of state.thermos)
+    if (Array.isArray(thermos))
+      for (const path of thermos)
         for (let p = 1; p < path.length; p++) {
           const a = path[p - 1];
           const b = path[p];
@@ -1105,12 +1084,8 @@
           // q = gornja-lijeva ćelija kvadrata 2×2 oko kuta. Razmake čitamo iz istog
           // pravila koje ćeliji q daje .br/.bb (2px linija + 1px razmak = 3px).
           const q = Math.min(Math.floor(a / 9), Math.floor(b / 9)) * 9 + Math.min(a % 9, b % 9);
-          const gx = (jigsawMode ? state.regions[q] !== state.regions[q + 1] : (q % 9) % 3 === 2)
-            ? 3
-            : 1;
-          const gy = (
-            jigsawMode ? state.regions[q] !== state.regions[q + 9] : Math.floor(q / 9) % 3 === 2
-          )
+          const gx = (jigsawMode ? regions[q] !== regions[q + 1] : (q % 9) % 3 === 2) ? 3 : 1;
+          const gy = (jigsawMode ? regions[q] !== regions[q + 9] : Math.floor(q / 9) % 3 === 2)
             ? 3
             : 1;
           // Krpaju ćelije s DRUGE dijagonale kvadrata - one kroz koje tuba ne prolazi.
@@ -1141,17 +1116,9 @@
       const row = Math.floor(i / 9);
       // Granice regija: jigsaw crta rub gdje susjedna ćelija pripada drugoj regiji,
       // inače klasične granice 3×3 kvadrata. Isti .br/.bb mehanizam (2px linija).
-      if (
-        jigsawMode
-          ? col !== 8 && state.regions[i] !== state.regions[i + 1]
-          : col % 3 === 2 && col !== 8
-      )
+      if (jigsawMode ? col !== 8 && regions[i] !== regions[i + 1] : col % 3 === 2 && col !== 8)
         cell.classList.add("br");
-      if (
-        jigsawMode
-          ? row !== 8 && state.regions[i] !== state.regions[i + 9]
-          : row % 3 === 2 && row !== 8
-      )
+      if (jigsawMode ? row !== 8 && regions[i] !== regions[i + 9] : row % 3 === 2 && row !== 8)
         cell.classList.add("bb");
       // Dijagonalna crta (X-Sudoku) crta se u POZADINI ćelije pa upisani broj
       // (tekst) uvijek ostaje iznad nje.
@@ -1173,8 +1140,8 @@
       }
       // Even/Odd: oznaka parnosti u ::before sloju (kvadrat = parno, krug = neparno).
       // Skrivena na zadanim ćelijama - upisani broj već pokazuje parnost.
-      if (state.parity && state.parity[i] && !isGiven) {
-        cell.classList.add(state.parity[i] === 1 ? "even" : "odd");
+      if (parity && parity[i] && !isGiven) {
+        cell.classList.add(parity[i] === 1 ? "even" : "odd");
       }
 
       // Highlight odabranih ćelija (grupa ili sidro)
@@ -1279,7 +1246,7 @@
       // span; textContent gore ih pobriše svaki render pa se čisto ponovno postave.
       // Oznaka između DVIJE zadane ćelije je šum (oba broja poznata od početka) - skrij ju.
       // Na granici bloka (deblja linija) razmak je širi pa oznaka dobiva `thick` offset.
-      if (state.edges) {
+      if (edges) {
         const given = (j) => state.puzzle[j] !== 0;
         // Zajednička klasa `emark` nosi poziciju na bridu; kdot/xmark samo izgled.
         const mark = (t, axis, thick) => {
@@ -1292,17 +1259,13 @@
           if (t >= 3) el.textContent = t === 3 ? "V" : "X";
           cell.appendChild(el);
         };
-        if (col > 0 && state.edges.h[i - 1] && !(given(i) && given(i - 1))) {
-          const thick = jigsawMode
-            ? state.regions[i] !== state.regions[i - 1]
-            : col === 3 || col === 6;
-          mark(state.edges.h[i - 1], "h", thick);
+        if (col > 0 && edges.h[i - 1] && !(given(i) && given(i - 1))) {
+          const thick = jigsawMode ? regions[i] !== regions[i - 1] : col === 3 || col === 6;
+          mark(edges.h[i - 1], "h", thick);
         }
-        if (row > 0 && state.edges.v[i - 9] && !(given(i) && given(i - 9))) {
-          const thick = jigsawMode
-            ? state.regions[i] !== state.regions[i - 9]
-            : row === 3 || row === 6;
-          mark(state.edges.v[i - 9], "v", thick);
+        if (row > 0 && edges.v[i - 9] && !(given(i) && given(i - 9))) {
+          const thick = jigsawMode ? regions[i] !== regions[i - 9] : row === 3 || row === 6;
+          mark(edges.v[i - 9], "v", thick);
         }
       }
     }

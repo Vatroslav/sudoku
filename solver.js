@@ -626,12 +626,16 @@ const Solver = (() => {
 
   // Postavi aktivni kontekst jedinica prije grading-a / pomoći. Prima polje (ili
   // legacy string) aktivnih varijanti; nepoznato => klasik (unatražna
-  // kompatibilnost sa spremljenim igrama). regions = jigsaw geometrija (81-polje)
-  // ili null; nevaljano se tretira klasično (statični kvadrati). parity = Even/Odd
-  // maska (81-polje 0/1/2) ili null; nevaljano se ignorira. edges = Kropki/XV
-  // brid-oznake ({ h, v }) ili null; nevaljano se ignorira. thermos = Thermo tube
-  // (polje putova) ili null; nevaljano se ignorira.
-  function useVariant(variants, regions, parity, edges, thermos) {
+  // kompatibilnost sa spremljenim igrama). clues = per-puzzle podaci (wire oblik,
+  // vidi Sudoku.prepClues), svi opcionalni; solver si brze oblike gradi sam:
+  //   regions - jigsaw geometrija (81-polje); nevaljano => klasični kvadrati.
+  //   parity  - Even/Odd maska (81-polje 0/1/2); nevaljano se ignorira.
+  //   edges   - Kropki/XV brid-oznake ({ h, v }); nevaljano se ignorira.
+  //   thermos - Thermo tube (polje putova); nevaljano se ignorira.
+  // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
+  // verzije ne smije srušiti solver.
+  function useVariant(variants, clues) {
+    const { regions, parity, edges, thermos } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
@@ -1072,8 +1076,8 @@ const Solver = (() => {
   //   solution = puno rješenje, sigurnosni filtar (opcionalno)
   // Vrati { reason, action } | { contradiction } | { done } | { reason: null }.
   // action.kind: "place" | "eliminate" | "eliminate-then-place".
-  function explainNext(values, notes, solution, variants, regions, parity, edges, thermos) {
-    useVariant(variants, regions, parity, edges, thermos);
+  function explainNext(values, notes, solution, variants, clues) {
+    useVariant(variants, clues);
     const raw = computeCandidates(values);
     for (let i = 0; i < 81; i++)
       if (values[i] === 0 && raw[i].size === 0) return { contradiction: true };
@@ -1098,11 +1102,9 @@ const Solver = (() => {
   ];
 
   // Vrati { solved, tier, techniques } - tier je najteža potrebna tehnika.
-  // regions = jigsaw geometrija (81-polje id-eva) ili null/izostavljeno = klasik.
-  // parity = Even/Odd maska (81-polje 0/1/2) ili null. edges = Kropki/XV oznake ({h,v}) ili null.
-  // thermos = Thermo tube (polje putova, bulb prvi) ili null.
-  function solveAndGrade(puzzle, variants, regions, parity, edges, thermos) {
-    useVariant(variants, regions, parity, edges, thermos);
+  // clues = per-puzzle podaci ili null/izostavljeno = klasik (vidi useVariant).
+  function solveAndGrade(puzzle, variants, clues) {
+    useVariant(variants, clues);
     const grid = puzzle.slice();
     const cand = computeCandidates(grid);
     let maxTier = 0;
