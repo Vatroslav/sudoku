@@ -126,12 +126,18 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       geometrija-first** - vidi zasebnu sekciju niže.
 - [x] Palindrome (linija čita isto u oba smjera, v1.32.0). Kao Thermo, **nije ispala
       geometrija-first** - vidi zasebnu sekciju niže.
+- [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
+      svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
 Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,
 generacija mora dati jedinstveno rješenje):
 
-- [ ] Clone (dvije regije dijele isti raspored)
 - [ ] Killer (kavezi sa zadanim zbrojem - traži vlastiti generator geometrije, zadnji)
+
+Nakon Thermo, Palindromea i Clonea u toj je kategoriji ostao **samo Killer** - i on je
+jedini kojem klasifikacija stvarno stoji. Ostala tri doc je svrstao tamo jer je pisan
+prije derive pipelinea (rješenje prvo, oznaka izvedena iz njega); Killer nije oznaka
+izvedena iz rješenja nego geometrija sa zbrojevima, pa mu `setup()` doista treba.
 
 ## Značajke
 
@@ -427,6 +433,103 @@ samim hintovima, nula krivih prijedloga.
 **Render je prošao iz prve** (Vatra odigrao partiju) - kod Thermo je isti render trebao
 tri runde popravaka (kut, spoj u središtu). Potvrda da je generalizacija u `.line-*`
 klase bila cijeli posao: naslijeđen je i dotjeran render, ne samo njegov oblik.
+
+## Clone (v1.33.0)
+
+Dvije regije istog oblika nose iste znamenke u odgovarajućim ćelijama. Treća varijanta
+koju je doc svrstao u "geometrija-first" i treći put iz istog razloga u krivu.
+
+**Nije dodao nijednu novu granu u jezgru.** Palindrome je pokazao da cijeli odnos
+ćelije staje u jedan broj (indeks partnera koji mora nositi istu vrijednost); klon je
+točno taj isti odnos, samo iz drugog izvora. Zato je izvedeni `pal` postao `mate`,
+koji pune obje varijante, a `isValid`/`computeCandidates`/`place` nisu ni dirani -
+dobili su samo više parova. Isti potez kao XV nad Kropkijem ("generalizacija, ne novi
+kanal"): Clone je tako **najjeftiniji dodatak dosad po retku koda u jezgri**.
+
+Jedan partner po ćeliji je dovoljan jer generator ne pušta dvije oznake kroz istu
+ćeliju. Da se ipak sudare, klon bi pregazio palindrom - solver bi bio slabiji, nikad
+krivi (obje relacije vrijede u rješenju, ispuštena znači samo nepotrošen trag).
+
+**Kopija je čista translacija**, bez rotacije i zrcaljenja: igrač mora na prvi pogled
+znati koja ćelija odgovara kojoj, a to nosi isti oblik u istoj orijentaciji. Regija
+raste iz sjemena ORTOGONALNO (mrlja, ne put - dijagonalni korak bi bio još jedna
+dvosmislenost), 3-6 ćelija; ćelija ulazi samo ako i ona i njena kopija stoje slobodne i
+nose istu vrijednost u rješenju. Oba pomaka moraju biti različita od nule (ćelije istog
+reda ne mogu nositi istu vrijednost); ostalo se ne filtrira - traži se jednakost U
+RJEŠENJU pa nemoguć par jednostavno ne prođe. Svaki par dobiva svoj pomak, inače se dva
+para čitaju kao jedna razlomljena regija.
+
+Izmjereno (Hard): **prosjek 18ms, max 56ms**, 18-28 zadanih, 1-4 para (6-28 ćelija).
+`STRENGTH: 10` (dno 18) je provjeren u oba smjera - sa 14 i 18 ploče svejedno ne padnu
+ispod 18 zadanih, a s 18 generacija poskoči (max 446ms). Dno je točno na zidu.
+
+### Redoslijed izvođenja: klon PRVI (11× jeftinije)
+
+Prva verzija je klon izvela zadnjim, po uzoru na Palindrome (koji zaobilazi ćelije
+tuba). Ispalo je da je redoslijed bitan i da je taj krivi:
+
+| clone+thermo  | prosjek  | max     | parova |
+| ------------- | -------- | ------- | ------ |
+| klon zadnji   | 5521ms   | 15425   | 1-3    |
+| **klon prvi** | **65ms** | **302** | 2-4    |
+
+Klon je od svih oznaka NAJVEZANIJI: mrlja mora naći podudarne vrijednosti na točnom
+pomaku, dok tuba i linija biraju bilo kojeg slobodnog susjeda. Kad tuba prva pojede
+ploču, klonu ostane pola para regija - a `floorFor` mu svejedno pripisuje punu snagu
+(10), pa `dig` gura ploču ispod dna koje ta kombinacija može podnijeti. To je isti
+mehanizam koji je XV-u prije floora dizao generaciju na 23s, samo skriven u redoslijedu
+umjesto u konstanti. **Pravilo za iduću oznaku koja zauzima ćeliju: prva ide ona koja
+ima najmanje slobode, ne ona koja je zadnja dodana.** `deriveThermos` je zato dobio
+`blocked` parametar (dotad ga je imao samo Palindrome).
+
+### Prune floor NIJE trebao
+
+Thermo i Palindrome su oba trebali donju granicu (`THERMO_KEEP_MIN`,
+`PALINDROME_KEEP_MIN`) jer prune na vrhu raspona pojede skoro sve oznake. Kod klona je
+izmjereno **1/30 ploča** palo na jedan par (Thermo 12/30 na ≤2 tube, Palindrome 17/30 na
+3 linije), pa je knob namjerno izostavljen. Dva razloga:
+
+1. **Jedinica je grublja** - micanje para skida 3-6 jednakosti odjednom, pa ploča obično
+   stane i prune ga vrati.
+2. **Jedan par nije greška.** Usamljen termometar se čita kao propust, ali klon je po
+   definiciji "nešto i njegova kopija" - dvije obojane regije su minimalna ISPRAVNA
+   slika varijante. A prune ostavlja samo ono bez čega ploča stane, pa je taj par nosiv.
+
+Na nulu ne može pasti: `variantNeeded` je već odbacio ploču koju klasika sama
+jedinstveno rješava, pa zadnji par nema kako proći `stoji()`.
+
+### Render: prva oznaka bez geometrije
+
+Suprotno od Thermo/Palindromea, gdje je render bio cijeli posao (tri runde popravaka za
+kut, spoj u središtu, krpe). Klon nema što crtati po ćeliji - ćelija je ili u klonu ili
+nije - pa je render **ispuna cijele ćelije** (`span.clone-fill`, `z-index: -1`, isti
+sloj kao parity i linije). Translucentna je namjerno: odabir i peer-highlight ispod nje
+moraju ostati vidljivi.
+
+Par se čita po BOJI (obje regije para nose istu), a koja ćelija odgovara kojoj po
+obliku. Zato su tinte 4 različita TONA, ne nijanse istog - dva para iste boje čitala bi
+se kao jedan klon. `CLONE_TINTS` u `app.js` mora pratiti `MAX_CLONES` u `sudoku.js`.
+Tonovi su namjerno drugi od `--window-tint` zbog kombinacije Hyper + Clone.
+
+Ispuna se NE skriva na zadanim ćelijama (za razliku od parity oznake): zadana znamenka u
+klonu i dalje određuje partnera, pa je oznaka tamo nosiva informacija, ne ponavljanje.
+
+**Render nije provjeren okom** - browser pane u sesiji izrade nije radio (screenshotovi
+timeoutali, klikovi na overlay se nisu registrirali). Provjereno je da sloj i mehanizam
+odgovaraju već dokazanom obrascu (`.cell.colored::after`), ali prvu partiju treba
+odigrati prije nego se render proglasi gotovim.
+
+### Provjere
+
+- **Regresija**: 26 ploča (13 kombinacija × 2 težine, zasijan RNG) **bajt-identično**
+  prije i poslije - jedina razlika je novo prazno `clones: null` polje. Redoslijed
+  izvođenja je preslagan, ali za kombinacije bez klona lanac poziva ostaje isti.
+- **Generator**: na svakoj ploči provjereno da klon vrijedi u rješenju, da je kopija
+  stvarno translacija i da se regije para ne preklapaju (sve kombinacije, obje težine).
+- **Hint**: 10/10 Clone Hard ploča riješeno samim hintovima, **nula krivih prijedloga**
+  (isto na Normalu; u kombinacijama 8-10/10, gdje zastoji dolaze od eliminacijskih
+  koraka koje mjerni harness ne primjenjuje - shipane kombinacije poput thermo+palindrome
+  i kropki+xv daju 6/10 na istom harnessu).
 
 ## Poznato / tehnički dug
 

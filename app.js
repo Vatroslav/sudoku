@@ -17,6 +17,7 @@
     "xv",
     "thermo",
     "palindrome",
+    "clone",
   ];
   const VARIANT_LABELS = {
     antiking: "Antiking",
@@ -29,6 +30,7 @@
     xv: "XV",
     thermo: "Thermo",
     palindrome: "Palindrome",
+    clone: "Clone",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -56,6 +58,9 @@
     "167, 129, 244", // 8 ljubičasta
     "236, 110, 190", // 9 roza
   ];
+  // Clone: broj tinti u CSS-u (.clone-fill.c1 ... .c4). Mora pratiti MAX_CLONES u
+  // sudoku.js - dva para iste boje čitala bi se kao jedan klon.
+  const CLONE_TINTS = 4;
   const SWATCH_ALPHA = 0.9;
   const MAX_COLORS = 4; // najviše boja po ćeliji
 
@@ -224,6 +229,24 @@
     return true;
   }
   const validPalindromes = validThermos; // isti oblik puta, samo bez smjera
+  // Clone: par regija istog oblika ([[a...],[b...]]) - odnos je po indeksu, pa render
+  // treba samo ćelije. Oblik se ne provjerava; bitno je da su parovi cjeloviti i da
+  // se ćelije ne ponavljaju (jedna ćelija = najviše jedan klon).
+  function validClones(clones) {
+    if (!Array.isArray(clones)) return false;
+    const seen = new Set();
+    for (const pair of clones) {
+      if (!Array.isArray(pair) || pair.length !== 2) return false;
+      const [a, b] = pair;
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || !a.length)
+        return false;
+      for (const i of [...a, ...b]) {
+        if (!Number.isInteger(i) || i < 0 || i > 80 || seen.has(i)) return false;
+        seen.add(i);
+      }
+    }
+    return true;
+  }
   // Regija ćelije: jigsaw -> state.clues.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
     if (state.variants.includes("jigsaw") && Array.isArray(state.clues.regions))
@@ -387,6 +410,7 @@
         edges: (clues && clues.edges) || null,
         thermos: (clues && clues.thermos) || null,
         palindromes: (clues && clues.palindromes) || null,
+        clones: (clues && clues.clones) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -559,6 +583,12 @@
         if (!validPalindromes(clues.palindromes)) return false;
       } else {
         clues.palindromes = null;
+      }
+      // Clone: parovi regija moraju biti cjeloviti i bez ponovljenih ćelija.
+      if (state.variants.includes("clone")) {
+        if (!validClones(clues.clones)) return false;
+      } else {
+        clues.clones = null;
       }
       return true;
     } catch (e) {
@@ -1055,7 +1085,7 @@
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
-    const { regions, parity, edges, thermos, palindromes } = state.clues;
+    const { regions, parity, edges, thermos, palindromes, clones } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
@@ -1134,6 +1164,15 @@
           }
         }
     }
+
+    // Clone: par se čita po BOJI (obje regije para nose istu), a koja ćelija odgovara
+    // kojoj po obliku - kopija je čista translacija pa se poklapaju na prvi pogled.
+    // 81-polje broja tinte (0 = nije u klonu), kao l.at kod linija.
+    const cloneTint = new Array(81).fill(0);
+    if (Array.isArray(clones))
+      clones.forEach(([a, b], k) => {
+        for (const i of [...a, ...b]) cloneTint[i] = (k % CLONE_TINTS) + 1;
+      });
 
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
@@ -1220,6 +1259,15 @@
         cell.appendChild(grid);
       } else {
         cell.textContent = "";
+      }
+
+      // Clone: ispuna cijele ćelije u zasebnom sloju (::before/::after su zauzeti
+      // parnošću i bojanjem). Translucentna je namjerno - odabir i peer-highlight ispod
+      // nje moraju ostati vidljivi. Ide prije linija: mrlja je pozadina, ne oznaka.
+      if (cloneTint[i]) {
+        const fill = document.createElement("span");
+        fill.className = "clone-fill c" + cloneTint[i];
+        cell.appendChild(fill);
       }
 
       // Thermo tube i Palindrome linije. Prva oznaka koja NE stane u ćeliju - ide u

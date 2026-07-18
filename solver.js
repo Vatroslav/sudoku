@@ -185,15 +185,39 @@ const Solver = (() => {
   // Palindrome: linije čije se vrijednosti čitaju isto u oba smjera. Oblik je isti kao
   // kod tuba (put ćelija po potezu kralja, bez preklopa) pa dijele validaciju.
   const validPalindromes = validThermos;
-  // Indeks ćelija -> zrcalni partner (-1 = nije na liniji ili je sredina bez partnera).
-  // Sav palindromski odnos staje u taj jedan broj - vidi sudoku.js prepPalindromes.
-  function prepPalindromes(pals) {
-    const mate = new Array(81).fill(-1);
-    for (const path of pals)
-      for (let p = 0; p < path.length; p++) {
-        const q = path.length - 1 - p;
-        if (q !== p) mate[path[p]] = path[q];
+  // Clone: parovi regija istog oblika ([[a...],[b...]], odnos je po indeksu). Oblik
+  // regije se ne provjerava - solver iz njega čita samo parove, a render skup ćelija.
+  function validClones(clones) {
+    if (!Array.isArray(clones)) return false;
+    const seen = new Set();
+    for (const pair of clones) {
+      if (!Array.isArray(pair) || pair.length !== 2) return false;
+      const [a, b] = pair;
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || !a.length)
+        return false;
+      for (const i of [...a, ...b]) {
+        if (!Number.isInteger(i) || i < 0 || i > 80 || seen.has(i)) return false;
+        seen.add(i);
       }
+    }
+    return true;
+  }
+  // Indeks ćelija -> partner koji mora nositi ISTU vrijednost (-1 = nema ga). Palindrome
+  // i Clone su dva izvora istog odnosa - vidi sudoku.js prepMates.
+  function prepMates(pals, clones) {
+    const mate = new Array(81).fill(-1);
+    if (pals)
+      for (const path of pals)
+        for (let p = 0; p < path.length; p++) {
+          const q = path.length - 1 - p;
+          if (q !== p) mate[path[p]] = path[q];
+        }
+    if (clones)
+      for (const [a, b] of clones)
+        for (let p = 0; p < a.length; p++) {
+          mate[a[p]] = b[p];
+          mate[b[p]] = a[p];
+        }
     return mate;
   }
   // Raspon [lo,hi] dopušten na poziciji p termometra. Mora se poklapati sa sudoku.js
@@ -274,12 +298,13 @@ const Solver = (() => {
   // zasebne tehnike - tuba samo steže kandidate (computeCandidates iz pozicije i
   // popunjenih članova, place() pri svakom upisu), klasične tehnike dovrše.
   let curThermos = null;
-  // Palindrome: per-puzzle 81-polje zrcalnih partnera (-1 gdje ga nema) ili null.
+  // Palindrome/Clone: per-puzzle 81-polje partnera koji nosi ISTU vrijednost (-1 gdje
+  // ga nema) ili null. Obje varijante su isti odnos pa dijele polje (vidi prepMates).
   // Dva mjesta propagacije, oba bez zasebne tehnike (kao Thermo/Kropki):
   //   computeCandidates - popunjen partner fiksira vrijednost, a par praznih PRESIJECA
   //     kandidate (par leži u različitim jedinicama pa presjek stvarno reže),
   //   place - upis fiksira partnera.
-  let curPal = null;
+  let curMate = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -320,20 +345,20 @@ const Solver = (() => {
         const [lo, hi] = thermoRange(grid, path, pos);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
       }
-      // Palindrome: popunjen partner fiksira vrijednost. (Par praznih se presijeca
+      // Palindrome/Clone: popunjen partner fiksira vrijednost. (Par praznih se presijeca
       // niže - tek kad su OBA skupa izračunata.)
-      if (curPal && curPal[idx] >= 0 && grid[curPal[idx]] !== 0) {
-        const m = grid[curPal[idx]];
+      if (curMate && curMate[idx] >= 0 && grid[curMate[idx]] !== 0) {
+        const m = grid[curMate[idx]];
         for (const v of [...s]) if (v !== m) s.delete(v);
       }
       cand[idx] = s;
     }
-    // Palindrome: dvije prazne zrcalne ćelije nose istu vrijednost, pa svaka smije
+    // Palindrome/Clone: dvije prazne ćelije u paru nose istu vrijednost, pa svaka smije
     // zadržati samo ono što obje dopuštaju. Presjek stvarno reže jer par leži u
     // različitim redovima/stupcima/kutijama (inače ne bi mogao biti jednak).
-    if (curPal)
+    if (curMate)
       for (let idx = 0; idx < 81; idx++) {
-        const j = curPal[idx];
+        const j = curMate[idx];
         if (j <= idx || !cand[idx] || !cand[j]) continue; // svaki par jednom
         const both = [...cand[idx]].filter((v) => cand[j].has(v));
         cand[idx] = new Set(both);
@@ -363,10 +388,10 @@ const Solver = (() => {
         for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
       }
     }
-    // Palindrome: upis fiksira zrcalnog partnera na istu vrijednost - naked single
-    // koji klasične tehnike odmah pokupe.
-    if (curPal && curPal[idx] >= 0) {
-      const j = curPal[idx];
+    // Palindrome/Clone: upis fiksira partnera na istu vrijednost - naked single koji
+    // klasične tehnike odmah pokupe.
+    if (curMate && curMate[idx] >= 0) {
+      const j = curMate[idx];
       if (cand[j]) for (const u of [...cand[j]]) if (u !== val) cand[j].delete(u);
     }
   }
@@ -676,17 +701,21 @@ const Solver = (() => {
   //   edges   - Kropki/XV brid-oznake ({ h, v }); nevaljano se ignorira.
   //   thermos - Thermo tube (polje putova); nevaljano se ignorira.
   //   palindromes - Palindrome linije (polje putova); nevaljano se ignorira.
+  //   clones - Clone parovi regija (polje parova putova); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
-    const { regions, parity, edges, thermos, palindromes } = clues || {};
+    const { regions, parity, edges, thermos, palindromes, clones } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
     curParity = validParity(parity) ? parity : null;
     curEdges = validEdges(edges) ? edges : null;
     curThermos = validThermos(thermos) ? prepThermos(thermos) : null;
-    curPal = validPalindromes(palindromes) ? prepPalindromes(palindromes) : null;
+    const okPal = validPalindromes(palindromes) && palindromes.length;
+    const okClone = validClones(clones) && clones.length;
+    curMate =
+      okPal || okClone ? prepMates(okPal ? palindromes : null, okClone ? clones : null) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);

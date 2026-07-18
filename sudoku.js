@@ -122,18 +122,36 @@ const Sudoku = (() => {
     return at;
   }
 
-  // Palindrome: cijeli odnos ćelije staje u JEDAN broj - indeks zrcalnog partnera
-  // (-1 = nije na liniji, ili je sredina neparne linije i nema partnera). Za razliku
-  // od termometra, gdje raspon ovisi o poziciji i duljini cijele tube, palindrom
-  // kaže samo "ove dvije ćelije su jednake" - pa ni isValid ni solver ne trebaju put.
-  function prepPalindromes(pals) {
-    if (!pals || !pals.length) return null;
+  // Palindrome i Clone svode se na ISTI odnos - "ove dvije ćelije nose istu
+  // vrijednost" - pa dijele izvedeni oblik: 81-polje indeksa partnera (-1 = nema ga).
+  // Cijeli odnos ćelije staje u taj jedan broj: za razliku od termometra, gdje raspon
+  // ovisi o poziciji i duljini cijele tube, ovdje ni isValid ni solver ne trebaju
+  // znati put ni oblik regije. Zato Clone nije dodao nijednu novu granu u
+  // isValid/computeCandidates/place - samo drugi izvor partnera.
+  //
+  // Jedan partner po ćeliji dovoljan je jer generator ne pušta dvije oznake kroz istu
+  // ćeliju (deriveClones dobiva ćelije linija kao `blocked`). Kad bi se ipak sudarile,
+  // klon bi pregazio palindrom - solver bi bio slabiji, nikad krivi: obje relacije
+  // vrijede u rješenju, pa ispuštena znači samo nepotrošen trag.
+  function prepMates(pals, clones) {
+    const hasPal = !!(pals && pals.length),
+      hasClone = !!(clones && clones.length);
+    if (!hasPal && !hasClone) return null;
     const mate = new Array(81).fill(-1);
-    for (const path of pals)
-      for (let p = 0; p < path.length; p++) {
-        const q = path.length - 1 - p;
-        if (q !== p) mate[path[p]] = path[q];
-      }
+    // Palindrom: partner je zrcalna pozicija (sredina neparne linije nema partnera).
+    if (hasPal)
+      for (const path of pals)
+        for (let p = 0; p < path.length; p++) {
+          const q = path.length - 1 - p;
+          if (q !== p) mate[path[p]] = path[q];
+        }
+    // Clone: partner je ćelija na ISTOJ poziciji u drugoj regiji para.
+    if (hasClone)
+      for (const [a, b] of clones)
+        for (let p = 0; p < a.length; p++) {
+          mate[a[p]] = b[p];
+          mate[b[p]] = a[p];
+        }
     return mate;
   }
 
@@ -144,24 +162,27 @@ const Sudoku = (() => {
   // Ovako ih dodaje NULA - novo polje putuje samo po sebi.
   //
   // Dvije vrste polja i zato ih gradi jedno mjesto:
-  //   - wire (regions/parity/edges/thermos/palindromes) - ono što ide u state i
-  //     localStorage,
-  //   - izvedeno (jig/thm/pal) - brzi oblici koje isValid gleda u vrućoj petlji.
+  //   - wire (regions/parity/edges/thermos/palindromes/clones) - ono što ide u state
+  //     i localStorage,
+  //   - izvedeno (jig/thm/mate) - brzi oblici koje isValid gleda u vrućoj petlji.
   // Izvedeno se NE sprema; prepClues ga svaki put složi iz wire polja.
   function prepClues(c) {
     const regions = (c && c.regions) || null;
     const thermos = (c && c.thermos) || null;
     const palindromes = (c && c.palindromes) || null;
+    const clones = (c && c.clones) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
       edges: (c && c.edges) || null,
       thermos,
       palindromes,
+      clones,
       // jig se drži uz regions: isValid ne smije po ćeliji tražiti tko je u kojoj regiji.
       jig: regions ? { map: regions, cells: regionsToCells(regions) } : null,
       thm: prepThermos(thermos),
-      pal: prepPalindromes(palindromes),
+      // Jedno polje partnera za obje varijante jednakosti - vidi prepMates.
+      mate: prepMates(palindromes, clones),
     };
   }
   const EMPTY_CLUES = prepClues({}); // klasik: nema nijedne per-puzzle oznake
@@ -182,6 +203,7 @@ const Sudoku = (() => {
     "xv",
     "thermo",
     "palindrome",
+    "clone",
   ];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -310,9 +332,10 @@ const Sudoku = (() => {
   //     v[i] = brid i↔i+9; tipovi kao u edgeOk). Samo pozitivno: prikazana oznaka
   //     mora vrijediti, odsutnost ne ograničava ništa.
   //   thm - 81-polje { path, pos } (vidi prepThermos), Thermo tube.
-  //   pal - 81-polje indeksa zrcalnog partnera (vidi prepPalindromes), Palindrome linije.
+  //   mate - 81-polje indeksa partnera koji mora nositi ISTU vrijednost (vidi
+  //     prepMates); pune ga Palindrome linije i Clone regije.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, pal } = clues;
+    const { jig, parity, edges, thm, mate } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -371,10 +394,10 @@ const Sudoku = (() => {
       const [lo, hi] = thermoRange(board, path, pos);
       if (val < lo || val > hi) return false;
     }
-    // Palindrome: zrcalni partner mora nositi ISTU vrijednost. Provjerava se samo kad
+    // Palindrome/Clone: partner mora nositi ISTU vrijednost. Provjerava se samo kad
     // je popunjen - drugi smjer stigne kad na njega dođe red (kao kod brid-oznaka).
-    if (pal && pal[idx] >= 0) {
-      const m = board[pal[idx]];
+    if (mate && mate[idx] >= 0) {
+      const m = board[mate[idx]];
       if (m && m !== val) return false;
     }
     return true;
@@ -559,11 +582,12 @@ const Sudoku = (() => {
   // pločama s puno zadanih - na dnu raspona (gdje tube nose rješenje) granica se ne
   // dosegne pa prune tamo radi puni posao.
   const THERMO_KEEP_MIN = 4;
-  function deriveThermos(solution, boost = 0) {
+  // blocked = 81-polje bool ćelija koje je već zauzela druga oznaka (Clone).
+  function deriveThermos(solution, boost = 0, blocked = null) {
     const want = Math.round(MAX_THERMOS * pickDensity(scaled(THERMO_DENSITY, boost)));
     // Termometri se NE preklapaju: dvije tube kroz istu ćeliju su i za oko i za
     // render (segment po ćeliji) nered, a dobiju se i bez toga.
-    const used = new Array(81).fill(false);
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
     const thermos = [];
     for (const start of shuffle([...Array(81).keys()])) {
       if (thermos.length >= want) break;
@@ -650,6 +674,89 @@ const Sudoku = (() => {
     return pals;
   }
 
+  // Clone: dvije regije istog oblika nose iste znamenke u odgovarajućim ćelijama.
+  // Wire oblik je par putova jednake duljine ([[a0,a1,...],[b0,b1,...]]) - odnos je
+  // "po indeksu", pa se čita bez ikakve geometrije (vidi prepMates).
+  //
+  // Kopija je čista TRANSLACIJA (bez rotacije i zrcaljenja): igrač mora na prvi
+  // pogled znati koja ćelija odgovara kojoj, a to nosi isti oblik u istoj
+  // orijentaciji. Zato regiju definira jedan pomak (dr,dc) i skup ćelija.
+  //
+  // Oba pomaka moraju biti različita od nule: ćelije istog reda (ili stupca) ne mogu
+  // nositi istu vrijednost, pa takav pomak ne bi dao nijedan par. Ostatak (isti blok,
+  // preklop s dijagonalom kod X-a) ne treba filtrirati - traži se jednakost U
+  // RJEŠENJU, pa nemoguć par jednostavno ne prođe.
+  //
+  // Kao i linije, regija raste iz sjemena, ali ORTOGONALNO (blob, ne put): oblik se
+  // čita kao mrlja, a ne kao niz, pa je dijagonalni korak samo dodatna dvosmislenost.
+  const CLONE_SIZE = { min: 3, max: 6 };
+  const MAX_CLONES = 4;
+  const CLONE_DENSITY = { min: 0.5, max: 1 };
+  // Prune floor (THERMO_KEEP_MIN / PALINDROME_KEEP_MIN) ovdje NE treba, i to je jedina
+  // stvar u kojoj Clone odstupa od te dvije. Dva razloga, oba izmjerena:
+  //   1. Prune ga jedva dira - bez ikakve granice samo 1/30 Hard ploča padne na jedan
+  //      par (Thermo 12/30 na <=2 tube, Palindrome 17/30 na 3 linije). Jedinica je
+  //      grublja: micanje para skida 3-6 jednakosti odjednom, pa ploča obično stane.
+  //   2. Jedan par NIJE greška. Usamljen termometar se čita kao propust, ali klon je
+  //      po definiciji "nešto i njegova kopija" - dvije obojane regije su minimalna
+  //      ISPRAVNA slika varijante. A prune ostavlja samo ono bez čega ploča stane, pa
+  //      je taj jedan par nosiv, ne dekoracija.
+  // Na nulu ne može: variantNeeded je već odbacio ploču koju klasika sama jedinstveno
+  // rješava, pa zadnji par nema kako proći `stoji()`.
+  //
+  // blocked = 81-polje bool ćelija koje su već zauzete linijskom varijantom (Thermo,
+  // Palindrome). Klon boji CIJELU ćeliju, pa bi ispod boje linija bila nečitljiva.
+  function deriveClones(solution, boost = 0, blocked = null) {
+    const want = Math.round(MAX_CLONES * pickDensity(scaled(CLONE_DENSITY, boost)));
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
+    const clones = [];
+    const offsets = [];
+    for (let dr = -8; dr <= 8; dr++)
+      for (let dc = -8; dc <= 8; dc++) if (dr && dc) offsets.push([dr, dc]);
+
+    // Svaki par dobiva SVOJ pomak: dva para s istim pomakom čitaju se kao jedna veća
+    // (razlomljena) regija umjesto kao dva klona.
+    for (const [dr, dc] of shuffle(offsets)) {
+      if (clones.length >= want) break;
+      const shift = (i) => {
+        const r = Math.floor(i / 9) + dr,
+          c = (i % 9) + dc;
+        return r >= 0 && r < 9 && c >= 0 && c < 9 ? r * 9 + c : -1;
+      };
+      for (const seed of shuffle([...Array(81).keys()])) {
+        const mine = new Set();
+        // Ćelija ulazi u regiju samo ako i ona i njena kopija stoje slobodne i nose
+        // istu vrijednost u rješenju. `mine` drži OBJE strane pa se regija i njena
+        // kopija ne mogu preklopiti (bez toga bi mali pomak dao besmislen par).
+        const ok = (n) => {
+          if (used[n] || mine.has(n)) return false;
+          const m = shift(n);
+          return m >= 0 && !used[m] && !mine.has(m) && solution[n] === solution[m];
+        };
+        if (!ok(seed)) continue;
+        const a = [seed],
+          b = [shift(seed)];
+        mine.add(seed);
+        mine.add(b[0]);
+        const maxLen =
+          CLONE_SIZE.min + Math.floor(Math.random() * (CLONE_SIZE.max - CLONE_SIZE.min + 1));
+        while (a.length < maxLen) {
+          const next = shuffle([...new Set(a.flatMap(orthNeighbors))]).find(ok);
+          if (next === undefined) break;
+          a.push(next);
+          b.push(shift(next));
+          mine.add(next);
+          mine.add(b[b.length - 1]);
+        }
+        if (a.length < CLONE_SIZE.min) continue;
+        for (const i of mine) used[i] = true;
+        clones.push([a, b]);
+        break; // ovaj pomak je iskorišten - sljedeći par traži novi
+      }
+    }
+    return clones;
+  }
+
   // 81-polje bool: ćelije kroz koje prolazi neka od danih linija (null ako ih nema).
   const lineCells = (paths) => {
     if (!paths || !paths.length) return null;
@@ -683,6 +790,7 @@ const Sudoku = (() => {
     thermo: 12,
     xv: 10,
     palindrome: 10,
+    clone: 10,
     hyper: 8,
     antiknight: 6,
     jigsaw: 6,
@@ -712,7 +820,7 @@ const Sudoku = (() => {
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
   function pruneMarks(puzzle, solution, variants, clues, maxTier) {
-    const { parity, edges, thermos, palindromes } = clues;
+    const { parity, edges, thermos, palindromes, clones } = clues;
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -727,6 +835,9 @@ const Sudoku = (() => {
     // Palindrome: kao tuba, jedinica je CIJELA linija - skraćivanje bi premjestilo
     // sve zrcalne parove (partner ovisi o duljini), dakle druga slagalica.
     if (palindromes) for (const p of palindromes) cands.push(["l", p]);
+    // Clone: jedinica je CIJELI par regija - jedna regija bez svoje kopije nije oznaka
+    // nego obojana mrlja bez značenja.
+    if (clones) for (const c of clones) cands.push(["c", c]);
     if (!cands.length) return;
     const stoji = () => {
       const r = Solver.solveAndGrade(puzzle, variants, clues);
@@ -747,8 +858,16 @@ const Sudoku = (() => {
         const k = palindromes.indexOf(ref);
         palindromes.splice(k, 1);
         if (!stoji()) palindromes.splice(k, 0, ref); // bez nje ploča stane -> treba ju
-        // palindromes je wire polje; izvedeni pal bi inače ostao na staroj listi linija.
-        clues.pal = prepPalindromes(palindromes);
+        // palindromes je wire polje; izvedeni mate bi inače ostao na staroj listi linija.
+        clues.mate = prepMates(palindromes, clones);
+        continue;
+      }
+      if (kind === "c") {
+        const k = clones.indexOf(ref); // bez donje granice - vidi komentar uz deriveClones
+        clones.splice(k, 1);
+        if (!stoji()) clones.splice(k, 0, ref); // bez njega ploča stane -> treba ga
+        // clones je wire polje; izvedeni mate bi inače ostao na staroj listi parova.
+        clues.mate = prepMates(palindromes, clones);
         continue;
       }
       const src = kind === "p" ? parity : edges[kind];
@@ -776,13 +895,14 @@ const Sudoku = (() => {
       difficulty,
       variants,
       techniques: res.techniques || [],
-      // Samo wire polja - izvedeno (jig/thm/pal) se ne isporučuje ni ne sprema.
+      // Samo wire polja - izvedeno (jig/thm/mate) se ne isporučuje ni ne sprema.
       clues: {
         regions: clues.regions,
         parity: clues.parity,
         edges: clues.edges,
         thermos: clues.thermos,
         palindromes: clues.palindromes,
+        clones: clues.clones,
       },
     };
   }
@@ -824,13 +944,25 @@ const Sudoku = (() => {
     const useEdges = useKropki || useXv;
     const useThermo = variants.includes("thermo");
     const usePal = variants.includes("palindrome");
-    // Thermo i Palindrome su obje linijske: palindromi se izvode NAKON tuba i
-    // zaobilaze njihove ćelije (vidi derivePalindromes `blocked`).
-    const deriveLines = (solution, boost) => {
-      const thermos = useThermo ? deriveThermos(solution, boost) : null;
+    const useClone = variants.includes("clone");
+    // Oznake koje zauzimaju ĆELIJU (a ne brid) izvode se u nizu i svaka zaobilazi
+    // ćelije prethodnih: dvije linije kroz istu ćeliju render crta preko sebe, a klon
+    // boji cijelu ćeliju pa bi linija ispod njega nestala.
+    //
+    // KLON IDE PRVI jer je od svih najvezaniji: mrlja mora naći podudarne vrijednosti
+    // na točnom pomaku, dok tuba i linija biraju bilo kojeg susjeda. Obrnut redoslijed
+    // je izmjeren i bio je 11× skuplji na clone+thermo (5.5s prosjek, 15.4s max prema
+    // 0.5s/1.6s): klonu je nakon tuba ostalo pola para regija, a floorFor mu svejedno
+    // pripisuje punu snagu - pa je dig gonio ploču ispod dna koje ta kombinacija može
+    // podnijeti.
+    const deriveGeom = (solution, boost) => {
+      const clones = useClone ? deriveClones(solution, boost) : null;
+      const taken = (paths) => lineCells([...(clones ? clones.flat() : []), ...paths]);
+      const thermos = useThermo ? deriveThermos(solution, boost, taken([])) : null;
       return {
+        clones,
         thermos,
-        palindromes: usePal ? derivePalindromes(solution, boost, lineCells(thermos)) : null,
+        palindromes: usePal ? derivePalindromes(solution, boost, taken(thermos || [])) : null,
       };
     };
     // Raspon zadanih brojeva vrijedi samo za Hard s varijantama - Normal drži
@@ -855,7 +987,7 @@ const Sudoku = (() => {
         regions: geom.regions,
         parity: useEven ? deriveParity(solution, boost) : null,
         edges: useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null,
-        ...deriveLines(solution, boost),
+        ...deriveGeom(solution, boost),
       });
       const puzzle = dig(solution, target, variants, clues);
       // Varijanta mora nešto raditi - ploču koju klasika sama jedinstveno rješava
@@ -909,7 +1041,7 @@ const Sudoku = (() => {
       regions: geom.regions,
       parity: useEven ? deriveParity(solution) : null,
       edges: useEdges ? deriveEdges(solution, useKropki, useXv) : null,
-      ...deriveLines(solution, 0),
+      ...deriveGeom(solution, 0),
     });
     const puzzle = dig(solution, topTarget, variants, clues);
     // Ovdje ploča nije prošla grading, pa prune ide s najvišim dopuštenim tierom.

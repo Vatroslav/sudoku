@@ -24,6 +24,14 @@
      isti ton svjetline, drugi ton boje - da se u kombinaciji Thermo+Palindrome na
      prvi pogled vidi koja je linija koja. */
   --palindrome: #3c4d42;
+  /* Clone: boja veže par regija, pa ih mora biti onoliko koliko ima parova (4) i
+     moraju se razlikovati na prvi pogled - zato tonovi, a ne nijanse istog tona.
+     Translucentne su da odabir i peer-highlight ostanu vidljivi ispod, i namjerno
+     drugih tonova od prozora (--window-tint) zbog kombinacije Hyper + Clone. */
+  --clone-1: rgba(70, 200, 190, 0.22);
+  --clone-2: rgba(235, 170, 70, 0.22);
+  --clone-3: rgba(240, 110, 170, 0.2);
+  --clone-4: rgba(150, 205, 80, 0.2);
   --kdot-white: #e8e8ef;
   --kdot-black: #14141a;
   --kdot-ring: #b0b1c6;
@@ -333,6 +341,29 @@ main {
 }
 .cell.odd::before {
   border-radius: 50%;
+}
+
+/* Clone: par regija istog oblika nosi iste znamenke. Ispuna cijele ćelije u zasebnom
+   spanu (::before/::after su zauzeti parnošću i bojanjem), z-index -1 = isti sloj kao
+   linije: iznad boje/highlighta ćelije, ispod znamenke i bilješki. Za razliku od
+   linija, ovdje nema geometrije - ćelija je ili u klonu ili nije. */
+.cell .clone-fill {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.cell .clone-fill.c1 {
+  background: var(--clone-1);
+}
+.cell .clone-fill.c2 {
+  background: var(--clone-2);
+}
+.cell .clone-fill.c3 {
+  background: var(--clone-3);
+}
+.cell .clone-fill.c4 {
+  background: var(--clone-4);
 }
 
 /* Linijske varijante (Thermo tuba, Palindrome linija) dijele cijelu mašineriju -
