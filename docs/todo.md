@@ -514,10 +514,17 @@ Tonovi su namjerno drugi od `--window-tint` zbog kombinacije Hyper + Clone.
 Ispuna se NE skriva na zadanim ćelijama (za razliku od parity oznake): zadana znamenka u
 klonu i dalje određuje partnera, pa je oznaka tamo nosiva informacija, ne ponavljanje.
 
-**Render nije provjeren okom** - browser pane u sesiji izrade nije radio (screenshotovi
-timeoutali, klikovi na overlay se nisu registrirali). Provjereno je da sloj i mehanizam
-odgovaraju već dokazanom obrascu (`.cell.colored::after`), ali prvu partiju treba
-odigrati prije nego se render proglasi gotovim.
+**Render je prošao iz prve** (Vatra odigrao partiju), i to bez ijedne provjere okom
+tijekom izrade - browser pane u toj sesiji nije radio (screenshotovi timeoutali, klikovi
+na overlay se nisu registrirali), pa je jedini oslonac bio da sloj i mehanizam ispune
+odgovaraju već dokazanom obrascu (`.cell.colored::after`). Prošlo je jer klon nema
+geometriju: Thermo je trebao tri runde popravaka na stvarima koje se vide tek na ploči
+(kut, spoj u središtu), a ispuna ćelije nema nijedan takav spoj.
+
+**Naslijeđen obrazac je ovdje vrijedio više nego kod Palindromea** (koji je isto prošao
+iz prve, ali uz render koji se dao pogledati). Pouka za iduću oznaku: kad se render
+svede na postojeći sloj i ništa se ne crta preko granica ćelije, nedostatak vizualne
+provjere je podnošljiv rizik. Za sve što prelazi granicu ćelije - nije.
 
 ### Provjere
 
