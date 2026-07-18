@@ -20,6 +20,10 @@
   --window-tint: rgba(160, 130, 240, 0.16);
   --parity: #7a7a8c;
   --thermo: #3f3f4d;
+  /* Palindrome dijeli oblik s tubom (linija po ćelijama) pa razliku mora nositi boja:
+     isti ton svjetline, drugi ton boje - da se u kombinaciji Thermo+Palindrome na
+     prvi pogled vidi koja je linija koja. */
+  --palindrome: #3c4d42;
   --kdot-white: #e8e8ef;
   --kdot-black: #14141a;
   --kdot-ring: #b0b1c6;
@@ -331,25 +335,37 @@ main {
   border-radius: 50%;
 }
 
-/* Thermo: tuba. Ista razina kao parity ::before (z-index -1: iznad boje/highlighta
-   ćelije, ispod znamenke), ali u spanovima - ::before/::after su zauzeti, a tuba
+/* Linijske varijante (Thermo tuba, Palindrome linija) dijele cijelu mašineriju -
+   razlikuju se samo bojom (klasa .thermo / .pal na svakom komadu) i kuglicom, koju
+   ima samo Thermo. Ista razina kao parity ::before (z-index -1: iznad boje/highlighta
+   ćelije, ispod znamenke), ali u spanovima - ::before/::after su zauzeti, a linija
    ionako treba dva segmenta po ćeliji (na skretanju).
 
    Svaka ćelija crta polovicu segmenta: pilula od svog središta prema susjedu, s
    3px preko granice. Suprotna polovica dolazi iz susjeda i preklapa se u razmaku,
-   pa je tuba neprekinuta i preko debele granice bloka. Zaobljeni krajevi na
+   pa je linija neprekinuta i preko debele granice bloka. Zaobljeni krajevi na
    skretanju daju zaobljen kut, a na spoju polovica se ne vide (ista boja).
 
    Duljina je 50% ŠIRINE ćelije - okomiti segment bi trebao 50% visine, ali ćelije
    su kvadratne do na 2px .br/.bb margine, što 3px prelaska pokrije. */
-.cell .thermo-seg {
+.cell .line-seg.thermo,
+.cell .line-joint.thermo,
+.cell .line-clip.thermo > span,
+.cell .thermo-bulb {
+  background: var(--thermo);
+}
+.cell .line-seg.pal,
+.cell .line-joint.pal,
+.cell .line-clip.pal > span {
+  background: var(--palindrome);
+}
+.cell .line-seg {
   position: absolute;
   left: 50%;
   top: 50%;
   width: calc(50% + 3px);
   height: 26%;
   border-radius: 999px;
-  background: var(--thermo);
   /* Rotacija oko lijevog ruba pilule; on nakon translate leži točno u središtu
      ćelije, pa segment izlazi iz središta pod kutom --a (JS ga računa). */
   transform-origin: 0 50%;
@@ -358,62 +374,60 @@ main {
   pointer-events: none;
 }
 /* Dijagonalni korak: središte->kut je √2 puta dulje od središte->brid. */
-.cell .thermo-seg.diag {
+.cell .line-seg.diag {
   width: calc(70.7% + 3px);
 }
-/* Dijagonalni kut: ćelija sa strane crta komad tube koji bi inače pojela (vidi
-   komentar uz thermoCorners u app.js). Obrez na vlastitu ćeliju je ono što komad
+/* Dijagonalni kut: ćelija sa strane crta komad linije koji bi inače pojela (vidi
+   komentar uz l.corners u app.js). Obrez na vlastitu ćeliju je ono što komad
    drži podalje od susjedovih bilješki - zato zaseban omotač s overflow:hidden, a ne
-   pilula koja viri iz ćelije kao .thermo-seg. */
-.cell .thermo-clip {
+   pilula koja viri iz ćelije kao .line-seg. */
+.cell .line-clip {
   position: absolute;
   inset: 0;
   overflow: hidden;
   z-index: -1;
   pointer-events: none;
 }
-.cell .thermo-clip > span {
+.cell .line-clip > span {
   position: absolute;
   /* Dulja nego što rupa traži: višak ionako padne izvan obreza, a ravni dio pilule
-     (bez zaobljenog kraja) tako pokrije rupu punom debljinom. Debljina = .thermo-seg. */
+     (bez zaobljenog kraja) tako pokrije rupu punom debljinom. Debljina = .line-seg. */
   width: 60%;
   height: 26%;
   border-radius: 999px;
-  background: var(--thermo);
   /* left/top dolje ciljaju središte križa razmaka (kut ćelije ± pola razmaka),
-     translate na njega dovede središte pilule, pa je rotacija poravna s tubom. */
+     translate na njega dovede središte pilule, pa je rotacija poravna s linijom. */
   transform: translate(-50%, -50%) rotate(var(--a));
 }
-.cell .thermo-clip.tl > span {
+.cell .line-clip.tl > span {
   left: calc(var(--gx) / -2);
   top: calc(var(--gy) / -2);
 }
-.cell .thermo-clip.tr > span {
+.cell .line-clip.tr > span {
   left: calc(100% + var(--gx) / 2);
   top: calc(var(--gy) / -2);
 }
-.cell .thermo-clip.bl > span {
+.cell .line-clip.bl > span {
   left: calc(var(--gx) / -2);
   top: calc(100% + var(--gy) / 2);
 }
-.cell .thermo-clip.br > span {
+.cell .line-clip.br > span {
   left: calc(100% + var(--gx) / 2);
   top: calc(100% + var(--gy) / 2);
 }
 
 /* Spoj u središtu ćelije. Segmenti kreću IZ središta, a zaobljeni vrh pilule tamo
-   dolazi u TOČKU - pa se tuba na svakom vrhu stanji (izmjereno: 10.75px -> 0-7px), na
-   skretanju vanjski kut ostane odgrizen, a zadnja ćelija tube završi šiljkom umjesto
-   zaobljeno. Disk promjera tube popuni spoj - isto što SVG dobije s round linejoinom
+   dolazi u TOČKU - pa se linija na svakom vrhu stanji (izmjereno: 10.75px -> 0-7px), na
+   skretanju vanjski kut ostane odgrizen, a zadnja ćelija završi šiljkom umjesto
+   zaobljeno. Disk promjera linije popuni spoj - isto što SVG dobije s round linejoinom
    i linecapom. Centriranje kao .thermo-bulb (inset:0 + margin:auto). */
-.cell .thermo-joint {
+.cell .line-joint {
   position: absolute;
   inset: 0;
   margin: auto;
   width: 26%;
   height: 26%;
   border-radius: 50%;
-  background: var(--thermo);
   z-index: -1;
   pointer-events: none;
 }
@@ -426,7 +440,6 @@ main {
   width: 58%;
   height: 58%;
   border-radius: 50%;
-  background: var(--thermo);
   z-index: -1;
   pointer-events: none;
 }

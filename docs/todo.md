@@ -124,15 +124,12 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 
 - [x] Thermo (vrijednosti rastu duž termometra, v1.30.0). **Nije ispala
       geometrija-first** - vidi zasebnu sekciju niže.
+- [x] Palindrome (linija čita isto u oba smjera, v1.32.0). Kao Thermo, **nije ispala
+      geometrija-first** - vidi zasebnu sekciju niže.
 
 Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,
 generacija mora dati jedinstveno rješenje):
 
-- [ ] Palindrome (linija čita isto u oba smjera). Kao i Thermo, kandidat za
-      derive-first: iz gotovog rješenja tražiti put čije se vrijednosti zrcale.
-      Teže od Thermo šetnje (uvjet veže parove s oba kraja puta, ne susjedni korak),
-      ali i dalje jeftinije od `setup`-prvo pristupa. Render nasljeđuje Thermo
-      segmente (`thermo-seg`) - linija je ista mašinerija bez kuglice.
 - [ ] Clone (dvije regije dijele isti raspored)
 - [ ] Killer (kavezi sa zadanim zbrojem - traži vlastiti generator geometrije, zadnji)
 
@@ -289,6 +286,7 @@ tamo nose rješenje) pa prune radi puni posao - 11 -> 6.
 
 **Isto vrijedi vjerojatno i za XV/Kropki na 28 zadanih** - nije mjereno, ali mehanizam
 je isti. Ako Vatra ikad javi "Hard XV ploča ima samo par oznaka", uzrok je ovdje.
+Kod Palindromea se ponovilo mjerljivo (17/30 ploča na dnu) - vidi sekciju niže.
 
 ### Render: prva oznaka koja ne stane u ćeliju
 
@@ -343,7 +341,8 @@ kontrolu 10.75-11px. Ostatak odstupanja (~1px) je postojeći dug per-ćelija pri
 `.br`/`.bb` margine čine ćelije ne-kvadratnima pa polovice segmenata ni na ortogonalnom
 koraku nisu savršeno kolinearne. Ortogonalni koraci mjere identično s krpama i bez njih.
 
-Palindrome nasljeđuje ovu mašineriju (ista linija bez kuglice) - i uštip i lijek.
+Palindrome je tu mašineriju i naslijedio (v1.32.0) - i uštip i lijek, bez ijedne nove
+render zamke.
 
 #### Spoj u središtu ćelije (v1.30.2)
 
@@ -370,6 +369,60 @@ dotakla. Uštip na kutu (11 → 7px) bio je stvaran i popravak stoji, ali nije b
 najvidljivije. Druga zamka: hit-test nad glifom znamenke vraća `.cell`, ne pilulu ispod
 nje (tekst je inline sadržaj ćelije), pa je prvo mjerenje spojeva lažno prijavilo 0% za
 svaku ćeliju sa znamenkom. Mjeriti tubu tek nakon što se znamenke maknu iz DOM-a.
+
+## Palindrome (v1.32.0)
+
+Druga varijanta koju je doc krivo svrstao u "geometrija-first" (prva je Thermo) - i
+opet iz istog razloga: doc pretpostavlja `setup()` koji složi liniju PRIJE rješenja.
+Derive pipeline ide obrnuto pa je i ovdje generator ostao netaknut.
+
+**Razlika prema Thermo je SMJER rasta.** Termometar je šetnja s jednog kraja (svaki
+korak gleda samo prethodnika), a palindromski uvjet veže parove s OBA kraja - pa
+`derivePalindromes` raste **iz sredine prema van, u parovima**: nađi susjeda lijevog i
+susjeda desnog kraja koji nose istu vrijednost u rješenju, dodaj oba. Svaki dodani par
+je jednak po konstrukciji, pa nemoguća linija ne može nastati.
+
+Samo **neparne duljine** (3/5/7): sredina je slobodna ćelija i sjeme je bilo koja
+ćelija. Parna linija bi tražila sjeme od dva susjeda jednake vrijednosti - dodatan
+slučaj za raspon koji neparne već pokrivaju.
+
+Cijeli odnos ćelije staje u **jedan broj** - indeks zrcalnog partnera (`prepPalindromes`
+vraća 81-polje, -1 gdje partnera nema). Za razliku od tube, gdje raspon ovisi o poziciji
+i duljini cijelog puta, palindrom kaže samo "ove dvije ćelije su jednake" - ni `isValid`
+ni solver ne trebaju put, samo partnera.
+
+**Solverova snaga je u presjeku, ne u upisu.** Kod Thermo/Kropki oznaka radi tek kad je
+susjed popunjen; ovdje dvije PRAZNE zrcalne ćelije smiju zadržati samo ono što obje
+dopuštaju. Presjek stvarno reže jer par nužno leži u različitim redovima/stupcima/
+kutijama (inače ne bi mogao biti jednak). Ide u `computeCandidates` nakon što su svi
+skupovi izračunati; `place` uz to fiksira partnera pri upisu. Zasebne tehnike nema
+(kao Kropki/XV/Thermo, klasične dovrše).
+
+Najjeftinija varijanta dosad: **Hard prosjek 8ms, max 26ms** (Thermo 40ms, XV je znao
+23s prije floora). Kombinacije: +Thermo 152ms, +Jigsaw 348ms, ostale ispod 35ms.
+
+`STRENGTH: 10` (dno raspona 18 zadanih) izmjeren je probom u oba smjera: sa `STRENGTH:
+20` (dno 8) generacija skoči na **2.6s prosjek / 13.5s max**, a ploče svejedno ne padnu
+ispod 20 zadanih - dno je nedostižno i samo se troše pokušaji.
+
+**Prune floor `PALINDROME_KEEP_MIN = 4`** iz istog razloga kao Thermo, i s istim
+nalazom: bez granice je **17/30 Hard ploča** spušteno na 3 linije (prune na vrhu raspona
+ispravno zaključi da je skoro svaka linija suvišna). S granicom: 4-8 linija, 17-36
+ćelija - isti red veličine kao Thermo (4-8 tuba, 12-29 ćelija).
+
+**Render je preuzet, ne napisan.** Thermo mašinerija (polovica segmenta po ćeliji,
+krpa dijagonalnog kuta, disk u središtu) generalizirana je u `.line-seg` / `.line-joint`
+/ `.line-clip` uz klasu vrste (`.thermo` / `.pal`) koja nosi samo boju; `.thermo-bulb`
+je ostao Thermo-specifičan jer palindrom nema smjer pa ni kuglicu. Boja je jedina
+stvarna razlika (`--palindrome`, isti ton svjetline kao `--thermo`) - kombinacija
+Thermo+Palindrome se mora čitati na prvi pogled. Generator ne pušta dvije linije kroz
+istu ćeliju (`derivePalindromes` prima `blocked` s ćelijama tuba): render crta segmente
+PO ĆELIJI pa bi preklop bio i nečitljiv i dvosmislen - izmjereno 0 preklopa u 6 partija.
+
+Regresija: 26 ploča (13 kombinacija × 2 težine, zasijan RNG) **bajt-identično** prije i
+poslije - jedina razlika je novo prazno `palindromes: null` polje u `clues`. Hint je
+odvojeno provjeren: 10/10 ploča (`palindrome`, `palindrome+thermo`) riješeno do kraja
+samim hintovima, nula krivih prijedloga.
 
 ## Poznato / tehnički dug
 

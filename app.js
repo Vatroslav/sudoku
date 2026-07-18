@@ -16,6 +16,7 @@
     "kropki",
     "xv",
     "thermo",
+    "palindrome",
   ];
   const VARIANT_LABELS = {
     antiking: "Antiking",
@@ -27,6 +28,7 @@
     kropki: "Kropki",
     xv: "XV",
     thermo: "Thermo",
+    palindrome: "Palindrome",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -201,9 +203,9 @@
     }
     return true;
   }
-  // Thermo: tube su per-puzzle podatak (state.clues.thermos = polje putova ćelija, bulb
-  // prvi, susjedi po potezu kralja). Preklop se odbija - render crta najviše jedan
-  // segment po smjeru i računa s jednim termometrom po ćeliji.
+  // Linijske varijante: per-puzzle putovi ćelija (Thermo tube s kuglicom na početku,
+  // Palindrome linije bez smjera; susjedi po potezu kralja). Preklop se odbija -
+  // render crta najviše jedan segment po smjeru i računa s jednom linijom po ćeliji.
   function validThermos(thermos) {
     if (!Array.isArray(thermos)) return false;
     const seen = new Set();
@@ -221,6 +223,7 @@
     }
     return true;
   }
+  const validPalindromes = validThermos; // isti oblik puta, samo bez smjera
   // Regija ćelije: jigsaw -> state.clues.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
     if (state.variants.includes("jigsaw") && Array.isArray(state.clues.regions))
@@ -383,6 +386,7 @@
         parity: (clues && clues.parity) || null,
         edges: (clues && clues.edges) || null,
         thermos: (clues && clues.thermos) || null,
+        palindromes: (clues && clues.palindromes) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -519,6 +523,8 @@
           thermos: state.thermos,
         };
       for (const k of ["regions", "parity", "edges", "thermos", "dots"]) delete state[k];
+      // Palindrome je uveden nakon clues objekta pa nema što migrirati - partija bez
+      // njega jednostavno nema polje.
       const clues = state.clues;
       // Jigsaw: regions mora biti valjan (81, id-evi 0-8, svaki 9x). Korumpiran
       // save s jigsaw variants odbaci (solver bi tiho sudio krivo). Non-jigsaw = null.
@@ -547,6 +553,12 @@
         if (!validThermos(clues.thermos)) return false;
       } else {
         clues.thermos = null;
+      }
+      // Palindrome: isto kao Thermo (putovi susjednih ćelija, bez preklopa).
+      if (state.variants.includes("palindrome")) {
+        if (!validPalindromes(clues.palindromes)) return false;
+      } else {
+        clues.palindromes = null;
       }
       return true;
     } catch (e) {
@@ -1043,7 +1055,7 @@
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
-    const { regions, parity, edges, thermos } = state.clues;
+    const { regions, parity, edges, thermos, palindromes } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
@@ -1059,37 +1071,46 @@
     // Jigsaw: ploča dobiva klasu za deblje/svjetlije granice regija (vidi CSS).
     boardEl.classList.toggle("jigsaw", jigsawMode);
 
-    // Thermo: indeks ćelija -> { path, pos } za ovaj render. Tube su nepromjenjive
-    // tijekom partije, ali render se zove na svaki potez - 81 unosa je jeftinije od
-    // pretrage po putovima za svaku ćeliju.
-    const thermoAt = new Array(81).fill(null);
-    if (Array.isArray(thermos))
-      for (const path of thermos)
-        for (let p = 0; p < path.length; p++) thermoAt[path[p]] = { path, pos: p };
+    // Linijske varijante (Thermo tube, Palindrome linije) dijele cijelu render
+    // mašineriju - razlikuju se samo bojom i kuglicom na dnu tube. Generator ih ne
+    // pušta kroz istu ćeliju (vidi derivePalindromes `blocked`).
+    const lines = [
+      { kind: "thermo", paths: thermos },
+      { kind: "pal", paths: palindromes },
+    ].filter((l) => Array.isArray(l.paths) && l.paths.length);
 
-    // Thermo: krpanje dijagonalnog kuta. Dvije dijagonalne ćelije dodiruju se samo u
+    // Indeks ćelija -> { path, pos } po vrsti linije. Linije su nepromjenjive tijekom
+    // partije, ali render se zove na svaki potez - 81 unosa je jeftinije od pretrage
+    // po putovima za svaku ćeliju.
+    for (const l of lines) {
+      l.at = new Array(81).fill(null);
+      for (const path of l.paths)
+        for (let p = 0; p < path.length; p++) l.at[path[p]] = { path, pos: p };
+    }
+
+    // Krpanje dijagonalnog kuta. Dvije dijagonalne ćelije dodiruju se samo u
     // TOČKI, pa polovice segmenata ne mogu same iscrtati tubu preko kuta: tik uz kut
     // bokovi pilule prelaze u dvije ćelije SA STRANE, a barem jedna od njih crta se
     // kasnije pa taj dio pojede svojom neprozirnom pozadinom - tuba se na kutu vidno
     // stanji (izmjereno 11px -> 7px).
     //
     // Unutar VLASTITE ćelije segment nitko ne pojede (kutije ćelija se ne preklapaju),
-    // pa krpa treba samo dvjema ćelijama sa strane - onima koje same nisu na tubi.
-    // Svaka nacrta svoj komad tube obrezan na sebe (.thermo-clip): obrez je ono što ga
+    // pa krpa treba samo dvjema ćelijama sa strane - onima koje same nisu na liniji.
+    // Svaka nacrta svoj komad linije obrezan na sebe (.line-clip): obrez je ono što ga
     // drži izvan susjedovih bilješki, a ostaje ispod vlastite znamenke.
     //
     // Sidro komada je središte križa razmaka (kut + pola razmaka), a NE kut same
     // ćelije: kutovi četiriju ćelija razmaknuti su za razmak (3px na granici bloka),
-    // pa bi pilula usidrena na vlastiti kut legla pokraj osi tube i tuba bi se na kutu
-    // podebljala umjesto stanjila.
-    const thermoCorners = new Array(81).fill(null);
-    const addCorner = (i, corner, ang, gx, gy) => {
-      const list = thermoCorners[i] || (thermoCorners[i] = []);
-      if (!list.some((p) => p.corner === corner && p.ang === ang))
-        list.push({ corner, ang, gx, gy });
-    };
-    if (Array.isArray(thermos))
-      for (const path of thermos)
+    // pa bi pilula usidrena na vlastiti kut legla pokraj osi linije i linija bi se na
+    // kutu podebljala umjesto stanjila.
+    for (const l of lines) {
+      l.corners = new Array(81).fill(null);
+      const addCorner = (i, corner, ang, gx, gy) => {
+        const list = l.corners[i] || (l.corners[i] = []);
+        if (!list.some((p) => p.corner === corner && p.ang === ang))
+          list.push({ corner, ang, gx, gy });
+      };
+      for (const path of l.paths)
         for (let p = 1; p < path.length; p++) {
           const a = path[p - 1];
           const b = path[p];
@@ -1103,7 +1124,7 @@
           const gy = (jigsawMode ? regions[q] !== regions[q + 9] : Math.floor(q / 9) % 3 === 2)
             ? 3
             : 1;
-          // Krpaju ćelije s DRUGE dijagonale kvadrata - one kroz koje tuba ne prolazi.
+          // Krpaju ćelije s DRUGE dijagonale kvadrata - one kroz koje linija ne prolazi.
           if (dr === dc) {
             addCorner(q + 1, "bl", 45, gx, gy);
             addCorner(q + 9, "tr", 45, gx, gy);
@@ -1112,6 +1133,7 @@
             addCorner(q + 10, "tl", -45, gx, gy);
           }
         }
+    }
 
     const sel = state.selected;
     const selList = state.multi && state.multi.length ? state.multi : sel !== null ? [sel] : [];
@@ -1200,60 +1222,63 @@
         cell.textContent = "";
       }
 
-      // Thermo: tuba. Prva oznaka koja NE stane u ćeliju - ide u zasebne spanove sa
-      // z-indexom -1 (isti sloj kao parity ::before: iznad boje/highlighta ćelije,
-      // ispod znamenke). Jedan board-level SVG preko ploče bi bio čišći, ali ne ide:
-      // ćelije imaju neprozirnu pozadinu pa bi ih SVG ispod bio nevidljiv, a iznad
-      // bi prekrio znamenke.
+      // Thermo tube i Palindrome linije. Prva oznaka koja NE stane u ćeliju - ide u
+      // zasebne spanove sa z-indexom -1 (isti sloj kao parity ::before: iznad
+      // boje/highlighta ćelije, ispod znamenke). Jedan board-level SVG preko ploče bi
+      // bio čišći, ali ne ide: ćelije imaju neprozirnu pozadinu pa bi ih SVG ispod bio
+      // nevidljiv, a iznad bi prekrio znamenke.
       //
       // Zato svaka ćelija crta SVOJU polovicu svakog segmenta - od svog središta
-      // prema susjedu na tubi, s prelaskom od 3px preko granice. Dvije polovice se
+      // prema susjedu na liniji, s prelaskom od 3px preko granice. Dvije polovice se
       // preklope u razmaku (i na debeloj granici bloka, gdje je razmak 3px) pa je
-      // tuba neprekinuta bez računanja točnih razmaka. Prelazak ne smije biti veći:
+      // linija neprekinuta bez računanja točnih razmaka. Prelazak ne smije biti veći:
       // ćelija se cijela iscrtava iznad ranije iscrtanih susjeda, pa bi dulji
       // segment prekrio susjedovu znamenku. Na 3px dohvati samo njegov rub.
-      if (thermoAt[i]) {
-        const { path, pos } = thermoAt[i];
-        // Kuglica = dno tube (najmanji broj). Crta se preko početka segmenta.
-        if (pos === 0) {
-          const bulb = document.createElement("span");
-          bulb.className = "thermo-bulb";
-          cell.appendChild(bulb);
-        } else {
-          // Spoj u središtu: segmenti kreću IZ središta pa im zaobljeni vrh tamo dođe
-          // u točku - bez diska tuba se na svakom vrhu stanji (vidi CSS). Kuglica taj
-          // posao odradi sama (šira je od tube) pa joj spoj ne treba.
-          const joint = document.createElement("span");
-          joint.className = "thermo-joint";
-          cell.appendChild(joint);
+      for (const l of lines) {
+        if (l.at[i]) {
+          const { path, pos } = l.at[i];
+          // Kuglica = dno tube (najmanji broj), jedina razlika u crtanju dviju vrsta
+          // linija. Palindrom nema smjer pa ni kuglicu - oba mu kraja su ravnopravna.
+          if (l.kind === "thermo" && pos === 0) {
+            const bulb = document.createElement("span");
+            bulb.className = "thermo-bulb";
+            cell.appendChild(bulb);
+          } else {
+            // Spoj u središtu: segmenti kreću IZ središta pa im zaobljeni vrh tamo dođe
+            // u točku - bez diska se linija na svakom vrhu stanji (vidi CSS). Kuglica taj
+            // posao odradi sama (šira je od tube) pa joj spoj ne treba.
+            const joint = document.createElement("span");
+            joint.className = "line-joint " + l.kind;
+            cell.appendChild(joint);
+          }
+          for (const q of [pos - 1, pos + 1]) {
+            if (q < 0 || q >= path.length) continue;
+            const j = path[q];
+            const seg = document.createElement("span");
+            seg.className = "line-seg " + l.kind;
+            const dr = Math.floor(j / 9) - row;
+            const dc = (j % 9) - col;
+            // Kut prema susjedu; dijagonalni segment je za faktor √2 dulji.
+            seg.style.setProperty("--a", `${(Math.atan2(dr, dc) * 180) / Math.PI}deg`);
+            if (dr && dc) seg.classList.add("diag");
+            cell.appendChild(seg);
+          }
         }
-        for (const q of [pos - 1, pos + 1]) {
-          if (q < 0 || q >= path.length) continue;
-          const j = path[q];
-          const seg = document.createElement("span");
-          seg.className = "thermo-seg";
-          const dr = Math.floor(j / 9) - row;
-          const dc = (j % 9) - col;
-          // Kut prema susjedu; dijagonalni segment je za faktor √2 dulji.
-          seg.style.setProperty("--a", `${(Math.atan2(dr, dc) * 180) / Math.PI}deg`);
-          if (dr && dc) seg.classList.add("diag");
-          cell.appendChild(seg);
-        }
-      }
 
-      // Thermo: komad tube preko dijagonalnog kuta, obrezan na ovu ćeliju (vidi
-      // komentar uz thermoCorners). Crta ga ćelija kroz koju tuba ne prolazi.
-      if (thermoCorners[i])
-        for (const { corner, ang, gx, gy } of thermoCorners[i]) {
-          const clip = document.createElement("span");
-          clip.className = "thermo-clip " + corner;
-          const pill = document.createElement("span");
-          pill.style.setProperty("--a", `${ang}deg`);
-          pill.style.setProperty("--gx", `${gx}px`);
-          pill.style.setProperty("--gy", `${gy}px`);
-          clip.appendChild(pill);
-          cell.appendChild(clip);
-        }
+        // Komad linije preko dijagonalnog kuta, obrezan na ovu ćeliju (vidi komentar
+        // uz l.corners). Crta ga ćelija kroz koju linija ne prolazi.
+        if (l.corners[i])
+          for (const { corner, ang, gx, gy } of l.corners[i]) {
+            const clip = document.createElement("span");
+            clip.className = "line-clip " + l.kind + " " + corner;
+            const pill = document.createElement("span");
+            pill.style.setProperty("--a", `${ang}deg`);
+            pill.style.setProperty("--gx", `${gx}px`);
+            pill.style.setProperty("--gy", `${gy}px`);
+            clip.appendChild(pill);
+            cell.appendChild(clip);
+          }
+      }
 
       // Kropki/XV: oznake na bridovima. Vežemo ih uz KASNIJE iscrtanu ćeliju (ovu, i) na
       // lijevom/gornjem bridu prema ranijem susjedu (i-1 / i-9) - tako oznaka leži iznad

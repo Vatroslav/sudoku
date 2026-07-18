@@ -182,6 +182,20 @@ const Solver = (() => {
       for (let p = 0; p < path.length; p++) at[path[p]] = { path, pos: p };
     return at;
   }
+  // Palindrome: linije čije se vrijednosti čitaju isto u oba smjera. Oblik je isti kao
+  // kod tuba (put ćelija po potezu kralja, bez preklopa) pa dijele validaciju.
+  const validPalindromes = validThermos;
+  // Indeks ćelija -> zrcalni partner (-1 = nije na liniji ili je sredina bez partnera).
+  // Sav palindromski odnos staje u taj jedan broj - vidi sudoku.js prepPalindromes.
+  function prepPalindromes(pals) {
+    const mate = new Array(81).fill(-1);
+    for (const path of pals)
+      for (let p = 0; p < path.length; p++) {
+        const q = path.length - 1 - p;
+        if (q !== p) mate[path[p]] = path[q];
+      }
+    return mate;
+  }
   // Raspon [lo,hi] dopušten na poziciji p termometra. Mora se poklapati sa sudoku.js
   // thermoRange (generator i solver dijele definiciju odnosa).
   function thermoRange(grid, path, p) {
@@ -260,6 +274,12 @@ const Solver = (() => {
   // zasebne tehnike - tuba samo steže kandidate (computeCandidates iz pozicije i
   // popunjenih članova, place() pri svakom upisu), klasične tehnike dovrše.
   let curThermos = null;
+  // Palindrome: per-puzzle 81-polje zrcalnih partnera (-1 gdje ga nema) ili null.
+  // Dva mjesta propagacije, oba bez zasebne tehnike (kao Thermo/Kropki):
+  //   computeCandidates - popunjen partner fiksira vrijednost, a par praznih PRESIJECA
+  //     kandidate (par leži u različitim jedinicama pa presjek stvarno reže),
+  //   place - upis fiksira partnera.
+  let curPal = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -300,8 +320,25 @@ const Solver = (() => {
         const [lo, hi] = thermoRange(grid, path, pos);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
       }
+      // Palindrome: popunjen partner fiksira vrijednost. (Par praznih se presijeca
+      // niže - tek kad su OBA skupa izračunata.)
+      if (curPal && curPal[idx] >= 0 && grid[curPal[idx]] !== 0) {
+        const m = grid[curPal[idx]];
+        for (const v of [...s]) if (v !== m) s.delete(v);
+      }
       cand[idx] = s;
     }
+    // Palindrome: dvije prazne zrcalne ćelije nose istu vrijednost, pa svaka smije
+    // zadržati samo ono što obje dopuštaju. Presjek stvarno reže jer par leži u
+    // različitim redovima/stupcima/kutijama (inače ne bi mogao biti jednak).
+    if (curPal)
+      for (let idx = 0; idx < 81; idx++) {
+        const j = curPal[idx];
+        if (j <= idx || !cand[idx] || !cand[j]) continue; // svaki par jednom
+        const both = [...cand[idx]].filter((v) => cand[j].has(v));
+        cand[idx] = new Set(both);
+        cand[j] = new Set(both);
+      }
     return cand;
   }
 
@@ -325,6 +362,12 @@ const Solver = (() => {
         const [lo, hi] = thermoRange(grid, path, q);
         for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
       }
+    }
+    // Palindrome: upis fiksira zrcalnog partnera na istu vrijednost - naked single
+    // koji klasične tehnike odmah pokupe.
+    if (curPal && curPal[idx] >= 0) {
+      const j = curPal[idx];
+      if (cand[j]) for (const u of [...cand[j]]) if (u !== val) cand[j].delete(u);
     }
   }
 
@@ -632,16 +675,18 @@ const Solver = (() => {
   //   parity  - Even/Odd maska (81-polje 0/1/2); nevaljano se ignorira.
   //   edges   - Kropki/XV brid-oznake ({ h, v }); nevaljano se ignorira.
   //   thermos - Thermo tube (polje putova); nevaljano se ignorira.
+  //   palindromes - Palindrome linije (polje putova); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
-    const { regions, parity, edges, thermos } = clues || {};
+    const { regions, parity, edges, thermos, palindromes } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
     curParity = validParity(parity) ? parity : null;
     curEdges = validEdges(edges) ? edges : null;
     curThermos = validThermos(thermos) ? prepThermos(thermos) : null;
+    curPal = validPalindromes(palindromes) ? prepPalindromes(palindromes) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);

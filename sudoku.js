@@ -75,8 +75,9 @@ const Sudoku = (() => {
     kingPeers.push(list);
   }
 
-  // Thermo: tuba se grana po potezu kralja (8 susjeda) - smije skretati i dijagonalno.
-  const thermoNeighbors = [];
+  // Linijske varijante (Thermo, Palindrome): linija korača po potezu kralja (8
+  // susjeda) - smije skretati i dijagonalno. Dijele susjedstvo jer dijele i render.
+  const lineNeighbors = [];
   for (let idx = 0; idx < 81; idx++) {
     const r = Math.floor(idx / 9),
       c = idx % 9;
@@ -88,7 +89,7 @@ const Sudoku = (() => {
           nc = c + dc;
         if (nr >= 0 && nr < 9 && nc >= 0 && nc < 9) list.push(nr * 9 + nc);
       }
-    thermoNeighbors.push(list);
+    lineNeighbors.push(list);
   }
 
   // Thermo: raspon [lo,hi] dopušten na poziciji p termometra. Dva izvora, oba nužna:
@@ -121,6 +122,21 @@ const Sudoku = (() => {
     return at;
   }
 
+  // Palindrome: cijeli odnos ćelije staje u JEDAN broj - indeks zrcalnog partnera
+  // (-1 = nije na liniji, ili je sredina neparne linije i nema partnera). Za razliku
+  // od termometra, gdje raspon ovisi o poziciji i duljini cijele tube, palindrom
+  // kaže samo "ove dvije ćelije su jednake" - pa ni isValid ni solver ne trebaju put.
+  function prepPalindromes(pals) {
+    if (!pals || !pals.length) return null;
+    const mate = new Array(81).fill(-1);
+    for (const path of pals)
+      for (let p = 0; p < path.length; p++) {
+        const q = path.length - 1 - p;
+        if (q !== p) mate[path[p]] = path[q];
+      }
+    return mate;
+  }
+
   // clues = SVI per-puzzle podaci u jednom objektu (za razliku od `variants`, koji
   // vrijedi za cijelu partiju). Prije je svaki od njih bio zaseban parametar pa je
   // isValid narastao na 8; svaka nova derivacijska varijanta dodavala je još jedan
@@ -128,20 +144,24 @@ const Sudoku = (() => {
   // Ovako ih dodaje NULA - novo polje putuje samo po sebi.
   //
   // Dvije vrste polja i zato ih gradi jedno mjesto:
-  //   - wire (regions/parity/edges/thermos) - ono što ide u state i localStorage,
-  //   - izvedeno (jig/thm) - brzi oblici koje isValid gleda u vrućoj petlji.
+  //   - wire (regions/parity/edges/thermos/palindromes) - ono što ide u state i
+  //     localStorage,
+  //   - izvedeno (jig/thm/pal) - brzi oblici koje isValid gleda u vrućoj petlji.
   // Izvedeno se NE sprema; prepClues ga svaki put složi iz wire polja.
   function prepClues(c) {
     const regions = (c && c.regions) || null;
     const thermos = (c && c.thermos) || null;
+    const palindromes = (c && c.palindromes) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
       edges: (c && c.edges) || null,
       thermos,
+      palindromes,
       // jig se drži uz regions: isValid ne smije po ćeliji tražiti tko je u kojoj regiji.
       jig: regions ? { map: regions, cells: regionsToCells(regions) } : null,
       thm: prepThermos(thermos),
+      pal: prepPalindromes(palindromes),
     };
   }
   const EMPTY_CLUES = prepClues({}); // klasik: nema nijedne per-puzzle oznake
@@ -161,6 +181,7 @@ const Sudoku = (() => {
     "kropki",
     "xv",
     "thermo",
+    "palindrome",
   ];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -289,8 +310,9 @@ const Sudoku = (() => {
   //     v[i] = brid i↔i+9; tipovi kao u edgeOk). Samo pozitivno: prikazana oznaka
   //     mora vrijediti, odsutnost ne ograničava ništa.
   //   thm - 81-polje { path, pos } (vidi prepThermos), Thermo tube.
+  //   pal - 81-polje indeksa zrcalnog partnera (vidi prepPalindromes), Palindrome linije.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm } = clues;
+    const { jig, parity, edges, thm, pal } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -348,6 +370,12 @@ const Sudoku = (() => {
       const { path, pos } = thm[idx];
       const [lo, hi] = thermoRange(board, path, pos);
       if (val < lo || val > hi) return false;
+    }
+    // Palindrome: zrcalni partner mora nositi ISTU vrijednost. Provjerava se samo kad
+    // je popunjen - drugi smjer stigne kad na njega dođe red (kao kod brid-oznaka).
+    if (pal && pal[idx] >= 0) {
+      const m = board[pal[idx]];
+      if (m && m !== val) return false;
     }
     return true;
   }
@@ -548,7 +576,7 @@ const Sudoku = (() => {
         // Strogi rast jamči da se ćelija ne može ponoviti (vrijednost bi morala biti
         // veća od same sebe) - zato provjera samo protiv tuđih tuba.
         const up = shuffle(
-          thermoNeighbors[cur].filter((n) => !used[n] && solution[n] > solution[cur])
+          lineNeighbors[cur].filter((n) => !used[n] && solution[n] > solution[cur])
         );
         if (!up.length) break;
         cur = up[0];
@@ -560,6 +588,75 @@ const Sudoku = (() => {
     }
     return thermos;
   }
+
+  // Palindrome: linija čije se vrijednosti čitaju isto u oba smjera (path[p] ===
+  // path[len-1-p]).
+  //
+  // Doc ga, kao i Thermo, svrstava u "geometrija-first" - i tu je iz istog razloga u
+  // krivu: derive pipeline izvodi liniju IZ gotovog rješenja. Razlika prema termometru
+  // je u SMJERU rasta: Thermo je šetnja s jednog kraja (svaki korak gleda samo
+  // prethodnika), a palindromski uvjet veže parove s OBA kraja - pa linija raste iz
+  // sredine prema van, u parovima. Tako je svaki dodani par jednak po konstrukciji i
+  // nemoguća linija se ne može proizvesti.
+  //
+  // Samo NEPARNE duljine (3/5/7): sredina je slobodna ćelija i sjeme je bilo koja
+  // ćelija. Parna linija bi tražila sjeme od dva susjeda jednake vrijednosti - dodatan
+  // slučaj za raspon koji neparne već pokrivaju.
+  const PAL_LENS = [3, 5, 7];
+  const MAX_PALINDROMES = 12;
+  const PAL_DENSITY = { min: 0.3, max: 0.5 };
+  // Kao THERMO_KEEP_MIN: linija je strukturni objekt i jedna usamljena se čita kao
+  // greška, pa prune ne smije ispod ovoga (vidi komentar uz THERMO_KEEP_MIN).
+  // Izmjereno bez granice (30 Hard ploča): 17/30 spuštenih na 3 linije - prune ih
+  // reže do dna jer na vrhu raspona klasika nosi ploču gotovo cijelu. S granicom:
+  // 4-8 linija (17-36 ćelija), isti red veličine kao Thermo (4-8 tuba, 12-29 ćelija).
+  const PALINDROME_KEEP_MIN = 4;
+  // blocked = 81-polje bool ćelija koje su već zauzete drugom linijskom varijantom
+  // (Thermo). Preklop linija se ne radi: render crta segmente PO ĆELIJI, pa bi dvije
+  // linije kroz istu ćeliju bile i nečitljive i dvosmislene.
+  function derivePalindromes(solution, boost = 0, blocked = null) {
+    const want = Math.round(MAX_PALINDROMES * pickDensity(scaled(PAL_DENSITY, boost)));
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
+    const pals = [];
+    for (const seed of shuffle([...Array(81).keys()])) {
+      if (pals.length >= want) break;
+      if (used[seed]) continue;
+      const maxLen = PAL_LENS[Math.floor(Math.random() * PAL_LENS.length)];
+      let path = [seed];
+      const mine = new Set([seed]); // vlastiti put; `used` pokriva tuđe linije
+      while (path.length + 2 <= maxLen) {
+        const free = (n) => !used[n] && !mine.has(n);
+        const heads = shuffle(lineNeighbors[path[0]].filter(free));
+        let grew = false;
+        for (const a of heads) {
+          const tails = shuffle(
+            lineNeighbors[path[path.length - 1]].filter(
+              (b) => b !== a && free(b) && solution[b] === solution[a]
+            )
+          );
+          if (!tails.length) continue;
+          path = [a, ...path, tails[0]];
+          mine.add(a);
+          mine.add(tails[0]);
+          grew = true;
+          break;
+        }
+        if (!grew) break;
+      }
+      if (path.length < PAL_LENS[0]) continue;
+      for (const i of path) used[i] = true;
+      pals.push(path);
+    }
+    return pals;
+  }
+
+  // 81-polje bool: ćelije kroz koje prolazi neka od danih linija (null ako ih nema).
+  const lineCells = (paths) => {
+    if (!paths || !paths.length) return null;
+    const used = new Array(81).fill(false);
+    for (const p of paths) for (const i of p) used[i] = true;
+    return used;
+  };
 
   const TARGET = { normal: 34, hard: 28 };
   const REQ_TIER = { normal: Solver.T_SINGLE, hard: Solver.T_INTER };
@@ -585,6 +682,7 @@ const Sudoku = (() => {
     evenodd: 15,
     thermo: 12,
     xv: 10,
+    palindrome: 10,
     hyper: 8,
     antiknight: 6,
     jigsaw: 6,
@@ -614,7 +712,7 @@ const Sudoku = (() => {
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
   function pruneMarks(puzzle, solution, variants, clues, maxTier) {
-    const { parity, edges, thermos } = clues;
+    const { parity, edges, thermos, palindromes } = clues;
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -626,6 +724,9 @@ const Sudoku = (() => {
     // nego druga slagalica - pozicijski raspon svake ćelije ovisi o duljini tube
     // (vidi thermoRange), pa kraća tuba mijenja i ono što je ostalo.
     if (thermos) for (const t of thermos) cands.push(["t", t]);
+    // Palindrome: kao tuba, jedinica je CIJELA linija - skraćivanje bi premjestilo
+    // sve zrcalne parove (partner ovisi o duljini), dakle druga slagalica.
+    if (palindromes) for (const p of palindromes) cands.push(["l", p]);
     if (!cands.length) return;
     const stoji = () => {
       const r = Solver.solveAndGrade(puzzle, variants, clues);
@@ -639,6 +740,15 @@ const Sudoku = (() => {
         if (!stoji()) thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
         // thermos je wire polje; izvedeni thm bi inače ostao na staroj listi tuba.
         clues.thm = prepThermos(thermos);
+        continue;
+      }
+      if (kind === "l") {
+        if (palindromes.length <= PALINDROME_KEEP_MIN) continue; // vidi PALINDROME_KEEP_MIN
+        const k = palindromes.indexOf(ref);
+        palindromes.splice(k, 1);
+        if (!stoji()) palindromes.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        // palindromes je wire polje; izvedeni pal bi inače ostao na staroj listi linija.
+        clues.pal = prepPalindromes(palindromes);
         continue;
       }
       const src = kind === "p" ? parity : edges[kind];
@@ -666,12 +776,13 @@ const Sudoku = (() => {
       difficulty,
       variants,
       techniques: res.techniques || [],
-      // Samo wire polja - izvedeno (jig/thm) se ne isporučuje ni ne sprema.
+      // Samo wire polja - izvedeno (jig/thm/pal) se ne isporučuje ni ne sprema.
       clues: {
         regions: clues.regions,
         parity: clues.parity,
         edges: clues.edges,
         thermos: clues.thermos,
+        palindromes: clues.palindromes,
       },
     };
   }
@@ -698,8 +809,9 @@ const Sudoku = (() => {
   // "xv" (slova X/V na bridovima), ili kombinacija. Rezultat nosi `regions` (81-polje
   // id-eva regije) kad je jigsaw aktivan inače `null`, `parity` (81-polje 0/1/2) kad
   // je evenodd aktivan inače `null`, te `edges` ({ h, v } 81-polja) kad je kropki
-  // i/ili xv aktivan inače `null`, te `thermos` (polje putova ćelija, bulb prvi)
-  // kad je thermo aktivan inače `null`.
+  // i/ili xv aktivan inače `null`, `thermos` (polje putova ćelija, bulb prvi)
+  // kad je thermo aktivan inače `null`, te `palindromes` (polje putova ćelija) kad
+  // je palindrome aktivan inače `null`.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
@@ -711,6 +823,16 @@ const Sudoku = (() => {
     const useXv = variants.includes("xv");
     const useEdges = useKropki || useXv;
     const useThermo = variants.includes("thermo");
+    const usePal = variants.includes("palindrome");
+    // Thermo i Palindrome su obje linijske: palindromi se izvode NAKON tuba i
+    // zaobilaze njihove ćelije (vidi derivePalindromes `blocked`).
+    const deriveLines = (solution, boost) => {
+      const thermos = useThermo ? deriveThermos(solution, boost) : null;
+      return {
+        thermos,
+        palindromes: usePal ? derivePalindromes(solution, boost, lineCells(thermos)) : null,
+      };
+    };
     // Raspon zadanih brojeva vrijedi samo za Hard s varijantama - Normal drži
     // svoju razinu, a Classic nema oznaka koje bi manjak brojeva nadoknadile.
     const spread = difficulty === "hard" && variants.length > 0;
@@ -728,12 +850,12 @@ const Sudoku = (() => {
       const geom = newRegionClues(useJig);
       const solution = generateSolution(variants, geom);
       if (!solution) continue; // probijen budžet (loše regije) -> novi pokušaj
-      // Parity/edges/thermos se izvode iz rješenja (uvijek konzistentni) pa su aktivni u dig/solveAndGrade.
+      // Oznake se izvode iz rješenja (uvijek konzistentne) pa su aktivne u dig/solveAndGrade.
       const clues = prepClues({
         regions: geom.regions,
         parity: useEven ? deriveParity(solution, boost) : null,
         edges: useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null,
-        thermos: useThermo ? deriveThermos(solution, boost) : null,
+        ...deriveLines(solution, boost),
       });
       const puzzle = dig(solution, target, variants, clues);
       // Varijanta mora nešto raditi - ploču koju klasika sama jedinstveno rješava
@@ -787,7 +909,7 @@ const Sudoku = (() => {
       regions: geom.regions,
       parity: useEven ? deriveParity(solution) : null,
       edges: useEdges ? deriveEdges(solution, useKropki, useXv) : null,
-      thermos: useThermo ? deriveThermos(solution) : null,
+      ...deriveLines(solution, 0),
     });
     const puzzle = dig(solution, topTarget, variants, clues);
     // Ovdje ploča nije prošla grading, pa prune ide s najvišim dopuštenim tierom.
