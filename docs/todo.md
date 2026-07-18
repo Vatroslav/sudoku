@@ -424,6 +424,10 @@ poslije - jedina razlika je novo prazno `palindromes: null` polje u `clues`. Hin
 odvojeno provjeren: 10/10 ploča (`palindrome`, `palindrome+thermo`) riješeno do kraja
 samim hintovima, nula krivih prijedloga.
 
+**Render je prošao iz prve** (Vatra odigrao partiju) - kod Thermo je isti render trebao
+tri runde popravaka (kut, spoj u središtu). Potvrda da je generalizacija u `.line-*`
+klase bila cijeli posao: naslijeđen je i dotjeran render, ne samo njegov oblik.
+
 ## Poznato / tehnički dug
 
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
