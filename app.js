@@ -18,6 +18,7 @@
     "thermo",
     "palindrome",
     "clone",
+    "killer",
   ];
   const VARIANT_LABELS = {
     antiking: "Antiking",
@@ -31,6 +32,7 @@
     thermo: "Thermo",
     palindrome: "Palindrome",
     clone: "Clone",
+    killer: "Killer",
   };
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -247,6 +249,25 @@
     }
     return true;
   }
+  // Killer: kavezi ({ cells, sum }) se ne preklapaju, a zbroj mora biti dostižan skupom
+  // različitih znamenki te veličine (isti kriterij kao u solveru).
+  const CAGE_MIN_SUM = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45];
+  const CAGE_MAX_SUM = [0, 9, 17, 24, 30, 35, 39, 42, 44, 45];
+  function validCages(cages) {
+    if (!Array.isArray(cages)) return false;
+    const seen = new Set();
+    for (const cage of cages) {
+      if (!cage || !Array.isArray(cage.cells) || !cage.cells.length) return false;
+      const n = cage.cells.length;
+      if (n > 9 || !Number.isInteger(cage.sum)) return false;
+      if (cage.sum < CAGE_MIN_SUM[n] || cage.sum > CAGE_MAX_SUM[n]) return false;
+      for (const i of cage.cells) {
+        if (!Number.isInteger(i) || i < 0 || i > 80 || seen.has(i)) return false;
+        seen.add(i);
+      }
+    }
+    return true;
+  }
   // Regija ćelije: jigsaw -> state.clues.regions[idx], inače klasični 3×3 kvadrat.
   function regionOf(idx) {
     if (state.variants.includes("jigsaw") && Array.isArray(state.clues.regions))
@@ -411,6 +432,7 @@
         thermos: (clues && clues.thermos) || null,
         palindromes: (clues && clues.palindromes) || null,
         clones: (clues && clues.clones) || null,
+        cages: (clues && clues.cages) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -589,6 +611,12 @@
         if (!validClones(clues.clones)) return false;
       } else {
         clues.clones = null;
+      }
+      // Killer: kavezi moraju biti bez preklopa i s dostižnim zbrojem.
+      if (state.variants.includes("killer")) {
+        if (!validCages(clues.cages)) return false;
+      } else {
+        clues.cages = null;
       }
       return true;
     } catch (e) {
@@ -1085,7 +1113,7 @@
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
-    const { regions, parity, edges, thermos, palindromes, clones } = state.clues;
+    const { regions, parity, edges, thermos, palindromes, clones, cages } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
@@ -1172,6 +1200,20 @@
     if (Array.isArray(clones))
       clones.forEach(([a, b], k) => {
         for (const i of [...a, ...b]) cloneTint[i] = (k % CLONE_TINTS) + 1;
+      });
+
+    // Killer: 81-polje id-a kaveza (-1 = nije u kavezu) i zbroj u ćeliji koja ga nosi.
+    // Kavez se crta kao isprekidani obrub oko mrlje, a obrub se u renderu svodi na
+    // "koje strane ćelije su rub" - isti oblik podatka kao jigsaw granice, samo po
+    // kavezu umjesto po regiji.
+    const cageOf = new Array(81).fill(-1);
+    const cageSum = new Array(81).fill(0);
+    if (Array.isArray(cages))
+      cages.forEach((cage, k) => {
+        for (const i of cage.cells) cageOf[i] = k;
+        // Zbroj nosi ćelija gore-lijevo (najmanji indeks) - tako je uvijek na istom
+        // mjestu bez obzira kojim redom je mrlja rasla.
+        cageSum[Math.min(...cage.cells)] = cage.sum;
       });
 
     const sel = state.selected;
@@ -1268,6 +1310,33 @@
         const fill = document.createElement("span");
         fill.className = "clone-fill c" + cloneTint[i];
         cell.appendChild(fill);
+      }
+
+      // Killer: isprekidani obrub oko kaveza. Za razliku od linija, ovdje se NIŠTA ne
+      // crta preko granice ćelije - svaka ćelija nosi svoj dio obruba i pita samo
+      // "je li mi susjed u istom kavezu". Strana bez susjeda dobiva rub uvučen 3px
+      // (.ct/.cr/.cb/.cl); strana sa susjedom nema rub i tamo se okvir PRODUŽI izvan
+      // ćelije (default inset -1px), pa se susjedni rubovi spoje preko razmaka umjesto
+      // da ostave 6px rupu na svakom spoju.
+      if (cageOf[i] >= 0) {
+        const k = cageOf[i];
+        const box = document.createElement("span");
+        const cls = ["cage-box"];
+        if (row === 0 || cageOf[i - 9] !== k) cls.push("ct");
+        if (col === 8 || cageOf[i + 1] !== k) cls.push("cr");
+        if (row === 8 || cageOf[i + 9] !== k) cls.push("cb");
+        if (col === 0 || cageOf[i - 1] !== k) cls.push("cl");
+        box.className = cls.join(" ");
+        cell.appendChild(box);
+        // Zbroj sjedi u gornjem lijevom kutu - točno tamo gdje ide i prva kutna
+        // bilješka, pa ćelija koja ga nosi gura svoju 3×3 rešetku niže (vidi CSS).
+        if (cageSum[i]) {
+          const sum = document.createElement("span");
+          sum.className = "cage-sum";
+          sum.textContent = cageSum[i];
+          cell.appendChild(sum);
+          cell.classList.add("has-cage-sum");
+        }
       }
 
       // Thermo tube i Palindrome linije. Prva oznaka koja NE stane u ćeliju - ide u

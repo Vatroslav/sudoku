@@ -129,15 +129,22 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 - [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
       svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
-Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`,
-generacija mora dati jedinstveno rješenje):
+- [x] Killer (kavezi sa zadanim zbrojem, v1.34.0). **Ni on nije bio geometrija-first** -
+      vidi zasebnu sekciju niže.
 
-- [ ] Killer (kavezi sa zadanim zbrojem - traži vlastiti generator geometrije, zadnji)
+Geometrija-first + relacijske (najteže - `setup` geometrije + relacijski `isValid`):
 
-Nakon Thermo, Palindromea i Clonea u toj je kategoriji ostao **samo Killer** - i on je
-jedini kojem klasifikacija stvarno stoji. Ostala tri doc je svrstao tamo jer je pisan
-prije derive pipelinea (rješenje prvo, oznaka izvedena iz njega); Killer nije oznaka
-izvedena iz rješenja nego geometrija sa zbrojevima, pa mu `setup()` doista treba.
+- (prazno)
+
+Kategorija je ostala **prazna**. Doc je u nju svrstao Thermo, Palindrome, Clone i
+Killer - sva četiri iz istog razloga i sva četiri pogrešno: pisan je prije derive
+pipelinea. Zadnji koji je "sigurno" pripadao ovamo bio je Killer, uz obrazloženje da
+nije oznaka izvedena iz rješenja nego geometrija sa zbrojevima. Ali **zbroj JEST izveden
+iz rješenja** - kavez je slobodna mrlja, a zbroj se izračuna tek kad mrlja stane.
+
+Pouka za iduću varijantu: prije nego se prihvati docova procjena "ovo traži `setup()`",
+provjeriti može li se oznaka IZVESTI iz gotovog rješenja. Dosad je odgovor bio da četiri
+puta zaredom.
 
 ## Značajke
 
@@ -537,6 +544,135 @@ provjere je podnošljiv rizik. Za sve što prelazi granicu ćelije - nije.
   (isto na Normalu; u kombinacijama 8-10/10, gdje zastoji dolaze od eliminacijskih
   koraka koje mjerni harness ne primjenjuje - shipane kombinacije poput thermo+palindrome
   i kropki+xv daju 6/10 na istom harnessu).
+
+## Killer (v1.34.0)
+
+Kavez je mrlja ćelija sa zadanim zbrojem, unutar koje se znamenka ne ponavlja. Četvrta
+i zadnja varijanta koju je doc svrstao u "geometrija-first" - i četvrti put u krivu iz
+istog razloga (vidi gore).
+
+**Casual izvedba, kao Kropki/XV** (Vatrin izbor nakon usporedbe dviju ploča): kavezi
+pokrivaju dio ploče uz zadane brojeve, umjesto strict Killera gdje kavezi pokrivaju
+svih 81 ćeliju i nema nijednog zadanog broja. Strict nije stvar gustoće nego druge
+igre: ploča bez zadanih brojeva nema što `dig` kopati, a `dig` je mehanizam kojim se
+težina ovdje uopće određuje - `STRENGTH`, `floorFor` i cijeli raspon zadanih na Hardu
+mjere se u zadanim brojevima. Uz to bi kombinacije izgubile smisao (Killer + Jigsaw =
+ploča bez ijednog broja s dvije nepoznate geometrije).
+
+**Gustoća je zato knob, i namjerno visok** (`CAGE_DENSITY` 0.55-0.75 pokrivenih ćelija,
+mjereno u ćelijama a ne u broju kaveza). Killer je jedina varijanta koju igrači
+prepoznaju po tome što kavezi pokrivaju ploču - pet kaveza razbacanih uokolo formalno
+jest Killer, ali se ne čita kao Killer.
+
+Izmjereno (Hard, 30 ploča): **prosjek 15ms, max 58ms** sam; kombinacije 130-141ms
+prosjek uz rep do 2.7s (killer+clone, killer+thermo). 15-28 zadanih, 10-15 kaveza,
+40-45 pokrivenih ćelija.
+
+### Zbroj se izvodi, geometrija se ne postavlja
+
+`deriveCages` je `deriveClones` bez dijela s pomakom: mrlja raste ortogonalno iz
+sjemena, ćelija ulazi ako je slobodna i **njena vrijednost još nije u kavezu**, a zbroj
+se zbroji iz rješenja kad mrlja stane. Nemoguć kavez tako ne može nastati i generator
+je ostao netaknut.
+
+`cageRange(board, cells, sum, idx)` je jezgra koju dijele `sudoku.js` i `solver.js` (kao
+`thermoRange` i `edgeOk`). Preostali zbroj dijeli se između ove ćelije i k ostalih
+praznih; znamenke su različite pa tih k nose barem 1+2+…+k a najviše 9+8+…, i iz toga
+slijedi raspon za nas. Granica je namjerno **gruba** - ne gleda koje su znamenke
+potrošene, samo koliko ih je. Točan skup tražio bi kombinatoriku po kavezu, a
+ponavljanje ionako hvata zasebna provjera.
+
+Zasebne tehnike nema (kao Kropki/XV/Thermo/Palindrome) - kavez steže kandidate u
+`computeCandidates` i `place`, klasične dovrše. `place` propagira na **cijeli** kavez:
+upis potroši i vrijednost i dio zbroja, pa udaljena ćelija dobije uži raspon odmah.
+
+**Kavez ide ZADNJI u derive nizu** (klon → tuba → linija → kavez), suprotno od Clonea
+koji ide prvi. Isto pravilo, drugi kraj: prva ide oznaka s najmanje slobode. Klonu
+treba podudarnost na točnom pomaku, tubi i liniji odnos sa susjedom, a kavezu samo da
+se vrijednost ne ponovi - to nađe u ostatku ploče.
+
+### Prune floor je u ćelijama, ne u kavezima
+
+Bez granice prune spusti ploču na **jedan kavez (2-4 ćelije)** - isti nalaz kao Thermo
+(12/30 na ≤2 tube) i Palindrome (17/30 na 3 linije), jer na vrhu Hard raspona klasika
+nosi ploču gotovo cijelu. Granica je zato nužna, ali je mjerena u **pokrivenim
+ćelijama** (`CAGE_KEEP_CELLS = 40`), ne u broju kaveza: kavez od 2 i kavez od 5 ne nose
+isto, a ono što se čita kao Killer je pokrivenost.
+
+Izmjereno po granici (Hard): 30 → 30-38 ćelija, **40 → 40-46**, 45 → 45-46. Uzeto 40
+(~50% ploče, isti red veličine kao ploča koju je Vatra odobrio u usporedbi). Granica ne
+košta brzinu - prune s njom staje ranije, dakle zove solver manje puta.
+
+`STRENGTH: 16` (dno 12) izmjeren je u oba smjera: 8, 12, 16 i 20 daju ploče koje
+svejedno ne padnu ispod ~13 zadanih - **zid je oko 13-15, dno je nedostižno** (isto kao
+Palindrome), a 20 je samo sporiji bez ijedne ploče niže.
+
+Izbor 16 nad 10 je **svjesna razmjena, ne besplatan dobitak** (30 ploča po vrijednosti):
+
+| STRENGTH | killer sam    | +clone        | +thermo      | zadanih (sam) |
+| -------- | ------------- | ------------- | ------------ | ------------- |
+| 10       | 7ms (max 21)  | 10ms (max 53) | 98ms (1.3s)  | 18-27         |
+| **16**   | 15ms (max 58) | 130ms (1.6s)  | 141ms (2.7s) | **15-28**     |
+
+Uzeto 16 jer ploče s malo zadanih su ono što Killer čini Killerom (tamo kavezi nose
+rješenje, a ne dekoriraju ga) - a rep od 2.7s je i dalje daleko ispod hypera (10.6s),
+koji je u ovom repou već prihvaćen kao dug uz Cancel i worker.
+
+### Render: prva oznaka koja piše TEKST u ćeliju
+
+Obrub kaveza je lakši dio - ništa se ne crta preko granice ćelije (za razliku od
+tuba), svaka ćelija pita samo "je li mi susjed u istom kavezu" i crta strane koje to
+nisu. Ali dvije stvari nisu bile očite, i obje je našlo **mjerenje, ne oko** (browser
+pane je i u ovoj sesiji bio polovičan - screenshotovi timeoutaju, klikovi ne prolaze,
+ali `getBoundingClientRect` radi):
+
+1. **Spoj preko granice bloka.** Okvir je izvan ćelije (`inset: -2px`) baš zato da se na
+   strani sa susjedom produži preko razmaka i spoji sa susjedovim. Na -1px su spojevi
+   preko granice bloka ostajali s 1px rupom - **3 od 32 spoja** na jednoj ploči, i to
+   samo vertikalni. Razmak nije uniforman (1px među ćelijama, 3px na `.br`/`.bb`), pa
+   inset mora biti veći od polovice najšireg. Poslije: 32/32 spoja s preklopom 1-3px.
+2. **Zbroj i kutna bilješka bore se za isti kut.** `.notes` je 3×3 rešetka i mjesto 1 je
+   gore lijevo - točno gdje ide zbroj. Rešetka se zato u toj ćeliji spusti (34%) **i**
+   smanji: sam pomak ne stane na ~37px ćeliji (mobitel), gdje tri reda u preostaloj
+   visini ispadnu niža od vlastitog fonta pa bi se redovi preklopili međusobno umjesto
+   sa zbrojem. Izmjereno poslije: 0 preklopa i 0 preklopa među bilješkama na 375px i
+   900px širini.
+
+Uz to: zbroj počinje na 4px jer obrub stoji na 3px - broj koji presijeca vlastitu
+liniju kaveza čita se kao greška u crtežu. I namjerno je **sitniji od bilješke** (10px
+prema 12px): na istoj veličini se čitao kao još jedna bilješka.
+
+### Usput nađen zatečen bug: prune je znao pojesti varijantu do nule
+
+Killer ga nije uveo, ali ga je učinio čestim. Prune makne svaku oznaku bez koje ploča
+stane - a kad je JEDNA varijanta dovoljno jaka da nosi ploču sama, sve oznake one druge
+ispadnu suvišne. Ploča onda u naslovu piše "Clone + Killer" a nema nijednog klona.
+
+Izmjereno (Hard, 20 ploča po kombinaciji):
+
+| kombinacija         | bez druge varijante |
+| ------------------- | ------------------- |
+| clone+thermo (HEAD) | 1/20 (zatečeno)     |
+| clone+killer        | **6/20**            |
+| kropki+killer       | **2/20**            |
+
+Thermo i Palindrome to nikad nisu pokazali jer imaju svoj `KEEP_MIN`. Popravak je ista
+zaštita za one koji ga nemaju, samo na najnižoj granici: **nijedna aktivna varijanta ne
+smije ostati bez ijedne oznake**. Kropki i XV se broje odvojeno iako dijele `edges` -
+to su dvije varijante, ne jedna. Poslije: 0/40 praznih u svim provjerenim kombinacijama,
+a regresija ostaje bajt-identična (popravak dira samo rubne slučajeve).
+
+### Provjere
+
+- **Regresija**: 30 ploča (15 kombinacija × 2 težine, zasijan RNG) **bajt-identično**
+  prije i poslije - jedina razlika je novo prazno `cages: null` polje.
+- **Generator**: na svakoj ploči provjereno da je svaki kavez ortogonalno povezan, bez
+  ponovljene znamenke, sa zbrojem koji odgovara rješenju, i bez preklopa s drugim
+  kavezom (sve kombinacije, obje težine).
+- **Hint**: **nula krivih prijedloga** u svim kombinacijama. Riješeno samim hintovima:
+  Killer Normal 10/10, Hard 8/10, +thermo 9/10, +clone 8/10, +kropki 5/10 - zastoji su
+  eliminacijski koraci koje mjerni harness ne primjenjuje (shipane kombinacije poput
+  kropki+xv daju 6/10 na istom harnessu).
 
 ## Poznato / tehnički dug
 

@@ -220,6 +220,45 @@ const Solver = (() => {
         }
     return mate;
   }
+  // Killer: kavezi ({ cells, sum }) se ne preklapaju i ne dijele ćeliju s drugim
+  // oznakama. Zbroj mora biti dostižan skupom različitih znamenki te veličine -
+  // spremljena partija s besmislenim zbrojem ne smije srušiti solver.
+  function validCages(cages) {
+    if (!Array.isArray(cages)) return false;
+    const seen = new Set();
+    for (const cage of cages) {
+      if (!cage || !Array.isArray(cage.cells) || !cage.cells.length) return false;
+      const n = cage.cells.length;
+      if (n > 9 || !Number.isInteger(cage.sum)) return false;
+      if (cage.sum < MIN_SUM[n] || cage.sum > MAX_SUM[n]) return false;
+      for (const i of cage.cells) {
+        if (!Number.isInteger(i) || i < 0 || i > 80 || seen.has(i)) return false;
+        seen.add(i);
+      }
+    }
+    return true;
+  }
+  // Indeks ćelija -> { cells, sum } (najviše jedan kavez po ćeliji).
+  function prepCages(cages) {
+    const at = new Array(81).fill(null);
+    for (const cage of cages) for (const i of cage.cells) at[i] = cage;
+    return at;
+  }
+  // Raspon [lo,hi] dopušten ćeliji u kavezu. Mora se poklapati sa sudoku.js cageRange
+  // (generator i solver dijele definiciju odnosa).
+  const MIN_SUM = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45];
+  const MAX_SUM = [0, 9, 17, 24, 30, 35, 39, 42, 44, 45];
+  function cageRange(grid, cells, sum, idx) {
+    let rest = sum,
+      k = 0;
+    for (const j of cells) {
+      if (j === idx) continue;
+      if (grid[j]) rest -= grid[j];
+      else k++;
+    }
+    return [Math.max(1, rest - MAX_SUM[k]), Math.min(9, rest - MIN_SUM[k])];
+  }
+
   // Raspon [lo,hi] dopušten na poziciji p termometra. Mora se poklapati sa sudoku.js
   // thermoRange (generator i solver dijele definiciju odnosa).
   function thermoRange(grid, path, p) {
@@ -305,6 +344,10 @@ const Solver = (() => {
   //     kandidate (par leži u različitim jedinicama pa presjek stvarno reže),
   //   place - upis fiksira partnera.
   let curMate = null;
+  // Killer: per-puzzle indeks ćelija -> { cells, sum } ili null. Kao Thermo, bez
+  // zasebne tehnike - kavez samo steže kandidate (raspon zbroja i zabrana ponavljanja
+  // unutar kaveza), klasične tehnike dovrše.
+  let curCages = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -343,6 +386,14 @@ const Solver = (() => {
       if (curThermos && curThermos[idx]) {
         const { path, pos } = curThermos[idx];
         const [lo, hi] = thermoRange(grid, path, pos);
+        for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+      }
+      // Killer: unutar kaveza znamenka se ne ponavlja (kavez nije jedinica pa ga peers
+      // ne pokrivaju), a preostali zbroj reže raspon - vidi cageRange.
+      if (curCages && curCages[idx]) {
+        const { cells, sum } = curCages[idx];
+        for (const j of cells) if (j !== idx && grid[j]) s.delete(grid[j]);
+        const [lo, hi] = cageRange(grid, cells, sum, idx);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
       }
       // Palindrome/Clone: popunjen partner fiksira vrijednost. (Par praznih se presijeca
@@ -385,6 +436,18 @@ const Solver = (() => {
         const j = path[q];
         if (!cand[j]) continue;
         const [lo, hi] = thermoRange(grid, path, q);
+        for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
+      }
+    }
+    // Killer: upis stegne SVE prazne ćelije svog kaveza, ne samo susjedne - potroši i
+    // vrijednost (nema ponavljanja) i dio zbroja. Ta udaljena posljedica je ono što
+    // kavezu daje snagu, isto kao kod tube.
+    if (curCages && curCages[idx]) {
+      const { cells, sum } = curCages[idx];
+      for (const j of cells) {
+        if (!cand[j]) continue;
+        cand[j].delete(val);
+        const [lo, hi] = cageRange(grid, cells, sum, j);
         for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
       }
     }
@@ -702,10 +765,11 @@ const Solver = (() => {
   //   thermos - Thermo tube (polje putova); nevaljano se ignorira.
   //   palindromes - Palindrome linije (polje putova); nevaljano se ignorira.
   //   clones - Clone parovi regija (polje parova putova); nevaljano se ignorira.
+  //   cages  - Killer kavezi (polje { cells, sum }); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
-    const { regions, parity, edges, thermos, palindromes, clones } = clues || {};
+    const { regions, parity, edges, thermos, palindromes, clones, cages } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
@@ -716,6 +780,7 @@ const Solver = (() => {
     const okClone = validClones(clones) && clones.length;
     curMate =
       okPal || okClone ? prepMates(okPal ? palindromes : null, okClone ? clones : null) : null;
+    curCages = validCages(cages) && cages.length ? prepCages(cages) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
