@@ -566,9 +566,9 @@ mjereno u ćelijama a ne u broju kaveza). Killer je jedina varijanta koju igrač
 prepoznaju po tome što kavezi pokrivaju ploču - pet kaveza razbacanih uokolo formalno
 jest Killer, ali se ne čita kao Killer.
 
-Izmjereno (Hard, 30 ploča): **prosjek 15ms, max 58ms** sam; kombinacije 130-141ms
-prosjek uz rep do 2.7s (killer+clone, killer+thermo). 15-28 zadanih, 10-15 kaveza,
-40-45 pokrivenih ćelija.
+Izmjereno (Hard, 25 ploča po kombinaciji): **prosjek 41ms, max 399ms** sam; kombinacije
+30-102ms prosjek uz rep do 1.3s (najskuplja killer+thermo). 15-28 zadanih, 9-18 kaveza,
+**38-53 pokrivene ćelije**.
 
 ### Zbroj se izvodi, geometrija se ne postavlja
 
@@ -598,12 +598,27 @@ se vrijednost ne ponovi - to nađe u ostatku ploče.
 Bez granice prune spusti ploču na **jedan kavez (2-4 ćelije)** - isti nalaz kao Thermo
 (12/30 na ≤2 tube) i Palindrome (17/30 na 3 linije), jer na vrhu Hard raspona klasika
 nosi ploču gotovo cijelu. Granica je zato nužna, ali je mjerena u **pokrivenim
-ćelijama** (`CAGE_KEEP_CELLS = 40`), ne u broju kaveza: kavez od 2 i kavez od 5 ne nose
+ćelijama** (`CAGE_KEEP_CELLS`), ne u broju kaveza: kavez od 2 i kavez od 5 ne nose
 isto, a ono što se čita kao Killer je pokrivenost.
 
-Izmjereno po granici (Hard): 30 → 30-38 ćelija, **40 → 40-46**, 45 → 45-46. Uzeto 40
-(~50% ploče, isti red veličine kao ploča koju je Vatra odobrio u usporedbi). Granica ne
+Izmjereno po granici (Hard): 30 → 30-38 ćelija, 40 → 40-46, 45 → 45-46. Granica ne
 košta brzinu - prune s njom staje ranije, dakle zove solver manje puta.
+
+**Granica je RASPON (38-52), ne jedna vrijednost.** Vatrino pitanje ("zašto nije random
+u rasponu?") otkrilo je da fiksno dno tiho poništava nasumičnost koja već postoji:
+`CAGE_DENSITY` izvede 45-61 ćeliju, ali prune je svaku ploču svodio na isto dno, pa su
+sve izlazile jednako guste (izmjereno 40-45 kad je Killer sam, 40-41 u kombinacijama -
+bez obzira odakle je ploča krenula). S rasponom: **38-53 ćelije u svim kombinacijama**.
+Kad dno ispadne više od izvedenog, prune kaveze ne dira pa gusta ploča ostane gusta.
+
+Dvije stvari koje to nosi:
+
+1. **`Math.random()` samo kad kaveza ima.** Inače pomakne RNG niz i pločama BEZ Killera,
+   pa ista sjemenka prestane davati istu ploču - regresija to uhvati odmah.
+2. **`KEEP_MIN.killer` ostaje `CAGE_KEEP_CELLS.min`, ne raspon.** `marksThin` njime
+   odbacuje pokušaj još u generaciji, dakle prije nego se za tu ploču izvuče dno prunea;
+   apsolutno dno mora biti ono najniže moguće, inače bi odbacivao ploče koje bi prune
+   ionako prihvatio.
 
 `STRENGTH: 16` (dno 12) izmjeren je u oba smjera: 8, 12, 16 i 20 daju ploče koje
 svejedno ne padnu ispod ~13 zadanih - **zid je oko 13-15, dno je nedostižno** (isto kao

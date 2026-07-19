@@ -823,10 +823,19 @@ const Sudoku = (() => {
   // Killer - isti argument kao THERMO_KEEP_MIN, samo primijenjen na gustoću.
   const CAGE_SIZE = { min: 2, max: 5 };
   const CAGE_DENSITY = { min: 0.55, max: 0.75 };
-  // Najmanja pokrivenost koju prune smije ostaviti (isti razlog kao THERMO_KEEP_MIN,
-  // samo mjereno u ćelijama - vidi granu "g" u pruneMarks). Vrijednost izmjerena, ne
-  // pogođena: vidi docs/todo.md.
-  const CAGE_KEEP_CELLS = 40;
+  // Pokrivenost koju prune smije ostaviti (isti razlog kao THERMO_KEEP_MIN, samo
+  // mjereno u ćelijama - vidi granu "g" u pruneMarks).
+  //
+  // RASPON, ne jedna vrijednost, i to je bitno: gustoća kaveza JEST nasumična po ploči
+  // (CAGE_DENSITY daje 45-61 ćelija), ali s fiksnim dnom prune svaku ploču sveže na
+  // isto - izmjereno 40-45 ćelija kad je Killer sam i 40-41 u kombinacijama, bez obzira
+  // odakle je ploča krenula. Nasumičnost se tiho gubila u pruneu. S rasponom dno varira
+  // po partiji (38-53 izmjereno), pa neka ploča ostane gusto pokrivena a neka
+  // prozračna; kad dno ispadne više od izvedenog, prune kaveze ne dira.
+  //
+  // `min` je apsolutno dno i ono ide u KEEP_MIN.killer - marksThin njime odbacuje
+  // pokušaj još u generaciji, dakle prije nego se za tu ploču izvuče dno prunea.
+  const CAGE_KEEP_CELLS = { min: 38, max: 52 };
   // blocked = 81-polje bool ćelija koje je već zauzela druga oznaka (Clone, linije).
   function deriveCages(solution, boost = 0, blocked = null) {
     const want = Math.round(81 * pickDensity(scaled(CAGE_DENSITY, boost)));
@@ -971,7 +980,7 @@ const Sudoku = (() => {
     thermo: THERMO_KEEP_MIN,
     palindrome: PALINDROME_KEEP_MIN,
     clone: 1, // par regija je "nešto i njegova kopija" - jedan je ISPRAVNA slika
-    killer: CAGE_KEEP_CELLS, // jedini mjeren u ĆELIJAMA - vidi markCount
+    killer: CAGE_KEEP_CELLS.min, // jedini mjeren u ĆELIJAMA - vidi markCount
   };
 
   // Je li ijedna odabrana varijanta ispod svog dna oznaka?
@@ -1022,6 +1031,14 @@ const Sudoku = (() => {
       if (n !== null) left[v] = n;
     }
     const mayDrop = (v) => (left[v] || 0) > (KEEP_MIN[v] || 0);
+    // Killerovo dno se bira po ploči, iz raspona (vidi CAGE_KEEP_CELLS) - zato ovdje, a
+    // ne u KEEP_MIN: prune se zove jednom pa je dno stabilno kroz cijeli prolaz. Random
+    // se poziva SAMO kad kaveza ima; inače bi pomaknuo RNG niz i pločama bez Killera, pa
+    // ista sjemenka više ne bi davala istu ploču (regresija to uhvati odmah).
+    const keepCages = cages
+      ? CAGE_KEEP_CELLS.min +
+        Math.floor(Math.random() * (CAGE_KEEP_CELLS.max - CAGE_KEEP_CELLS.min + 1))
+      : 0;
     const stoji = () => {
       const r = Solver.solveAndGrade(puzzle, variants, clues);
       return r.solved && r.tier <= maxTier && r.grid.every((v, i) => v === solution[i]);
@@ -1061,7 +1078,7 @@ const Sudoku = (() => {
         // Jedini koji ne ide kroz `mayDrop`: granica je u POKRIVENIM ĆELIJAMA, pa se
         // ne gleda "ima li još iznad dna" nego "ostaje li iznad dna NAKON ovog kaveza"
         // - jedan kavez nosi 2-5 ćelija, ne jednu (vidi markCount).
-        if ((left.killer || 0) - ref.cells.length < (KEEP_MIN.killer || 0)) continue;
+        if ((left.killer || 0) - ref.cells.length < keepCages) continue;
         const k = cages.indexOf(ref);
         cages.splice(k, 1);
         if (stoji()) left.killer -= ref.cells.length;
