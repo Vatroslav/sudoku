@@ -482,21 +482,23 @@ umjesto u konstanti. **Pravilo za iduću oznaku koja zauzima ćeliju: prva ide o
 ima najmanje slobode, ne ona koja je zadnja dodana.** `deriveThermos` je zato dobio
 `blocked` parametar (dotad ga je imao samo Palindrome).
 
-### Prune floor NIJE trebao
+### Prune floor je ispao NIŽI, ne nepostojeći
 
 Thermo i Palindrome su oba trebali donju granicu (`THERMO_KEEP_MIN`,
 `PALINDROME_KEEP_MIN`) jer prune na vrhu raspona pojede skoro sve oznake. Kod klona je
 izmjereno **1/30 ploča** palo na jedan par (Thermo 12/30 na ≤2 tube, Palindrome 17/30 na
-3 linije), pa je knob namjerno izostavljen. Dva razloga:
+3 linije), pa je knob u v1.33.0 izostavljen. Dva razloga i dalje stoje:
 
 1. **Jedinica je grublja** - micanje para skida 3-6 jednakosti odjednom, pa ploča obično
    stane i prune ga vrati.
 2. **Jedan par nije greška.** Usamljen termometar se čita kao propust, ali klon je po
    definiciji "nešto i njegova kopija" - dvije obojane regije su minimalna ISPRAVNA
-   slika varijante. A prune ostavlja samo ono bez čega ploča stane, pa je taj par nosiv.
+   slika varijante.
 
-Na nulu ne može pasti: `variantNeeded` je već odbacio ploču koju klasika sama
-jedinstveno rješava, pa zadnji par nema kako proći `stoji()`.
+Ono što NIJE stajalo je zaključak "na nulu ne može pasti". Vrijedi samo za klon SAM;
+u kombinaciji ploču nosi ona druga varijanta pa se `stoji()` ne zaustavi ni na zadnjem
+paru - Diagonal+Clone isporučio **4/20** Hard ploča bez ijedne obojane regije. Ispravljeno
+u v1.33.1 dnom od 1 para (vidi sekciju niže).
 
 ### Render: prva oznaka bez geometrije
 
@@ -537,6 +539,52 @@ provjere je podnošljiv rizik. Za sve što prelazi granicu ćelije - nije.
   (isto na Normalu; u kombinacijama 8-10/10, gdje zastoji dolaze od eliminacijskih
   koraka koje mjerni harness ne primjenjuje - shipane kombinacije poput thermo+palindrome
   i kropki+xv daju 6/10 na istom harnessu).
+
+## Odabrana varijanta se MORA vidjeti (v1.33.1)
+
+Vatra je prijavio Hard ploču "Diagonal + Even/Odd" **bez ijedne oznake parnosti**, i to
+2-3 partije za redom (u metrikama vidljivo kao započeta pa odmah promijenjena partija).
+
+**Uzrok su dvije rupe koje se poklope**, obje u kombinacijama:
+
+1. `variantNeeded` provjerava **SKUP** varijanti, ne svaku pojedinu. Ploču na kojoj sav
+   posao radi Diagonal, a Even/Odd ne radi ništa, kriterij `countSolutions(bez varijanti)
+   > 1` uredno propusti - jer klasika je stvarno ne rješava.
+2. `pruneMarks` onda ispravno zaključi da je suvišna **svaka** oznaka parnosti i pobriše
+   ih sve. Thermo i Palindrome su od toga bili zaštićeni donjom granicom; Even/Odd,
+   Kropki, XV i Clone nisu.
+
+Solo varijanta na nulu ne može (`variantNeeded` jamči da barem jedna oznaka nosi
+rješenje) - rupa je **isključivo u kombinacijama**, i tim češća što je druga varijanta
+jača. Izmjereno na 20 Hard ploča po kombinaciji, prije popravka:
+
+| Kombinacija         | Ploča bez ijedne oznake |
+| ------------------- | ----------------------- |
+| Antiknight+Even/Odd | 5/20                    |
+| Diagonal+Clone      | 4/20                    |
+| Diagonal+Kropki     | 3/20                    |
+| Hyper+Even/Odd      | 2/20                    |
+| Diagonal+Even/Odd   | 1/20                    |
+| Diagonal+XV         | 1/20                    |
+
+**Popravak: `KEEP_MIN` - dno oznaka po varijanti**, na jednom mjestu za svih šest
+oznakovnih varijanti (Even/Odd 6, Kropki 6, XV 5, Thermo/Palindrome 4 = postojeći
+`*_KEEP_MIN`, Clone 1). Dno vrijedi na **oba kraja**: prune ispod njega ne reže
+(`mayDrop` gleda živi broj oznaka, a kod brida po **tipu** - 1-2 su Kropki, 3-4 XV, jer
+dijele isto polje), a izvod koji ga ne dosegne odbacuje pokušaj (`marksThin`, prije
+`dig`-a jer je dig najskuplji korak). Krajnji fallback ima izlaz nakon `FALLBACK_TRIES`
+
+- ploča sa slabom oznakom pobjeđuje nikakvu ploču.
+
+Poslije popravka: **0/20 na svih 12 mjerenih kombinacija**, obje težine. Brzina
+generacije nemjerljivo promijenjena (clone+thermo, najteži par, prije avg 1974ms /
+max 21.8s → poslije 771ms / max 6.1s - isti red veličine, razlika je šum tog para).
+
+**Svjesno NIJE riješeno: nužnost po varijanti.** Ploča i dalje smije imati Even/Odd
+oznake koje su čista dekoracija - garantira se da se varijanta **vidi**, ne da radi.
+Necessity po varijanti tražila bi `countSolutions` po svakoj varijanti u svakom
+pokušaju i odbacivala većinu ploča; vidljivost je ono što je igraču nedostajalo. Ako se
+ikad pokaže da dekorativne oznake smetaju - to je sljedeći korak, ne ovaj.
 
 ## Poznato / tehnički dug
 
