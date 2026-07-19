@@ -6,7 +6,7 @@
      DRŽATI AŽURNIM PO VERZIJI: kad se promijene featurei / kontrole /
      varijante, ažurirati ovaj file u ISTOM commitu kao izmjena, pa re-paste
      na itch (upload je ručan - vidi README.md). Ispisati i u chat.
-     Zadnje usklađeno s verzijom: v1.30.3
+     Zadnje usklađeno s verzijom: v1.34.3
      ============================================================ -->
 
 <p><em>Classic Sudoku &mdash; plus variant rules you can mix and match.</em></p>
@@ -18,13 +18,20 @@
   count.
 </p>
 
-<p><strong>Variants</strong> (pick up to two, or play Classic)</p>
+<p><strong>Variants</strong> (pick up to two, roll them with Random, or play Classic)</p>
 <ul>
   <li><strong>Diagonal</strong> &mdash; both main diagonals must also hold 1&ndash;9</li>
   <li><strong>Hyper</strong> &mdash; four extra 3&times;3 boxes must also hold 1&ndash;9</li>
+  <li>
+    <strong>Killer</strong> &mdash; dashed cages add up to the small number in their corner, with no
+    digit repeated inside
+  </li>
   <li><strong>Antiknight</strong> &mdash; cells a knight's move apart can't share a digit</li>
   <li><strong>Antiking</strong> &mdash; cells touching diagonally can't share a digit</li>
   <li><strong>Jigsaw</strong> &mdash; nine irregular regions replace the 3&times;3 boxes</li>
+  <li>
+    <strong>Clone</strong> &mdash; two same-shaped regions hold the same digits, cell for cell
+  </li>
   <li>
     <strong>Even/Odd</strong> &mdash; shaded squares must hold an even digit, circles an odd one
   </li>
@@ -40,13 +47,14 @@
   <li>
     <strong>Thermo</strong> &mdash; digits rise along each thermometer, from the bulb to the tip
   </li>
+  <li><strong>Palindrome</strong> &mdash; each marked line reads the same in both directions</li>
 </ul>
 
 <p><strong>How to play</strong></p>
 <ul>
   <li><strong>Fill</strong> &mdash; tap a cell, then tap a number (or type 1&ndash;9)</li>
   <li><strong>Notes</strong> &mdash; pencil-mark candidates before you commit</li>
-  <li><strong>Color</strong> &mdash; shade cells with up to four colors to track your logic</li>
+  <li><strong>Color</strong> &mdash; shade cells in any of nine colors to track your logic</li>
   <li>
     <strong>Hint</strong> &mdash; reveals the next logical step: first the technique and region,
     then the exact cell
