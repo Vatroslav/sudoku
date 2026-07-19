@@ -111,6 +111,40 @@ const Sudoku = (() => {
     return [lo, hi];
   }
 
+  // Killer: raspon [lo,hi] dopušten ćelija u kavezu zadanog zbroja. Isti oblik kao
+  // thermoRange (granice, ne provjera para) pa solver može rezati kandidate odmah.
+  //
+  // Preostali zbroj (`rest`) dijeli se između ove ćelije i k ostalih praznih. Znamenke
+  // u kavezu su RAZLIČITE, pa tih k ne mogu nositi bilo što: najmanje im je 1+2+…+k,
+  // najviše 9+8+…, a iz tog raspona slijedi koliko smije ostati nama. Kavez od 3 sa
+  // zbrojem 7 i jednom praznom uz nas: ostale dvije nose barem 1+2=3, pa mi ostaje
+  // najviše 4.
+  //
+  // Granica je namjerno gruba - ne gleda KOJE su znamenke već potrošene, samo koliko
+  // ih je. Točan skup bi tražio kombinatoriku po kavezu; ovako je jedan prolaz, a
+  // ponavljanje unutar kaveza ionako hvata zasebna provjera (vidi isValid).
+  const MIN_SUM = [0, 1, 3, 6, 10, 15, 21, 28, 36, 45]; // k(k+1)/2
+  const MAX_SUM = [0, 9, 17, 24, 30, 35, 39, 42, 44, 45]; // 9+8+…
+  function cageRange(board, cells, sum, idx) {
+    let rest = sum,
+      k = 0;
+    for (const j of cells) {
+      if (j === idx) continue;
+      if (board[j]) rest -= board[j];
+      else k++;
+    }
+    return [Math.max(1, rest - MAX_SUM[k]), Math.min(9, rest - MIN_SUM[k])];
+  }
+
+  // Indeks ćelija -> { cells, sum }. Kavezi se ne preklapaju pa je po ćeliji najviše
+  // jedan (isti odnos kao thermos -> thm).
+  function prepCages(cages) {
+    if (!cages || !cages.length) return null;
+    const at = new Array(81).fill(null);
+    for (const cage of cages) for (const i of cage.cells) at[i] = cage;
+    return at;
+  }
+
   // Indeks ćelija -> { path, pos }. Termometri se ne preklapaju pa je po ćeliji
   // najviše jedan. Predizračunato jer ga isValid zove u vrućoj petlji - isti odnos
   // kao regions -> jig.
@@ -171,6 +205,7 @@ const Sudoku = (() => {
     const thermos = (c && c.thermos) || null;
     const palindromes = (c && c.palindromes) || null;
     const clones = (c && c.clones) || null;
+    const cages = (c && c.cages) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
@@ -178,11 +213,13 @@ const Sudoku = (() => {
       thermos,
       palindromes,
       clones,
+      cages,
       // jig se drži uz regions: isValid ne smije po ćeliji tražiti tko je u kojoj regiji.
       jig: regions ? { map: regions, cells: regionsToCells(regions) } : null,
       thm: prepThermos(thermos),
       // Jedno polje partnera za obje varijante jednakosti - vidi prepMates.
       mate: prepMates(palindromes, clones),
+      cag: prepCages(cages),
     };
   }
   const EMPTY_CLUES = prepClues({}); // klasik: nema nijedne per-puzzle oznake
@@ -204,6 +241,7 @@ const Sudoku = (() => {
     "thermo",
     "palindrome",
     "clone",
+    "killer",
   ];
   function normVariants(v) {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -335,7 +373,7 @@ const Sudoku = (() => {
   //   mate - 81-polje indeksa partnera koji mora nositi ISTU vrijednost (vidi
   //     prepMates); pune ga Palindrome linije i Clone regije.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, mate } = clues;
+    const { jig, parity, edges, thm, mate, cag } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -399,6 +437,15 @@ const Sudoku = (() => {
     if (mate && mate[idx] >= 0) {
       const m = board[mate[idx]];
       if (m && m !== val) return false;
+    }
+    // Killer: znamenke u kavezu su različite i moraju dati zadani zbroj. Ponavljanje
+    // se provjerava izravno (kavez nije jedinica pa ga peers ne pokrivaju), zbroj kroz
+    // raspon - vidi cageRange.
+    if (cag && cag[idx]) {
+      const { cells, sum } = cag[idx];
+      for (const j of cells) if (j !== idx && board[j] === val) return false;
+      const [lo, hi] = cageRange(board, cells, sum, idx);
+      if (val < lo || val > hi) return false;
     }
     return true;
   }
@@ -758,6 +805,58 @@ const Sudoku = (() => {
     return clones;
   }
 
+  // Killer: kavez je mrlja ćelija sa zadanim zbrojem, unutar koje se znamenka ne
+  // ponavlja. Četvrta varijanta koju doc svrstava u "geometrija-first" i četvrti put
+  // iz istog razloga u krivu: doc pretpostavlja setup() koji složi kaveze PRIJE
+  // rješenja, pa bi trebalo naći rješenje koje im odgovara. Derive pipeline ide
+  // obrnuto - mrlja slobodno raste, a zbroj se IZRAČUNA iz rješenja kad stane, pa
+  // nemoguć kavez ne može nastati i generator ostaje netaknut.
+  //
+  // Rast je isti kao kod klona (ortogonalno, mrlja a ne put), samo bez podudaranja na
+  // pomaku: ćelija ulazi ako je slobodna i njena vrijednost još nije u kavezu. Zato je
+  // kavez NAJMANJE vezana oznaka koju imamo - i zato ide zadnji u derive nizu
+  // (vidi deriveGeom).
+  //
+  // Gustoća je namjerno visoka i mjeri se u POKRIVENIM ĆELIJAMA, ne u broju kaveza:
+  // Killer je jedina varijanta koju igrači prepoznaju po tome što kavezi pokrivaju
+  // ploču. Pet kaveza razbacanih po ploči formalno je Killer, ali se ne čita kao
+  // Killer - isti argument kao THERMO_KEEP_MIN, samo primijenjen na gustoću.
+  const CAGE_SIZE = { min: 2, max: 5 };
+  const CAGE_DENSITY = { min: 0.55, max: 0.75 };
+  // Najmanja pokrivenost koju prune smije ostaviti (isti razlog kao THERMO_KEEP_MIN,
+  // samo mjereno u ćelijama - vidi granu "g" u pruneMarks). Vrijednost izmjerena, ne
+  // pogođena: vidi docs/todo.md.
+  const CAGE_KEEP_CELLS = 40;
+  // blocked = 81-polje bool ćelija koje je već zauzela druga oznaka (Clone, linije).
+  function deriveCages(solution, boost = 0, blocked = null) {
+    const want = Math.round(81 * pickDensity(scaled(CAGE_DENSITY, boost)));
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
+    const cages = [];
+    let covered = 0;
+    for (const seed of shuffle([...Array(81).keys()])) {
+      if (covered >= want) break;
+      if (used[seed]) continue;
+      const cells = [seed];
+      const vals = new Set([solution[seed]]);
+      const maxLen =
+        CAGE_SIZE.min + Math.floor(Math.random() * (CAGE_SIZE.max - CAGE_SIZE.min + 1));
+      while (cells.length < maxLen) {
+        const next = shuffle([...new Set(cells.flatMap(orthNeighbors))]).find(
+          (n) => !used[n] && !cells.includes(n) && !vals.has(solution[n])
+        );
+        if (next === undefined) break;
+        cells.push(next);
+        vals.add(solution[next]);
+      }
+      // Kavez od jedne ćelije je zadani broj napisan sitno - ne oznaka.
+      if (cells.length < CAGE_SIZE.min) continue;
+      for (const i of cells) used[i] = true;
+      covered += cells.length;
+      cages.push({ cells, sum: cells.reduce((a, i) => a + solution[i], 0) });
+    }
+    return cages;
+  }
+
   // 81-polje bool: ćelije kroz koje prolazi neka od danih linija (null ako ih nema).
   const lineCells = (paths) => {
     if (!paths || !paths.length) return null;
@@ -790,6 +889,7 @@ const Sudoku = (() => {
   // ovo je samo donja granica raspona, pa preciznost nije bitna: ako je dno malo
   // prenisko, poneki pokušaj propadne; ako je previsoko, izgubi se dio raspona.
   const STRENGTH = {
+    killer: 16,
     kropki: 18,
     evenodd: 15,
     thermo: 12,
@@ -820,7 +920,7 @@ const Sudoku = (() => {
   // jigsaw, antiknight, antiking) vraćaju null - one mijenjaju PRAVILA, pa su na ploči
   // i bez ijedne oznake i nema se što brojati.
   function markCount(v, clues) {
-    const { parity, edges, thermos, palindromes, clones } = clues;
+    const { parity, edges, thermos, palindromes, clones, cages } = clues;
     const edgesIn = (lo, hi) => {
       if (!edges) return 0;
       let n = 0;
@@ -836,6 +936,10 @@ const Sudoku = (() => {
     if (v === "thermo") return thermos ? thermos.length : 0;
     if (v === "palindrome") return palindromes ? palindromes.length : 0;
     if (v === "clone") return clones ? clones.length : 0;
+    // Killer je jedini kojem jedinica NIJE oznaka nego POKRIVENA ĆELIJA: kavez od 2 i
+    // kavez od 5 ne nose isto, a ono što se čita kao Killer je pokrivenost ploče
+    // (vidi CAGE_KEEP_CELLS). Zato mu `left` pada za cijeli kavez, a ne za 1.
+    if (v === "killer") return cages ? cages.reduce((a, g) => a + g.cells.length, 0) : 0;
     return null;
   }
 
@@ -845,10 +949,15 @@ const Sudoku = (() => {
   // SKUP varijanti nešto radi, ne svaka pojedina - pa kad ploču nosi ona druga
   // (Diagonal sam jedinstveno rješava), prune ispravno zaključi da je suvišna svaka
   // oznaka one prve i pobriše ih sve. Izmjereno na 20 Hard ploča po kombinaciji:
-  // Antiknight+Even/Odd 5/20 bez ijedne oznake parnosti, Diagonal+Clone 4/20,
-  // Diagonal+Kropki 3/20, Hyper+Even/Odd 2/20, Diagonal+Even/Odd 1/20. Solo varijanta
-  // na nulu ne može (variantNeeded jamči da barem jedna oznaka nosi rješenje) - rupa
-  // je isključivo u kombinacijama, i tim češća što je druga varijanta jača.
+  // Clone+Killer 6/20 bez ijednog klona, Antiknight+Even/Odd 5/20 bez ijedne oznake
+  // parnosti, Diagonal+Clone 4/20, Diagonal+Kropki 3/20, Kropki+Killer i Hyper+Even/Odd
+  // 2/20. Solo varijanta na nulu ne može (variantNeeded jamči da barem jedna oznaka nosi
+  // rješenje) - rupa je isključivo u kombinacijama, i tim češća što je druga varijanta
+  // jača (zato ju je Killer, najjača dosad, izbacio na površinu).
+  //
+  // Dno je namjerno VIDLJIVO, ne 1: ploča s jednom oznakom parnosti formalno jest
+  // Even/Odd, ali se ne čita kao Even/Odd. Isti argument kojim THERMO_KEEP_MIN odbija
+  // usamljenu tubu, samo proširen na sve oznakovne varijante.
   //
   // Dno vrijedi na OBA kraja: prune ispod njega ne reže, a izvod koji ga ne dosegne
   // odbacuje pokušaj (vidi marksThin). Cijena je nešto oznaka koje igraču ne trebaju -
@@ -862,6 +971,7 @@ const Sudoku = (() => {
     thermo: THERMO_KEEP_MIN,
     palindrome: PALINDROME_KEEP_MIN,
     clone: 1, // par regija je "nešto i njegova kopija" - jedan je ISPRAVNA slika
+    killer: CAGE_KEEP_CELLS, // jedini mjeren u ĆELIJAMA - vidi markCount
   };
 
   // Je li ijedna odabrana varijanta ispod svog dna oznaka?
@@ -882,7 +992,7 @@ const Sudoku = (() => {
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
   function pruneMarks(puzzle, solution, variants, clues, maxTier) {
-    const { parity, edges, thermos, palindromes, clones } = clues;
+    const { parity, edges, thermos, palindromes, clones, cages } = clues;
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -900,6 +1010,9 @@ const Sudoku = (() => {
     // Clone: jedinica je CIJELI par regija - jedna regija bez svoje kopije nije oznaka
     // nego obojana mrlja bez značenja.
     if (clones) for (const c of clones) cands.push(["c", c]);
+    // Killer: jedinica je CIJELI kavez. Smanjivanje kaveza nije micanje oznake nego
+    // drugi zbroj nad drugim ćelijama, dakle druga slagalica (kao tuba i linija).
+    if (cages) for (const g of cages) cands.push(["g", g]);
     if (!cands.length) return;
     // Živi broj oznaka po varijanti - pada kako prune miče. Ispod KEEP_MIN se ne ide,
     // pa odabrana varijanta ostane na ploči i kad joj kombinacija oduzme sav posao.
@@ -944,6 +1057,19 @@ const Sudoku = (() => {
         clues.mate = prepMates(palindromes, clones);
         continue;
       }
+      if (kind === "g") {
+        // Jedini koji ne ide kroz `mayDrop`: granica je u POKRIVENIM ĆELIJAMA, pa se
+        // ne gleda "ima li još iznad dna" nego "ostaje li iznad dna NAKON ovog kaveza"
+        // - jedan kavez nosi 2-5 ćelija, ne jednu (vidi markCount).
+        if ((left.killer || 0) - ref.cells.length < (KEEP_MIN.killer || 0)) continue;
+        const k = cages.indexOf(ref);
+        cages.splice(k, 1);
+        if (stoji()) left.killer -= ref.cells.length;
+        else cages.splice(k, 0, ref); // bez njega ploča stane -> treba ga
+        // cages je wire polje; izvedeni cag bi inače ostao na staroj listi kaveza.
+        clues.cag = prepCages(cages);
+        continue;
+      }
       const src = kind === "p" ? parity : edges[kind];
       const backup = src[ref];
       // Brid nosi ili točku (tip 1-2, Kropki) ili slovo (3-4, XV) - dvije varijante
@@ -982,6 +1108,7 @@ const Sudoku = (() => {
         thermos: clues.thermos,
         palindromes: clues.palindromes,
         clones: clues.clones,
+        cages: clues.cages,
       },
     };
   }
@@ -1016,7 +1143,8 @@ const Sudoku = (() => {
   // je evenodd aktivan inače `null`, te `edges` ({ h, v } 81-polja) kad je kropki
   // i/ili xv aktivan inače `null`, `thermos` (polje putova ćelija, bulb prvi)
   // kad je thermo aktivan inače `null`, te `palindromes` (polje putova ćelija) kad
-  // je palindrome aktivan inače `null`.
+  // je palindrome aktivan inače `null`, te `cages` (polje { cells, sum }) kad je
+  // killer aktivan inače `null`.
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
@@ -1030,6 +1158,7 @@ const Sudoku = (() => {
     const useThermo = variants.includes("thermo");
     const usePal = variants.includes("palindrome");
     const useClone = variants.includes("clone");
+    const useKiller = variants.includes("killer");
     // Oznake koje zauzimaju ĆELIJU (a ne brid) izvode se u nizu i svaka zaobilazi
     // ćelije prethodnih: dvije linije kroz istu ćeliju render crta preko sebe, a klon
     // boji cijelu ćeliju pa bi linija ispod njega nestala.
@@ -1044,10 +1173,18 @@ const Sudoku = (() => {
       const clones = useClone ? deriveClones(solution, boost) : null;
       const taken = (paths) => lineCells([...(clones ? clones.flat() : []), ...paths]);
       const thermos = useThermo ? deriveThermos(solution, boost, taken([])) : null;
+      const palindromes = usePal ? derivePalindromes(solution, boost, taken(thermos || [])) : null;
       return {
         clones,
         thermos,
-        palindromes: usePal ? derivePalindromes(solution, boost, taken(thermos || [])) : null,
+        palindromes,
+        // Kavez ide ZADNJI jer je najmanje vezan: mrlji treba samo da se vrijednost ne
+        // ponovi, dok klon traži podudarnost na točnom pomaku, a tuba i linija odnos
+        // sa susjedom. Ono što ostane nakon njih kavezu je i dalje dovoljno - obrnut
+        // redoslijed bi im pojeo ploču (vidi mjerenje kod Clonea).
+        cages: useKiller
+          ? deriveCages(solution, boost, taken([...(thermos || []), ...(palindromes || [])]))
+          : null,
       };
     };
     // Raspon zadanih brojeva vrijedi samo za Hard s varijantama - Normal drži

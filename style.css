@@ -32,6 +32,10 @@
   --clone-2: rgba(235, 170, 70, 0.22);
   --clone-3: rgba(240, 110, 170, 0.2);
   --clone-4: rgba(150, 205, 80, 0.2);
+  /* Killer: obrub kaveza i zbroj. Svjetliji od granice bloka bi se čitao kao geometrija
+     ploče, tamniji bi nestao - isprekidana linija ga ionako razlikuje od svega ostalog. */
+  --cage: #8a8a99;
+  --cage-sum: #c8c9d6;
   --kdot-white: #e8e8ef;
   --kdot-black: #14141a;
   --kdot-ring: #b0b1c6;
@@ -364,6 +368,72 @@ main {
 }
 .cell .clone-fill.c4 {
   background: var(--clone-4);
+}
+
+/* Killer: isprekidani obrub kaveza. Jedina oznaka koja ne treba ništa crtati preko
+   granice ćelije - obrub je uvijek unutar svoje ćelije, pa nema ni krpa ni spojeva
+   kakve trebaju linije.
+
+   Default inset je -2px (izvan ćelije): tako se na strani GDJE JE susjed iz istog
+   kaveza obrub produži preko razmaka i spoji sa susjedovim, umjesto da svaki spoj
+   ostavi 6px rupu. Strana koja JEST rub kaveza (.ct/.cr/.cb/.cl) povuče se na 3px
+   unutra i dobije liniju. Ide iznad ispune klona (DOM red), ispod znamenke.
+
+   Inset mora biti veći od POLA najšireg razmaka među ćelijama, a razmak nije
+   uniforman: 1px među ćelijama, 3px na granici bloka (.br/.bb margina). Na -1px su
+   spojevi preko granice bloka ostajali s 1px rupom - izmjereno 3 od 32 spoja na
+   jednoj ploči, i to samo na vertikalnim (kavez rijetko prelazi okomitu granicu
+   bloka pa se lako previdi). Na -2px svi spojevi imaju barem 1px preklopa. */
+.cell .cage-box {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  bottom: -2px;
+  left: -2px;
+  pointer-events: none;
+}
+.cell .cage-box.ct {
+  top: 3px;
+  border-top: 1px dashed var(--cage);
+}
+.cell .cage-box.cr {
+  right: 3px;
+  border-right: 1px dashed var(--cage);
+}
+.cell .cage-box.cb {
+  bottom: 3px;
+  border-bottom: 1px dashed var(--cage);
+}
+.cell .cage-box.cl {
+  left: 3px;
+  border-left: 1px dashed var(--cage);
+}
+/* Zbroj kaveza: sitan, u gornjem lijevom kutu ćelije s najmanjim indeksom. Namjerno
+   manji od bilješke (koja ide do 12px) - na istoj veličini se čitao kao još jedna
+   bilješka, a i tražio je toliko mjesta da su bilješke ispod ostajale bez njega. */
+.cell .cage-sum {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: clamp(5px, 2.1cqmin, 10px);
+  line-height: 1;
+  color: var(--cage-sum);
+  font-weight: 500;
+  pointer-events: none;
+}
+/* Zbroj i prva kutna bilješka bore se za isti kut, pa se rešetka bilježaka u toj
+   ćeliji spusti ispod zbroja i pritom smanji. Oboje je nužno: sam pomak dolje ne
+   stane na malim ćelijama (mobitel, ~37px) - tri reda bilježaka u preostaloj visini
+   ispadnu niža od vlastitog fonta, pa bi se redovi preklopili međusobno umjesto sa
+   zbrojem. Pogađa jednu ćeliju po kavezu.
+
+   Gornja granica pomaka nije zbroj nego OBRUB: zbroj počinje na 4px jer linija kaveza
+   stoji na 3px, a broj koji je presijeca čita se kao greška u crtežu. */
+.cell.has-cage-sum .notes {
+  padding-top: 34%;
+}
+.cell.has-cage-sum .notes span {
+  font-size: clamp(5px, 2.1cqmin, 10px);
 }
 
 /* Linijske varijante (Thermo tuba, Palindrome linija) dijele cijelu mašineriju -
