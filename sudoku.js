@@ -739,17 +739,18 @@ const Sudoku = (() => {
   const CLONE_SIZE = { min: 3, max: 6 };
   const MAX_CLONES = 4;
   const CLONE_DENSITY = { min: 0.5, max: 1 };
-  // Prune floor (THERMO_KEEP_MIN / PALINDROME_KEEP_MIN) ovdje NE treba, i to je jedina
-  // stvar u kojoj Clone odstupa od te dvije. Dva razloga, oba izmjerena:
+  // Dno je 1 par, a ne 4 kao kod tube i linije (vidi KEEP_MIN). Dva razloga, oba
+  // izmjerena:
   //   1. Prune ga jedva dira - bez ikakve granice samo 1/30 Hard ploča padne na jedan
   //      par (Thermo 12/30 na <=2 tube, Palindrome 17/30 na 3 linije). Jedinica je
   //      grublja: micanje para skida 3-6 jednakosti odjednom, pa ploča obično stane.
   //   2. Jedan par NIJE greška. Usamljen termometar se čita kao propust, ali klon je
   //      po definiciji "nešto i njegova kopija" - dvije obojane regije su minimalna
-  //      ISPRAVNA slika varijante. A prune ostavlja samo ono bez čega ploča stane, pa
-  //      je taj jedan par nosiv, ne dekoracija.
-  // Na nulu ne može: variantNeeded je već odbacio ploču koju klasika sama jedinstveno
-  // rješava, pa zadnji par nema kako proći `stoji()`.
+  //      ISPRAVNA slika varijante.
+  //
+  // Dno na 1 (umjesto nikakvog) jer se u kombinaciji ploča NE zaustavi: kad rješenje
+  // nosi druga varijanta, prune pojede i zadnji par - Diagonal+Clone isporučio 4/20
+  // Hard ploča bez ijedne obojane regije.
   //
   // blocked = 81-polje bool ćelija koje su već zauzete linijskom varijantom (Thermo,
   // Palindrome). Klon boji CIJELU ćeliju, pa bi ispod boje linija bila nečitljiva.
@@ -867,6 +868,10 @@ const Sudoku = (() => {
   const TARGET = { normal: 34, hard: 28 };
   const REQ_TIER = { normal: Solver.T_SINGLE, hard: Solver.T_INTER };
   const MAX_ATTEMPTS = { normal: 120, hard: 200 };
+  // Koliko puta krajnji fallback smije ponoviti izvod tražeći dno oznaka prije nego
+  // pusti i ploču bez njega (vidi KEEP_MIN). Ta petlja nema drugog izlaza - mora ga
+  // imati ovdje, inače bi kombinacija kojoj izvod dno ne dosegne vrtjela zauvijek.
+  const FALLBACK_TRIES = 40;
 
   // Hard s varijantama: broj zadanih brojeva se bira po pokušaju iz raspona, umjesto
   // fiksnih 28 - tako partije variraju (nekad ploča s 28 brojeva i rijetkim oznakama,
@@ -909,6 +914,73 @@ const Sudoku = (() => {
     return prepClues({ regions: useJig ? generateRegions() : null });
   }
 
+  // Koliko VIDLJIVIH oznaka varijanta trenutno ima na ploči. Jedinica je ono što oko
+  // čita kao jednu oznaku: kvadrat/krug (Even/Odd), točka (Kropki), slovo (XV), cijela
+  // tuba/linija/par regija (Thermo/Palindrome/Clone). Regijske varijante (x, hyper,
+  // jigsaw, antiknight, antiking) vraćaju null - one mijenjaju PRAVILA, pa su na ploči
+  // i bez ijedne oznake i nema se što brojati.
+  function markCount(v, clues) {
+    const { parity, edges, thermos, palindromes, clones, cages } = clues;
+    const edgesIn = (lo, hi) => {
+      if (!edges) return 0;
+      let n = 0;
+      for (let i = 0; i < 81; i++) {
+        if (edges.h[i] >= lo && edges.h[i] <= hi) n++;
+        if (edges.v[i] >= lo && edges.v[i] <= hi) n++;
+      }
+      return n;
+    };
+    if (v === "evenodd") return parity ? parity.reduce((a, p) => a + (p ? 1 : 0), 0) : 0;
+    if (v === "kropki") return edgesIn(1, 2); // tipovi 1-2 = točke
+    if (v === "xv") return edgesIn(3, 4); // tipovi 3-4 = slova
+    if (v === "thermo") return thermos ? thermos.length : 0;
+    if (v === "palindrome") return palindromes ? palindromes.length : 0;
+    if (v === "clone") return clones ? clones.length : 0;
+    // Killer je jedini kojem jedinica NIJE oznaka nego POKRIVENA ĆELIJA: kavez od 2 i
+    // kavez od 5 ne nose isto, a ono što se čita kao Killer je pokrivenost ploče
+    // (vidi CAGE_KEEP_CELLS). Zato mu `left` pada za cijeli kavez, a ne za 1.
+    if (v === "killer") return cages ? cages.reduce((a, g) => a + g.cells.length, 0) : 0;
+    return null;
+  }
+
+  // Najmanje oznaka koje odabrana varijanta MORA imati na isporučenoj ploči.
+  //
+  // Bez ovoga varijanta zna s ploče nestati do kraja. `variantNeeded` traži samo da
+  // SKUP varijanti nešto radi, ne svaka pojedina - pa kad ploču nosi ona druga
+  // (Diagonal sam jedinstveno rješava), prune ispravno zaključi da je suvišna svaka
+  // oznaka one prve i pobriše ih sve. Izmjereno na 20 Hard ploča po kombinaciji:
+  // Clone+Killer 6/20 bez ijednog klona, Antiknight+Even/Odd 5/20 bez ijedne oznake
+  // parnosti, Diagonal+Clone 4/20, Diagonal+Kropki 3/20, Kropki+Killer i Hyper+Even/Odd
+  // 2/20. Solo varijanta na nulu ne može (variantNeeded jamči da barem jedna oznaka nosi
+  // rješenje) - rupa je isključivo u kombinacijama, i tim češća što je druga varijanta
+  // jača (zato ju je Killer, najjača dosad, izbacio na površinu).
+  //
+  // Dno je namjerno VIDLJIVO, ne 1: ploča s jednom oznakom parnosti formalno jest
+  // Even/Odd, ali se ne čita kao Even/Odd. Isti argument kojim THERMO_KEEP_MIN odbija
+  // usamljenu tubu, samo proširen na sve oznakovne varijante.
+  //
+  // Dno vrijedi na OBA kraja: prune ispod njega ne reže, a izvod koji ga ne dosegne
+  // odbacuje pokušaj (vidi marksThin). Cijena je nešto oznaka koje igraču ne trebaju -
+  // isti trošak koji THERMO_KEEP_MIN već svjesno plaća.
+  const KEEP_MIN = {
+    // Točkaste oznake: dno je "vidi se da je to ta slagalica". Bazni izvod ih daje
+    // 19-31 (Even/Odd) odnosno 14-25 (Kropki), pa dno rijetko i zagrebe.
+    evenodd: 6,
+    kropki: 6,
+    xv: 5, // manje parova kvalificira (zbroj 5/10) pa je i prirodan broj niži
+    thermo: THERMO_KEEP_MIN,
+    palindrome: PALINDROME_KEEP_MIN,
+    clone: 1, // par regija je "nešto i njegova kopija" - jedan je ISPRAVNA slika
+    killer: CAGE_KEEP_CELLS, // jedini mjeren u ĆELIJAMA - vidi markCount
+  };
+
+  // Je li ijedna odabrana varijanta ispod svog dna oznaka?
+  const marksThin = (variants, clues) =>
+    variants.some((v) => {
+      const n = markCount(v, clues);
+      return n !== null && n < (KEEP_MIN[v] || 0);
+    });
+
   // Suvišne oznake: gustoća raste kako broj zadanih pada, pa ploča na dnu raspona
   // prikaže SVE što odnos dopušta - ali igraču dobar dio toga ne treba (izmjereno:
   // 68-80% oznaka se može maknuti a da se ploča i dalje riješi; Even/Odd je znao
@@ -942,76 +1014,71 @@ const Sudoku = (() => {
     // drugi zbroj nad drugim ćelijama, dakle druga slagalica (kao tuba i linija).
     if (cages) for (const g of cages) cands.push(["g", g]);
     if (!cands.length) return;
-    // Nijedna aktivna varijanta ne smije ostati BEZ IJEDNE oznake. Prune inače zna
-    // pojesti sve oznake jedne varijante kad je druga dovoljno jaka da nosi ploču sama
-    // - ploča onda u naslovu piše "Clone + Killer" a nema nijednog klona.
-    //
-    // Zatečeno prije Killera (izmjereno na clone+thermo: 1/20 ploča bez klona), ali
-    // rijetko dok nije bilo varijante ovako jake: s Killerom clone+killer daje 6/20,
-    // kropki+killer 2/20. Thermo i Palindrome to nikad nisu pokazali jer imaju svoj
-    // KEEP_MIN; ovo je ista zaštita za one koji ga nemaju, samo na najnižoj granici.
-    // Kropki i XV se broje odvojeno iako dijele `edges` - to su dvije varijante.
-    const edgeKind = (t) => (t === 3 || t === 4 ? "xv" : "kropki");
-    const left = { kropki: 0, xv: 0, p: 0 };
-    if (edges)
-      for (let i = 0; i < 81; i++) {
-        if (edges.h[i]) left[edgeKind(edges.h[i])]++;
-        if (edges.v[i]) left[edgeKind(edges.v[i])]++;
-      }
-    if (parity) for (let i = 0; i < 81; i++) if (parity[i]) left.p++;
+    // Živi broj oznaka po varijanti - pada kako prune miče. Ispod KEEP_MIN se ne ide,
+    // pa odabrana varijanta ostane na ploči i kad joj kombinacija oduzme sav posao.
+    const left = {};
+    for (const v of variants) {
+      const n = markCount(v, clues);
+      if (n !== null) left[v] = n;
+    }
+    const mayDrop = (v) => (left[v] || 0) > (KEEP_MIN[v] || 0);
     const stoji = () => {
       const r = Solver.solveAndGrade(puzzle, variants, clues);
       return r.solved && r.tier <= maxTier && r.grid.every((v, i) => v === solution[i]);
     };
     for (const [kind, ref] of shuffle(cands)) {
       if (kind === "t") {
-        if (thermos.length <= THERMO_KEEP_MIN) continue; // vidi THERMO_KEEP_MIN
+        if (!mayDrop("thermo")) continue;
         const k = thermos.indexOf(ref);
         thermos.splice(k, 1);
-        if (!stoji()) thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        if (stoji()) left.thermo--;
+        else thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
         // thermos je wire polje; izvedeni thm bi inače ostao na staroj listi tuba.
         clues.thm = prepThermos(thermos);
         continue;
       }
       if (kind === "l") {
-        if (palindromes.length <= PALINDROME_KEEP_MIN) continue; // vidi PALINDROME_KEEP_MIN
+        if (!mayDrop("palindrome")) continue;
         const k = palindromes.indexOf(ref);
         palindromes.splice(k, 1);
-        if (!stoji()) palindromes.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        if (stoji()) left.palindrome--;
+        else palindromes.splice(k, 0, ref); // bez nje ploča stane -> treba ju
         // palindromes je wire polje; izvedeni mate bi inače ostao na staroj listi linija.
         clues.mate = prepMates(palindromes, clones);
         continue;
       }
       if (kind === "c") {
-        if (clones.length <= 1) continue; // zadnji par ostaje - vidi `left` gore
-        const k = clones.indexOf(ref); // inače bez granice - vidi komentar uz deriveClones
+        if (!mayDrop("clone")) continue;
+        const k = clones.indexOf(ref);
         clones.splice(k, 1);
-        if (!stoji()) clones.splice(k, 0, ref); // bez njega ploča stane -> treba ga
+        if (stoji()) left.clone--;
+        else clones.splice(k, 0, ref); // bez njega ploča stane -> treba ga
         // clones je wire polje; izvedeni mate bi inače ostao na staroj listi parova.
         clues.mate = prepMates(palindromes, clones);
         continue;
       }
       if (kind === "g") {
-        // Granica je u POKRIVENIM ĆELIJAMA, ne u broju kaveza: kavez od 2 i kavez od
-        // 5 ne nose isto, a ono što se čita kao Killer je pokrivenost ploče.
-        const covered = cages.reduce((a, g) => a + g.cells.length, 0);
-        if (covered - ref.cells.length < CAGE_KEEP_CELLS) continue; // vidi CAGE_KEEP_CELLS
+        // Jedini koji ne ide kroz `mayDrop`: granica je u POKRIVENIM ĆELIJAMA, pa se
+        // ne gleda "ima li još iznad dna" nego "ostaje li iznad dna NAKON ovog kaveza"
+        // - jedan kavez nosi 2-5 ćelija, ne jednu (vidi markCount).
+        if ((left.killer || 0) - ref.cells.length < (KEEP_MIN.killer || 0)) continue;
         const k = cages.indexOf(ref);
         cages.splice(k, 1);
-        if (!stoji()) cages.splice(k, 0, ref); // bez njega ploča stane -> treba ga
+        if (stoji()) left.killer -= ref.cells.length;
+        else cages.splice(k, 0, ref); // bez njega ploča stane -> treba ga
         // cages je wire polje; izvedeni cag bi inače ostao na staroj listi kaveza.
         clues.cag = prepCages(cages);
         continue;
       }
       const src = kind === "p" ? parity : edges[kind];
       const backup = src[ref];
-      // Zadnja oznaka svoje varijante ostaje (Kropki i XV se broje odvojeno).
-      const group = kind === "p" ? "p" : edgeKind(backup);
-      if (left[group] <= 1) continue;
+      // Brid nosi ili točku (tip 1-2, Kropki) ili slovo (3-4, XV) - dvije varijante
+      // dijele isto polje, pa se dno gleda po TIPU oznake, ne po polju.
+      const v = kind === "p" ? "evenodd" : backup <= 2 ? "kropki" : "xv";
+      if (!mayDrop(v)) continue;
       src[ref] = 0;
-      if (!stoji())
-        src[ref] = backup; // bez nje ploča stane -> treba ju
-      else left[group]--;
+      if (stoji()) left[v]--;
+      else src[ref] = backup; // bez nje ploča stane -> treba ju
     }
   }
 
@@ -1053,6 +1120,12 @@ const Sudoku = (() => {
   // >1 klasično rješenje znači da varijanta stvarno bira između njih.
   // Jigsaw je iznimka - ZAMJENJUJE box-jedinice, pa "klasična" verzija te ploče
   // rješava drugi problem i usporedba nema smisla.
+  //
+  // Provjera je na SKUPU, ne po varijanti: kod kombinacije prolazi i ploča na kojoj
+  // sav posao radi jedna, a druga je gola dekoracija. Za to je zadužen KEEP_MIN -
+  // on jamči da se odabrana varijanta bar VIDI. Necessity po varijanti bi tražila
+  // countSolutions po svakoj u svakom pokušaju i odbacivala većinu ploča; vidljivost
+  // je ono što je igraču nedostajalo.
   function variantNeeded(puzzle, variants, useJig) {
     if (useJig || !variants.length) return true;
     return countSolutions(puzzle.slice(), 2, [], EMPTY_CLUES) > 1;
@@ -1138,6 +1211,9 @@ const Sudoku = (() => {
         edges: useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null,
         ...deriveGeom(solution, boost),
       });
+      // Izvod koji nije dao ni dno oznaka (rijetko - tube/linije kojima je klon
+      // pojeo ćelije): novi pokušaj. Ide PRIJE `dig`, najskupljeg koraka.
+      if (marksThin(variants, clues)) continue;
       const puzzle = dig(solution, target, variants, clues);
       // Varijanta mora nešto raditi - ploču koju klasika sama jedinstveno rješava
       // odbaci (provjeri prije gradinga, countSolutions je jeftiniji od solvera).
@@ -1181,17 +1257,21 @@ const Sudoku = (() => {
     // Krajnji fallback - bilo što rješivo (nove regije za jigsaw, ne recikliraj).
     // Ide na vrh raspona (najviše zadanih, bazna gustoća): ovo je zadnja linija
     // obrane, tu se ne riskira ploča koju igrač ne može riješiti.
-    let geom, solution;
-    do {
+    let geom, solution, clues;
+    for (let a = 0; ; a++) {
       geom = newRegionClues(useJig);
       solution = generateSolution(variants, geom);
-    } while (!solution);
-    const clues = prepClues({
-      regions: geom.regions,
-      parity: useEven ? deriveParity(solution) : null,
-      edges: useEdges ? deriveEdges(solution, useKropki, useXv) : null,
-      ...deriveGeom(solution, 0),
-    });
+      if (!solution) continue;
+      clues = prepClues({
+        regions: geom.regions,
+        parity: useEven ? deriveParity(solution) : null,
+        edges: useEdges ? deriveEdges(solution, useKropki, useXv) : null,
+        ...deriveGeom(solution, 0),
+      });
+      // Dno oznaka vrijedi i ovdje, ali s izlazom: ovo je zadnja linija obrane, pa
+      // ploča sa slabom oznakom pobjeđuje nikakvu ploču.
+      if (!marksThin(variants, clues) || a >= FALLBACK_TRIES) break;
+    }
     const puzzle = dig(solution, topTarget, variants, clues);
     // Ovdje ploča nije prošla grading, pa prune ide s najvišim dopuštenim tierom.
     // Ako ni tako nije rješiva, `stoji()` je uvijek false i nijedna oznaka ne pada.

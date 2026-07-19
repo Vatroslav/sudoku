@@ -489,21 +489,23 @@ umjesto u konstanti. **Pravilo za iduću oznaku koja zauzima ćeliju: prva ide o
 ima najmanje slobode, ne ona koja je zadnja dodana.** `deriveThermos` je zato dobio
 `blocked` parametar (dotad ga je imao samo Palindrome).
 
-### Prune floor NIJE trebao
+### Prune floor je ispao NIŽI, ne nepostojeći
 
 Thermo i Palindrome su oba trebali donju granicu (`THERMO_KEEP_MIN`,
 `PALINDROME_KEEP_MIN`) jer prune na vrhu raspona pojede skoro sve oznake. Kod klona je
 izmjereno **1/30 ploča** palo na jedan par (Thermo 12/30 na ≤2 tube, Palindrome 17/30 na
-3 linije), pa je knob namjerno izostavljen. Dva razloga:
+3 linije), pa je knob u v1.33.0 izostavljen. Dva razloga i dalje stoje:
 
 1. **Jedinica je grublja** - micanje para skida 3-6 jednakosti odjednom, pa ploča obično
    stane i prune ga vrati.
 2. **Jedan par nije greška.** Usamljen termometar se čita kao propust, ali klon je po
    definiciji "nešto i njegova kopija" - dvije obojane regije su minimalna ISPRAVNA
-   slika varijante. A prune ostavlja samo ono bez čega ploča stane, pa je taj par nosiv.
+   slika varijante.
 
-Na nulu ne može pasti: `variantNeeded` je već odbacio ploču koju klasika sama
-jedinstveno rješava, pa zadnji par nema kako proći `stoji()`.
+Ono što NIJE stajalo je zaključak "na nulu ne može pasti". Vrijedi samo za klon SAM;
+u kombinaciji ploču nosi ona druga varijanta pa se `stoji()` ne zaustavi ni na zadnjem
+paru - Diagonal+Clone isporučio **4/20** Hard ploča bez ijedne obojane regije. Ispravljeno
+u v1.33.1 dnom od 1 para (vidi sekciju niže).
 
 ### Render: prva oznaka bez geometrije
 
@@ -662,6 +664,11 @@ smije ostati bez ijedne oznake**. Kropki i XV se broje odvojeno iako dijele `edg
 to su dvije varijante, ne jedna. Poslije: 0/40 praznih u svim provjerenim kombinacijama,
 a regresija ostaje bajt-identična (popravak dira samo rubne slučajeve).
 
+Isti bug je paralelno nađen s druge strane (Vatrina prijavljena ploča) i tamo dignut s
+"barem 1 oznaka" na **vidljivo dno po varijanti** - vidi v1.34.1 niže. Granica od 1 je
+bila ispravna dijagnoza, ali premala mjera: ploča s jednom oznakom parnosti formalno
+JEST Even/Odd, a i dalje se ne čita kao Even/Odd.
+
 ### Provjere
 
 - **Regresija**: 30 ploča (15 kombinacija × 2 težine, zasijan RNG) **bajt-identično**
@@ -673,6 +680,52 @@ a regresija ostaje bajt-identična (popravak dira samo rubne slučajeve).
   Killer Normal 10/10, Hard 8/10, +thermo 9/10, +clone 8/10, +kropki 5/10 - zastoji su
   eliminacijski koraci koje mjerni harness ne primjenjuje (shipane kombinacije poput
   kropki+xv daju 6/10 na istom harnessu).
+
+## Odabrana varijanta se MORA VIDJETI, ne samo postojati (v1.34.1)
+
+Nastavak prethodne sekcije, nađen s druge strane: Vatra je prijavio Hard ploču
+"Diagonal + Even/Odd" **bez ijedne oznake parnosti**, 2-3 partije za redom (u metrikama
+vidljivo kao započeta pa odmah promijenjena partija). Ista dva uzroka:
+
+1. `variantNeeded` provjerava **SKUP** varijanti, ne svaku pojedinu. Ploču na kojoj sav
+   posao radi Diagonal, a Even/Odd ne radi ništa, kriterij `countSolutions(bez varijanti)
+   > 1` uredno propusti - klasika je stvarno ne rješava.
+2. `pruneMarks` onda ispravno zaključi da je suvišna **svaka** oznaka parnosti.
+
+Solo varijanta na nulu ne može (`variantNeeded` jamči da barem jedna oznaka nosi
+rješenje) - rupa je **isključivo u kombinacijama**, i tim češća što je druga varijanta
+jača. Izmjereno na 20 Hard ploča po kombinaciji, prije popravka:
+
+| Kombinacija         | Ploča bez ijedne oznake |
+| ------------------- | ----------------------- |
+| Antiknight+Even/Odd | 5/20                    |
+| Diagonal+Clone      | 4/20                    |
+| Diagonal+Kropki     | 3/20                    |
+| Hyper+Even/Odd      | 2/20                    |
+| Diagonal+Even/Odd   | 1/20                    |
+| Diagonal+XV         | 1/20                    |
+
+**Popravak diže granicu s 1 na vidljivo dno: `KEEP_MIN`**, jedno mjesto za svih sedam
+oznakovnih varijanti (Even/Odd 6, Kropki 6, XV 5, Thermo/Palindrome 4 = postojeći
+`*_KEEP_MIN`, Clone 1, Killer `CAGE_KEEP_CELLS`). Uz to:
+
+- **Dno vrijedi na oba kraja.** Prune ispod njega ne reže (`mayDrop` gleda živi broj
+  oznaka), a izvod koji ga ne dosegne odbacuje pokušaj (`marksThin`, prije `dig`-a jer
+  je dig najskuplji korak). Krajnji fallback ima izlaz nakon `FALLBACK_TRIES` - ploča
+  sa slabom oznakom pobjeđuje nikakvu ploču.
+- **Kod brida se dno gleda po TIPU oznake** (1-2 Kropki, 3-4 XV) jer dijele `edges`.
+- **Killer je jedini mjeren u ćelijama, ne u oznakama**, pa mu `left` pada za cijeli
+  kavez i provjera je "ostaje li iznad dna NAKON ovog kaveza" (naslijeđeno iz v1.34.0).
+
+Poslije popravka: **0/20 na svih mjerenih kombinacija**, obje težine. Brzina generacije
+nemjerljivo promijenjena (clone+thermo, najteži par, prije avg 1974ms / max 21.8s →
+poslije 771ms / max 6.1s - isti red veličine, razlika je šum tog para).
+
+**Svjesno NIJE riješeno: nužnost po varijanti.** Ploča i dalje smije imati oznake koje
+su čista dekoracija - garantira se da se varijanta **vidi**, ne da radi. Necessity po
+varijanti tražila bi `countSolutions` po svakoj varijanti u svakom pokušaju i odbacivala
+većinu ploča; vidljivost je ono što je igraču nedostajalo. Ako se ikad pokaže da
+dekorativne oznake smetaju - to je sljedeći korak, ne ovaj.
 
 ## Poznato / tehnički dug
 
