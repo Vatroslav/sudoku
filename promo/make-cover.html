@@ -14,14 +14,15 @@
         --block-line: #b0b1c6;
         --cell: #1f1f27;
         --cell-sel: #2f4a6b;
-        --cell-same: #3a3550;
+        --cell-same: #3b3b47;
+        --cell-same-ring: rgba(140, 200, 255, 0.65);
         --given: #e8e8ef;
         --user: #6db3ff;
         --accent: #6db3ff;
         --text: #e8e8ef;
         --muted: #9a9aae;
         --diag: rgba(109, 179, 255, 0.5);
-        --window-tint: rgba(160, 130, 240, 0.16);
+        --window-tint: rgba(150, 120, 245, 0.3);
       }
       * {
         margin: 0;
@@ -88,6 +89,8 @@
       }
       .c.same {
         background: var(--cell-same);
+        outline: 2px solid var(--cell-same-ring);
+        outline-offset: -2px;
       }
       .c.win {
         background-image: linear-gradient(var(--window-tint), var(--window-tint));

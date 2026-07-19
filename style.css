@@ -10,14 +10,21 @@
   --cell: #0e0e13;
   --cell-peer: #262631;
   --cell-sel: #2f4a6b;
-  --cell-same: #3a3550;
+  /* Iste brojke: pozadina ćelije je već prezauzeta (Hyper, Clone, Killer, dijagonala,
+     peer, odabir), a svaka nijansa ispod jakog tinta konvergira prema boji tinta - pa
+     hue ne može nositi ovu informaciju. Zato neutralna pozadina + obrub: obrub se crta
+     IZNAD background-imagea, pa ostaje oštar na svakoj varijanti. */
+  --cell-same: #3b3b47;
+  --cell-same-ring: rgba(140, 200, 255, 0.65);
   --given: #e8e8ef;
   --user: #6db3ff;
   --wrong: #ff6b6b;
   --note: #e6e6ef;
   --accent: #6db3ff;
   --diag-line: rgba(109, 179, 255, 0.4);
-  --window-tint: rgba(160, 130, 240, 0.16);
+  /* 0.30, a ne slabije: na 0.16 je prozor izlazio na istu svjetlinu kao peer (#262631),
+     pa je Hyper ćelija izgledala kao da je već označena. */
+  --window-tint: rgba(150, 120, 245, 0.3);
   --parity: #7a7a8c;
   --thermo: #3f3f4d;
   /* Palindrome dijeli oblik s tubom (linija po ćelijama) pa razliku mora nositi boja:
@@ -625,6 +632,12 @@ main {
 }
 .cell.same {
   background-color: var(--cell-same);
+}
+/* Odabrana ćelija je i sama "ista brojka", ali obrub joj ne treba - plava je pozadina
+   već čini jedinstvenom. Hint je prolazan i ima svoj zlatni obrub, pa ima prednost. */
+.cell.same:not(.selected):not(.hint-target) {
+  outline: 2px solid var(--cell-same-ring);
+  outline-offset: -2px;
 }
 .cell.selected {
   background-color: var(--cell-sel);
