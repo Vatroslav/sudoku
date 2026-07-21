@@ -179,7 +179,14 @@
           <button class="variant-row" data-variant="renban">
             <span class="variant-info">
               <span class="variant-name">Renban</span>
-              <span class="variant-desc">Each line holds consecutive digits, in any order.</span>
+              <!-- "consecutive digits, in any order" se čitalo kao proturječje (Vatra,
+                   autor igre, nije skužio pravilo iz njega): "consecutive" vuče na
+                   redoslijed, a odnosi se na skup. "Unbroken run" nosi ideju skupa bez
+                   rupa, primjer napravi ostalo. Jedini opis s primjerom - ostale
+                   varijante nemaju ovu zamku, čitaju se doslovno. -->
+              <span class="variant-desc"
+                >Digits on each line form an unbroken run (like 4-5-6-7), in any order.</span
+              >
             </span>
             <span class="variant-toggle" aria-hidden="true"></span>
           </button>
