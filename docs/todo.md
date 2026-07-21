@@ -806,6 +806,18 @@ njih - grupa je pravilna rešetka koraka 3, pa odabir ćelije odmah pokaže uzor
 `markCount` ga zato ne broji (vraća null, kao ostale regijske) i `KEEP_MIN` ga se ne
 tiče - nema oznake koja bi mogla nestati.
 
+**Potvrđeno igranjem** (Vatra odigrao partiju, v1.35.0): pravilo se čita s ploče bez
+ijedne trajne oznake, dodatna vizualna pomoć nije zatrebala. Time je zatvoren jedini
+otvoreni rizik ove varijante - odluka o izostanku tinte bila je do tada procjena, ne
+mjerenje (browser pane u toj sesiji nije radio, vidi Provjere niže).
+
+**Time se izostanak dekoracije pretvara iz iznimke u pravilo.** Antiknight i Antiking
+su prošli isto, ali su oba "potez figure" - obrazac koji igrač šahovski prepoznaje.
+Disjoint nije, pa je bio pravi test tvrdnje: **varijanta koja mijenja pravilo, a ne
+nosi per-puzzle podatak, ne treba trajnu dekoraciju** - peer-highlight je dovoljan.
+To je i granica: čim varijanta nosi oznaku IZVEDENU iz rješenja, oznaka se mora
+vidjeti (v1.34.1, `KEEP_MIN`), jer je tamo highlight ne može nadomjestiti.
+
 ### Jedina nespojiva kombinacija u repou: Jigsaw
 
 Jigsaw ZAMJENJUJE kutije nepravilnim regijama, a disjoint je definiran kao "ista
@@ -831,10 +843,14 @@ bilo koju kombinaciju.
 - **UI logika**: browser pane u ovoj sesiji nije registrirao klikove na meni overlay
   (screenshotovi timeoutali) - isto kao u Clone sesiji. Nespojivost i `randomVariants`
   su zato provjereni Node testom koji logiku EKSTRAHIRA iz `app.js` regexom umjesto da
-  je prepisuje (promašen regex ruši test, ne propušta ga): 8 slučajeva tablice istinitosti
-  - 20000 poziva randoma bez ijedne nevaljane kombinacije. Render nije provjeren okom, ali
-    ni ne postoji - varijanta ne uvodi nijednu novu CSS klasu (vidi pouku iz Clone sekcije:
-    rizik je podnošljiv kad se ništa ne crta preko granice ćelije).
+  je prepisuje (promašen regex ruši test, ne propušta ga): 8 slučajeva tablice
+  istinitosti plus 20000 poziva randoma bez ijedne nevaljane kombinacije.
+- **Odigrana partija**: Vatra odigrao Disjoint ploču i potvrdio da je dobro - pravilo
+  se čita bez trajne oznake. To je bio jedini dio koji Node testovi nisu mogli pokriti.
+  **Treća varijanta zaredom koja prolazi iz prve** (Palindrome, Clone, Disjoint), i
+  treći put iz istog razloga: render se svodi na već dokazan sloj ili ga uopće nema.
+  Kod Disjointa nema ni jedne nove CSS klase, pa je rizik bio najmanji dosad - Thermo,
+  jedini koji je tražio tri runde popravaka, jedini je i crtao preko granice ćelije.
 
 ## Poznato / tehnički dug
 
