@@ -1496,6 +1496,26 @@ u ovoj sesiji - vidi tehnički dug.
 - **Nespojivost**: tablica istinitosti proširena na novi par; `randomVariants` sada
   čita parove IZ `INCOMPATIBLE` umjesto da ih prepisuje (inače bi test i dalje
   provjeravao samo stari par - zamalo se dogodilo).
+- **Potvrđeno igranjem**: Vatra odigrao partiju - pravilo se čita s ploče bez ijedne
+  oznake, kao kod Disjoint Groups. Time je potvrđeno i da je izostanak rendera bio
+  ispravan izbor za drugu varijantu zaredom koja mijenja pravilo umjesto da nosi oznaku.
+
+## Stanje popisa kandidata (nakon v1.41.0)
+
+Popis iz [dorada-varijante.md](dorada-varijante.md), otvoren nakon što je originalna
+wish-lista iscrpljena u v1.34.x, sada je **isporučen do dvije stavke**:
+
+| isporučeno                                                              | preostalo               |
+| ----------------------------------------------------------------------- | ----------------------- |
+| Disjoint Groups, German Whispers, Renban, Zipper, Arrow, Nonconsecutive | Sandwich, Little Killer |
+
+Obje preostale traže **oznaku izvan ploče** - prvi novi render kanal otkako igra
+postoji (layout, mobitel, skaliranje). To je jedina skupina koja nije ni dotaknuta, i
+razlog zašto je ostavljena za kraj stoji: sve dosadašnje oznake staju unutar ćelije ili
+na brid između dvije.
+
+Uz njih ostaje otvoreno i **Daily Variant Mix** (v1.23.0 ideja, neplanirano) te
+tehnički dug oko Thermo repova, izmjeren u v1.41.0.
 
 ## Poznato / tehnički dug
 
