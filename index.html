@@ -41,7 +41,10 @@
           <div class="board-frame">
             <div class="out-strip out-top" id="out-top"></div>
             <div class="out-strip out-left" id="out-left"></div>
-            <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+            <div class="out-strip out-bottom" id="out-bottom"></div>
+            <div class="board-slot">
+              <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+            </div>
           </div>
           <div id="win-overlay" class="win-overlay hidden">
             <div class="win-card">
@@ -183,6 +186,16 @@
               <span class="variant-name">Kropki</span>
               <span class="variant-desc"
                 >White dot = consecutive, black dot = one is double the other.</span
+              >
+            </span>
+            <span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="littlekiller">
+            <span class="variant-info">
+              <span class="variant-name">Little Killer</span>
+              <span class="variant-desc"
+                >A number with an arrow outside the grid is the sum of the digits along that
+                diagonal. Digits may repeat.</span
               >
             </span>
             <span class="variant-toggle" aria-hidden="true"></span>

@@ -130,6 +130,11 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       dotad bio jedina nedotaknuta skupina. Ujedno prva relacija kojoj se ne zna nad
       kojim ćelijama vrijedi (skup ovisi o tome gdje padnu 1 i 9), pa se propagira
       enumeracijom umjesto rasponom - vidi sekciju niže.
+- [x] Little Killer (zbroj znamenki na dijagonali, v1.43.0). Osma i **zadnja s liste
+      kandidata**. Druga oznaka izvan ploče: nasljeđuje Sandwichev pojas, dodaje treću
+      stranu (dolje) i strelicu smjera, a pretince dijeli sa Sandwichem po dogovoru
+      Kropki/XV. Logikom je najslabija tvrdnja u repou - zbroj do 9 ćelija BEZ zabrane
+      ponavljanja - i to se vidjelo u STRENGTH-u. Vidi sekciju niže.
 
 - [x] Thermo (vrijednosti rastu duž termometra, v1.30.0). **Nije ispala
       geometrija-first** - vidi zasebnu sekciju niže.
@@ -1662,29 +1667,150 @@ ostavljeno kako jest; da je pao ispod, morao bi `markCount` znati za ploču.
   mjerljivo. Ne generalizirati na render kojem je pitanje "izgleda li dobro", ne
   "stoji li na mjestu".
 
-## Stanje popisa kandidata (nakon v1.42.0)
+## Little Killer (v1.43.0)
+
+Broj sa strelicom izvan ploče je zbroj znamenki na toj dijagonali; znamenka se smije
+ponoviti. Osma i **zadnja s liste kandidata** - popis otvoren nakon v1.34.x je time
+iscrpljen.
+
+Izmjereno (Hard, 60 ploča): **medijan 5ms, p90 23ms, max 68ms** sam; najgori par
+(littlekiller+jigsaw) medijan 213ms / max 1.7s, **0/25 iznad 5s**, i nijedna kombinacija
+nema ploču iznad 5s. Normal 1ms. Oznaka po ploči 6-12, dijagonala duga 2-9 (prosjek 5.3).
+
+### Tri strane, ne četiri - Vatrina korekcija
+
+Predložio sam pojas sa sve četiri strane. Vatra je pitao nisu li tri dovoljne, i **bio
+je u pravu**: zbroj ne ovisi o smjeru čitanja, pa su ↘ i ↖ ista dijagonala, a strelica
+bira samo s koje je strane oznaka. Provjereno na svih 30 dijagonala - **nijedna nema
+oba kraja na istoj strani**, pa izbacivanje bilo koje strane ne čini nijednu
+nedostupnom. Ostaje 48 (pretinac, smjer) opcija, 16 po strani.
+
+Izbačena je desna: lijevu i gornju već koristi Sandwich, a donji pojas je u portretu
+**besplatan** - ulazi u praznu visinu ispod ploče.
+
+Moja greška je bila da sam pokrivenost računao po KRAJU dijagonale umjesto po
+dijagonali. Iz toga je ispalo "7 dijagonala u donjem desnom kutu je nedostupno", što
+vrijedi samo ako se drži da smjer strelice mora biti fiksan. Ne mora.
+
+### Pojas po osi: donji je često besplatan
+
+Do sad je okvir bio kvadrat s jednakim pojasom lijevo i gore. To je bilo dovoljno za
+Sandwich, ali bi za tri pojasa bilo rasipno: ploča se računa kao
+`min(širina - lijevi, visina - gornji - donji)`, a `board-wrap` gotovo nikad nije
+kvadrat. Izmjereno na 375×812: wrap je 351×487, pa ploču ograničava ŠIRINA i oba
+vodoravna pojasa (gornji, donji) stanu u višak visine bez ijednog izgubljenog piksela.
+U landscapeu je obrnuto i tada je besplatan lijevi. Formula sama pogodi oba slučaja.
+
+Izmjereno (ćelija ploče):
+
+| ekran   | classic | Sandwich | Little Killer |
+| ------- | ------- | -------- | ------------- |
+| 390×844 | 39.0px  | 36.2px   | 35.2px        |
+| 375×812 | 37.4px  | 34.7px   | 33.7px        |
+| 812×375 | 30.5px  | 28.6px   | 25.9px        |
+| 320×568 | 26.9px  | 24.7px   | 20.9px        |
+
+Little Killer košta malo više od Sandwicha jer mu pretinac mora primiti i strelicu uz
+broj (9.5cqmin prema 7cqmin). Pokušaj da se pojas stisne je odbačen mjerenjem: na
+8cqmin ploča dobije jedan piksel po ćeliji, a zaliha u pretincu padne s 5.7px na 1.2px.
+
+**320×568 je jedini ekran gdje se donji pojas plaća** - tamo je wrap skoro kvadrat
+(254×250) pa viška visine nema. Ostaje 20.9px po ćeliji; to je telefon iz 2016., na
+375+ je 33.7px i više.
+
+### Container query jedinice mjere CONTENT box
+
+Prelaskom na pojaseve po osi maknut je množitelj `--bs` (kojim je Sandwich skalirao
+tekst) i ploča je trebala postati vlastiti size-container, pa da se tekst skalira sam.
+
+**Ploča ne smije biti taj container.** Ima okvir od 3px, a cq jedinice mjere content
+box - znamenka je time pala s 22.464px na 22.08px **i u klasiku**, dakle na ploči koja
+se uopće nije mijenjala. Container je zato zaseban pretinac (`.board-slot`) bez okvira
+i paddinga, kojem je content box točno veličina ploče. Nakon toga je klasik izmjeren
+na 22.464px, dakle bajt na bajt kao prije.
+
+Pouka je šira od ovog slučaja: **kad se uvodi size-container, provjeriti ima li
+element okvir ili padding** - inače se sve unutra tiho skalira za dvostruku širinu ruba.
+
+### Najslabija tvrdnja po ćeliji, i to se vidi u STRENGTH-u
+
+Little Killer je jedina varijanta kojoj je prva probana snaga bila **dva koraka**
+previsoka, i to se vidjelo tek na kombinaciji (pravilo iz v1.35.0). Par
+littlekiller+thermo, 40 ploča po vrijednosti:
+
+| STRENGTH | medijan | p90   | max       | iznad 5s |
+| -------- | ------- | ----- | --------- | -------- |
+| 10       | 49ms    | 2.6s  | 23s       | 3/40     |
+| 8        | 23ms    | 366ms | **748s**  | 2/40     |
+| 6        | 11ms    | 121ms | **453ms** | **0/40** |
+
+Ta 748-sekundna ploča na snazi 8 je najdublji rep izmjeren u repou dosad i sama je
+zaustavila mjerenje na dvanaest minuta.
+
+Razlog nije šum nego sama tvrdnja: zbroj dijagonale **veže do 9 ćelija bez zabrane
+ponavljanja**, pa je po ćeliji daleko slabiji od svega dosadašnjeg - Zipper fiksira
+partnera, Arrow steže u oba smjera, kavez barem zabranjuje ponavljanje. Niža snaga diže
+dno raspona pa `dig` prestane goniti ploču ispod onoga što kombinacija podnosi. Solo
+ploča za to plaća **jedan zadani broj** (22-28 umjesto 21-28), broj oznaka se ne mijenja.
+
+### Dijeljenje pretinaca sa Sandwichem
+
+Obje oznake stoje u istom pojasu, pa se natječu za iste pretince. Nisu proglašene
+nespojivima - presedan su Kropki i XV, koji dijele brid (v1.27.0): **Sandwich se izvodi
+prvi, Little Killer puni samo slobodne pretince.** Sandwich ide prvi jer ima manje
+slobode (18 pretinaca, treba mu barem 6), dok Little Killer bira između 48 opcija i ima
+cijeli donji pojas koji Sandwich ne dira - isto pravilo kao kod klona (v1.33.0).
+
+Provjereno na 40 ploča s obje varijante: **0 sudara pretinaca**, 0 dvaput označenih
+dijagonala, 0 pretinaca s dvije oznake.
+
+### Provjere
+
+- **Regresija**: 46 ploča (23 kombinacije × 2 težine, zasijan RNG) identične do na novo
+  prazno `littles: null` polje - nijedan redak uklonjen ni promijenjen.
+- **Generator**: na svakoj ploči provjereno da je zbroj dijagonale U RJEŠENJU jednak
+  prikazanom, **uz kontrolu** da isti test na klasičnoj ploči padne (85 prekršaja).
+- **Solver soundness**: 872 djelomične ploče, 25933 provjere praznih ćelija, **nijedan
+  točan kandidat izgubljen**.
+- **Hint**: 1761 prijedlog, **nula krivih**, nula kontradikcija, 29/35 ploča riješeno
+  samim upisima.
+- **Klasik nepromijenjen**: ploča 351px, ćelija 37.44px, font 22.464px - isto do na
+  decimalu kao prije prelaska na pojaseve po osi.
+- **Render**: poravnanje 0.00px na sva tri pojasa (gore, lijevo, dolje), na 390×844,
+  375×812, 320×568 i 812×375. Nigdje se tekst ne prelijeva; najgori mogući sadržaj
+  (dvoznamenkasti zbroj + strelica) ima 4.7-6.9px zalihe. Oznake prežive reload, nula
+  grešaka u konzoli.
+- **Meni**: test iz v1.40.1 prolazi - Little Killer je abecedno između Kropkija i
+  Nonconsecutivea. **Varijanti je sada 20.**
+- **Potvrda igranjem**: NIJE napravljena (screenshot i dalje pada u timeout, vidi
+  v1.42.0). Po pouci iz v1.40.0 to je ono što treba potvrditi - ovdje je novo i sam
+  pojas s treće strane i strelica u pretincu.
+
+## Popis kandidata je iscrpljen (nakon v1.43.0)
 
 Popis iz [dorada-varijante.md](dorada-varijante.md), otvoren nakon što je originalna
-wish-lista iscrpljena u v1.34.x, sada je **isporučen do jedne stavke**:
+wish-lista iscrpljena u v1.34.x, **isporučen je do kraja**:
 
-| isporučeno                                                                        | preostalo     |
-| --------------------------------------------------------------------------------- | ------------- |
-| Disjoint Groups, German Whispers, Renban, Zipper, Arrow, Nonconsecutive, Sandwich | Little Killer |
+| isporučeno                                                                                       |
+| ------------------------------------------------------------------------------------------------ |
+| Disjoint Groups, German Whispers, Renban, Zipper, Arrow, Nonconsecutive, Sandwich, Little Killer |
 
-**Render kanal izvan ploče je time otvoren i dokazan** (v1.42.0, potvrđen igranjem), pa
-razlog zbog kojeg je ta skupina ostavljena za kraj više ne vrijedi. Little Killer
-nasljeđuje gotov `.board-frame` s pojasom; posao koji mu preostaje je drugačiji:
+Varijanti je **20**. Obje liste su time prazne, pa iduća varijanta - ako je bude - opet
+nije "sljedeća s popisa" nego nova odluka, kao što je bio Disjoint Groups u v1.35.0.
 
-- oznaka mu stoji uz **dijagonalu**, ne uz redak - dakle u pojasu, ali s pripadnom
-  strelicom smjera, i na uglovima gdje se pojasevi sastaju (Sandwich taj kut ne koristi),
-- odnos je čisti zbroj nad zadanim skupom ćelija, dakle **natrag na `cageRange` oblik** -
-  Sandwicheva enumeracija mu ne treba, jer dijagonala je poznata unaprijed.
+**Što je ostalo otvoreno:**
 
-Uz njega ostaje otvoreno i **Daily Variant Mix** (v1.23.0 ideja, neplanirano) te
-tehnički dug oko Thermo repova, izmjeren u v1.41.0.
+- **Daily Variant Mix** (v1.23.0 ideja, neplanirano) - jedina zapisana ideja koja nije
+  varijanta.
+- **Tehnički dug oko Thermo repova**, sada s novim mjerenjem: vidi niže.
+- **Potvrda igranjem za Little Killer** - render je provjeren mjerenjem, ne okom.
 
-Uz njih ostaje otvoreno i **Daily Variant Mix** (v1.23.0 ideja, neplanirano) te
-tehnički dug oko Thermo repova, izmjeren u v1.41.0.
+**Za slučaj da se ipak doda još jedna varijanta**, ovo je zatečeno stanje mehanizama:
+
+- Boja je potrošena (šest linijskih, prag deltaE 20 - v1.39.1/v1.40.0); nova linija bi
+  morala posegnuti za oznakom na kraju, ne za bojom.
+- Pojas izvan ploče ima slobodnu **desnu stranu** i sve kutove.
+- `.board-slot` računa ploču po osi, pa novi pojas ne traži nikakav novi izračun.
 
 ## Poznato / tehnički dug
 
@@ -1693,9 +1819,16 @@ tehnički dug oko Thermo repova, izmjeren u v1.41.0.
   sam je uredan (max 536ms), pa problem nastaje u kombinaciji. Isti fenomen dao je
   outliere od 374s (renban+thermo, v1.38.0) i 234s (nonconsecutive+thermo, v1.41.0),
   koji se ni jednom nisu reproducirali u ponovljenom mjerenju - dakle rijedak je, ali
-  dubok. Nosi ga Cancel + worker (v1.17.0). **Ako se ikad uzme:** mjeriti na barem 50
-  ploča s ispisom svake (N=20 daje 60× različite maksimume između pokretanja), i
-  gledati troši li se vrijeme u `dig`-u ili u odbačenim pokušajima prije njega.
+  dubok. Nosi ga Cancel + worker (v1.17.0).
+  - **Najdublji izmjereni rep dosad: 748s** (`littlekiller+thermo` uz STRENGTH 8,
+    v1.43.0) - jedna ploča koja je sama zaustavila mjerenje na 12.5 minuta. Ista
+    kombinacija uz STRENGTH 6 ima max 453ms na 40 ploča, pa je rep izbjegnut spuštanjem
+    snage, ne popravljen. Kontrolno mjerenje istog dana: `clone+thermo` max 8.2s (1/40),
+    `renban+thermo` max 2.9s (0/40), `thermo` sam max 269ms (0/40) - dakle rep i dalje
+    nose ISKLJUČIVO kombinacije s Thermom.
+  - **Ako se ikad uzme:** mjeriti na barem 50
+    ploča s ispisom svake (N=20 daje 60× različite maksimume između pokretanja), i
+    gledati troši li se vrijeme u `dig`-u ili u odbačenim pokušajima prije njega.
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
   `Sudoku.generate` za "hard" traži slagalicu čija je najteža KLASIČNA tehnika
   tier-2. Kod varijanti je solver jači (dodatni units), pa slagalice češće ispadnu

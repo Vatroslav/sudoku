@@ -18,6 +18,7 @@
     "kropki",
     "xv",
     "sandwich",
+    "littlekiller",
     "thermo",
     "palindrome",
     "whisper",
@@ -39,6 +40,7 @@
     kropki: "Kropki",
     xv: "XV",
     sandwich: "Sandwich",
+    littlekiller: "Little Killer",
     thermo: "Thermo",
     palindrome: "Palindrome",
     whisper: "German Whispers",
@@ -277,6 +279,40 @@
   const validArrows = (a) => validThermos(a) && a.every((p) => p.length >= 3);
   // Sandwich: { rows, cols } po devet zbrojeva, -1 = linija bez oznake. Gornja granica
   // je 35 (2+3+…+8, sve što može stati između krajeva).
+  // Little Killer: { side, k, dir, sum }. Geometrija se izvodi iz side/k/dir (isti
+  // izvod kao u sudoku.js/solver.js), pa render nikad ne crta dijagonalu koju jezgra
+  // ne bi priznala.
+  const LITTLE_ENTRY = { top: (k) => [0, k], left: (k) => [k, 0], bottom: (k) => [8, k] };
+  function littleCells(side, k, dir) {
+    const entry = LITTLE_ENTRY[side];
+    if (!entry || !Number.isInteger(k) || k < 0 || k > 8) return [];
+    if (!Array.isArray(dir) || dir.length !== 2) return [];
+    const [dr, dc] = dir;
+    if (![-1, 1].includes(dr) || ![-1, 1].includes(dc)) return [];
+    let [r, c] = entry(k);
+    const out = [];
+    while (r >= 0 && r < 9 && c >= 0 && c < 9) {
+      out.push(r * 9 + c);
+      r += dr;
+      c += dc;
+    }
+    return out;
+  }
+  const validLittles = (ls) => {
+    if (!Array.isArray(ls)) return false;
+    const slots = new Set();
+    for (const g of ls) {
+      if (!g || !Number.isInteger(g.sum)) return false;
+      const cells = littleCells(g.side, g.k, g.dir);
+      // Ponavljanje je dopušteno pa je raspon [duljina, 9×duljina], ne kavezni MIN/MAX.
+      if (cells.length < 2 || g.sum < cells.length || g.sum > 9 * cells.length) return false;
+      // Jedan pretinac = jedna oznaka; dvije bi se u pojasu preklopile.
+      const slot = g.side + ":" + g.k;
+      if (slots.has(slot)) return false;
+      slots.add(slot);
+    }
+    return true;
+  };
   const validSandwich = (sw) =>
     !!sw &&
     Array.isArray(sw.rows) &&
@@ -357,6 +393,7 @@
   const boardWrapEl = document.getElementById("board-wrap");
   const outTopEl = document.getElementById("out-top");
   const outLeftEl = document.getElementById("out-left");
+  const outBottomEl = document.getElementById("out-bottom");
   const notesStateEl = document.getElementById("notes-state");
   const winOverlay = document.getElementById("win-overlay");
   const winStats = document.getElementById("win-stats");
@@ -496,6 +533,7 @@
         zippers: (clues && clues.zippers) || null,
         arrows: (clues && clues.arrows) || null,
         sandwich: (clues && clues.sandwich) || null,
+        littles: (clues && clues.littles) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -710,6 +748,12 @@
         if (!validSandwich(clues.sandwich)) return false;
       } else {
         clues.sandwich = null;
+      }
+      // Little Killer: dijagonalni zbrojevi uz pretinac i smjer.
+      if (state.variants.includes("littlekiller")) {
+        if (!validLittles(clues.littles)) return false;
+      } else {
+        clues.littles = null;
       }
       return true;
     } catch (e) {
@@ -1229,12 +1273,20 @@
   // Pojas se puni i kad varijante nema (praznim ćelijama): tako grid uvijek ima svojih
   // devet traka i poravnanje ne ovisi o tome koliko je oznaka prikazano. Širinu pojasa
   // (i time veličinu ploče) nosi klasa `has-outside` na wrapu - vidi CSS.
-  function renderSandwich(sandwich) {
-    if (!outTopEl || !outLeftEl || !boardWrapEl) return;
-    const on = !!sandwich;
+  // Strelica po smjeru dijagonale. Znak nosi smjer sam za sebe, pa se ne mora crtati
+  // geometrija ni rotirati element - a pretinac je premalen za oboje.
+  const ARROWS = { "1,1": "↘", "1,-1": "↙", "-1,1": "↗", "-1,-1": "↖" };
+
+  function renderOutside(sandwich, littles) {
+    if (!outTopEl || !outLeftEl || !outBottomEl || !boardWrapEl) return;
+    const diag = !!(littles && littles.length);
+    const on = !!sandwich || diag;
     boardWrapEl.classList.toggle("has-outside", on);
+    // Little Killer traži i donji pojas i širi pretinac (broj + strelica) - vidi CSS.
+    boardWrapEl.classList.toggle("has-diag", diag);
     outTopEl.textContent = "";
     outLeftEl.textContent = "";
+    outBottomEl.textContent = "";
     if (!on) return;
     // Čita li se cijeli sendvič već iz ZADANIH brojeva? Tada oznaka igraču ne govori
     // ništa - samo zbraja ono što ionako vidi - pa je šum. Presedan su Kropki/XV
@@ -1260,20 +1312,39 @@
         if (!state.puzzle[cells[k]]) return false;
       return true;
     };
-    const fill = (host, values, cellsAt) => {
+    const rowAt = (k) => Array.from({ length: 9 }, (_, j) => k * 9 + j);
+    const colAt = (k) => Array.from({ length: 9 }, (_, j) => j * 9 + k);
+    // Little Killer po pretincu (side:k). Jedan pretinac nosi najviše jednu oznaku, a
+    // generator jamči da se ne sudara sa Sandwichevim (vidi sandwichSlots u sudoku.js).
+    const bySlot = new Map();
+    if (diag) for (const g of littles) bySlot.set(g.side + ":" + g.k, g);
+    // Svaki pojas ima svojih devet pretinaca i kad su prazni - grid tako uvijek ima
+    // devet traka, pa poravnanje ne ovisi o tome koliko je oznaka prikazano.
+    const fill = (host, side, sums, cellsAt) => {
       for (let k = 0; k < 9; k++) {
         const cell = document.createElement("span");
         cell.className = "out-cell";
-        // -1 = linija bez oznake. Prazna ćelija, ne izostavljena: mjesto mora ostati
-        // zauzeto da preostale oznake i dalje stoje uz svoj redak.
-        if (values[k] >= 0 && !readable(cellsAt(k))) cell.textContent = values[k];
+        const g = bySlot.get(side + ":" + k);
+        if (g) {
+          const num = document.createElement("span");
+          num.textContent = g.sum;
+          const arr = document.createElement("span");
+          arr.className = "out-arrow";
+          arr.textContent = ARROWS[g.dir.join(",")] || "";
+          // Strelica ide sa strane bliže ploči: u lijevom pojasu desno od broja, u
+          // gornjem i donjem svejedno, pa isti redoslijed drži jedno pravilo.
+          cell.appendChild(num);
+          cell.appendChild(arr);
+        } else if (sums && sums[k] >= 0 && !readable(cellsAt(k))) {
+          // -1 = linija bez Sandwich oznake. Prazan pretinac, ne izostavljen.
+          cell.textContent = sums[k];
+        }
         host.appendChild(cell);
       }
     };
-    const rowAt = (k) => Array.from({ length: 9 }, (_, j) => k * 9 + j);
-    const colAt = (k) => Array.from({ length: 9 }, (_, j) => j * 9 + k);
-    fill(outTopEl, sandwich.cols, colAt);
-    fill(outLeftEl, sandwich.rows, rowAt);
+    fill(outTopEl, "top", sandwich && sandwich.cols, colAt);
+    fill(outLeftEl, "left", sandwich && sandwich.rows, rowAt);
+    fill(outBottomEl, "bottom", null, null);
   }
 
   // --- Render ---
@@ -1288,11 +1359,14 @@
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom. Putovi
     // linijskih varijanti NISU ovdje: njih čita LINE_KINDS preko state.clues, da
     // render i legenda ne mogu imati različit popis.
-    const { regions, parity, edges, clones, cages, sandwich } = state.clues;
+    const { regions, parity, edges, clones, cages, sandwich, littles } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
-    // Sandwich mijenja VELIČINU ploče (pojas joj uzme rub), pa ide prije petlje po
-    // ćelijama - ne da se ćelije crtaju pa se ploča ispod njih pomakne.
-    renderSandwich(validSandwich(sandwich) ? sandwich : null);
+    // Oznake izvan ploče mijenjaju VELIČINU ploče (pojas joj uzme rub), pa idu prije
+    // petlje po ćelijama - ne da se ćelije crtaju pa se ploča ispod njih pomakne.
+    renderOutside(
+      validSandwich(sandwich) ? sandwich : null,
+      validLittles(littles) ? littles : null
+    );
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");

@@ -305,6 +305,60 @@ const Solver = (() => {
     return [Math.max(1, rest - MAX_SUM[k]), Math.min(9, rest - MIN_SUM[k])];
   }
 
+  // Little Killer: polje { side, k, dir, sum } - pretinac u pojasu, smjer u ploču i
+  // zbroj dijagonale. Geometrija se IZVODI iz side/k/dir (mora se poklapati sa
+  // sudoku.js littleCells), pa nevaljan oblik ne može proći kao valjana dijagonala.
+  const LITTLE_ENTRY = { top: (k) => [0, k], left: (k) => [k, 0], bottom: (k) => [8, k] };
+  function littleCells(side, k, dir) {
+    const entry = LITTLE_ENTRY[side];
+    if (!entry || !Number.isInteger(k) || k < 0 || k > 8) return [];
+    if (!Array.isArray(dir) || dir.length !== 2) return [];
+    const [dr, dc] = dir;
+    if (![-1, 1].includes(dr) || ![-1, 1].includes(dc)) return [];
+    let [r, c] = entry(k);
+    const out = [];
+    while (r >= 0 && r < 9 && c >= 0 && c < 9) {
+      out.push(r * 9 + c);
+      r += dr;
+      c += dc;
+    }
+    return out;
+  }
+  function validLittles(littles) {
+    if (!Array.isArray(littles)) return false;
+    for (const g of littles) {
+      if (!g || !Number.isInteger(g.sum)) return false;
+      const cells = littleCells(g.side, g.k, g.dir);
+      // Ponavljanje je dopušteno, pa je gornja granica 9 po ćeliji, a donja 1.
+      if (cells.length < 2 || g.sum < cells.length || g.sum > 9 * cells.length) return false;
+    }
+    return true;
+  }
+  // Indeks ćelija -> polje { cells, sum }. Dijagonale se SMIJU sjeći (dvije obitelji),
+  // pa je po ćeliji moguće više od jedne - odatle polje, za razliku od tube i kaveza.
+  function prepLittles(littles) {
+    const at = new Array(81).fill(null);
+    for (const g of littles) {
+      const cells = littleCells(g.side, g.k, g.dir);
+      if (cells.length < 2) continue;
+      for (const i of cells) (at[i] || (at[i] = [])).push({ cells, sum: g.sum });
+    }
+    return at;
+  }
+  // Raspon [lo,hi] dopušten ćeliji na dijagonali. Isti oblik kao cageRange, ali BEZ
+  // MIN_SUM/MAX_SUM: dijagonala nije jedinica pa se znamenka smije ponoviti, i svaka
+  // prazna ćelija nosi bilo što od 1 do 9. Mora se poklapati sa sudoku.js isValid.
+  function littleRange(grid, cells, sum, idx) {
+    let rest = sum,
+      k = 0;
+    for (const j of cells) {
+      if (j === idx) continue;
+      if (grid[j]) rest -= grid[j];
+      else k++;
+    }
+    return [Math.max(1, rest - 9 * k), Math.min(9, rest - k)];
+  }
+
   // Sandwich: { rows, cols } po devet zbrojeva između 1 i 9 (-1 = linija bez oznake).
   // Gornja granica je 35 (2+3+…+8 - sve što može stati između krajeva).
   function validSandwich(sw) {
@@ -592,6 +646,9 @@ const Solver = (() => {
   // propagira po ćeliji nego po CIJELOJ liniji odjednom (vidi sandwichPrune), pa se ne
   // izvodi 81-polje - prune se zove nad retkom/stupcem koji oznaku nosi.
   let curSandwich = null;
+  // Little Killer: per-puzzle indeks ćelija -> polje { cells, sum } ili null. Kao kavez
+  // (raspon po preostalom zbroju), samo bez zabrane ponavljanja - vidi littleRange.
+  let curLittles = null;
   // Nonconsecutive: obična zastavica, jedina varijanta bez ikakvog per-puzzle podatka
   // (pravilo vrijedi za cijelu ploču). Propagacija je Kropki naopako: bijela točka
   // kaže "ovaj par JEST uzastopan", ovdje NIJEDAN ortogonalni par nije - pa se
@@ -693,6 +750,14 @@ const Solver = (() => {
         const { path, pos } = curArrows[idx];
         const [lo, hi] = arrowRange(grid, path, pos);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+      }
+      // Little Killer: preostali zbroj dijagonale reže raspon, isto kao kavez - samo
+      // se ovdje ne briše ponovljena vrijednost, jer dijagonala nije jedinica.
+      if (curLittles && curLittles[idx]) {
+        for (const g of curLittles[idx]) {
+          const [lo, hi] = littleRange(grid, g.cells, g.sum, idx);
+          for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+        }
       }
       // Renban: znamenke na liniji su različite (linija nije jedinica pa ju peers ne
       // pokrivaju), a raspon steže prozor od L uzastopnih - vidi renbanRange.
@@ -834,6 +899,18 @@ const Solver = (() => {
     if (curMate && curMate[idx] >= 0) {
       const j = curMate[idx];
       if (cand[j]) for (const u of [...cand[j]]) if (u !== val) cand[j].delete(u);
+    }
+    // Little Killer: upis stegne SVE prazne ćelije svake dijagonale kojoj ćelija
+    // pripada (može ih biti dvije), jer potroši dio zbroja - ista udaljena posljedica
+    // kao kod kaveza.
+    if (curLittles && curLittles[idx]) {
+      for (const g of curLittles[idx]) {
+        for (const j of g.cells) {
+          if (!cand[j]) continue;
+          const [lo, hi] = littleRange(grid, g.cells, g.sum, j);
+          for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
+        }
+      }
     }
     // Sandwich: upis mijenja i gdje krajevi mogu stajati i koliko je zbroju ostalo, pa
     // se cijeli redak i stupac računaju iznova. Upis 1 ili 9 je pritom najjači potez u
@@ -1161,6 +1238,7 @@ const Solver = (() => {
   //   zippers - Zipper linije (polje putova neparne duljine); nevaljano se ignorira.
   //   arrows  - Arrow putovi [krug, ...rep]; nevaljano se ignorira.
   //   sandwich - Sandwich zbrojevi ({ rows, cols }, -1 = bez oznake); nevaljano se ignorira.
+  //   littles - Little Killer dijagonale ({ side, k, dir, sum }); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
@@ -1177,6 +1255,7 @@ const Solver = (() => {
       zippers,
       arrows,
       sandwich,
+      littles,
     } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
@@ -1194,6 +1273,7 @@ const Solver = (() => {
     curZippers = validZippers(zippers) && zippers.length ? prepZippers(zippers) : null;
     curArrows = validArrows(arrows) && arrows.length ? prepArrows(arrows) : null;
     curSandwich = validSandwich(sandwich) ? sandwich : null;
+    curLittles = validLittles(littles) && littles.length ? prepLittles(littles) : null;
     const active = variantKey(variants);
     // Nonconsecutive se čita iz VARIJANTI, ne iz clues - jedina koja nema per-puzzle
     // podatak (pravilo vrijedi za cijelu ploču, kao antiknight).

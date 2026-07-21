@@ -276,31 +276,55 @@ main {
   display: grid;
   place-items: center;
 }
-/* Okvir ploče: pojas za oznake izvan grida (Sandwich) + sama ploča. Najveći kvadrat
-   koji stane u board-wrap; ploča uzima ono što pojas ne uzme. Pojas je jednako širok
-   lijevo i gore, pa ploča ostaje KVADRAT bez ijednog dodatnog računa.
+/* Okvir ploče: pojasevi za oznake izvan grida (Sandwich, Little Killer) + sama ploča.
+   Bez njih su svi pojasevi 0 i okvir se svede na samu ploču - zato je sloj dodan
+   svima, a ne samo tim partijama: jedan raspored za sve slučajeve.
 
-   Bez Sandwicha je --gutter 0 i okvir se svede na samu ploču - zato je ovaj sloj
-   dodan svima, a ne samo Sandwich partijama: jedan raspored za oba slučaja. */
+   Pojas se NE računa po osi zajedno: ploča uzima najveći kvadrat koji stane nakon što
+   se od širine oduzme lijevi pojas, a od visine gornji i donji. To je bitno jer
+   board-wrap gotovo nikad nije kvadrat - u portretu ispod ploče ostane stotinjak
+   piksela viška, pa DONJI POJAS NE KOŠTA NIŠTA: ulazi u tu prazninu. U landscapeu je
+   obrnuto i tada besplatan postaje lijevi. Formula sama pogodi oba slučaja.
+
+   Desni pojas namjerno ne postoji: nijedna dijagonala nema oba kraja na istoj strani,
+   pa je s tri strane svaka dostupna (provjereno na svih 30) - vidi todo.md. */
 .board-frame {
   display: grid;
-  grid-template-columns: var(--gutter, 0px) 1fr;
-  grid-template-rows: var(--gutter, 0px) 1fr;
-  width: min(100cqw, 100cqh);
-  aspect-ratio: 1 / 1;
+  grid-template-columns: var(--g-left, 0px) auto;
+  grid-template-rows: var(--g-top, 0px) auto var(--g-bottom, 0px);
 }
-/* 7cqmin je odmjereno prema ćeliji (~10.3cqmin): dovoljno za dvoznamenkasti broj, a
-   ploču košta 7% stranice. Više bi se čitalo kao drugi stupac, manje bi zbroj 35
-   stisnulo do nečitljivosti. */
-.board-wrap.has-outside .board-frame {
-  --gutter: 7cqmin;
-}
-/* Sve u ploči je odmjereno u cqmin board-wrapa, a pojas ploču suzi - bez ovoga bi
-   znamenke i bilješke ostale na staroj veličini u manjoj ćeliji. --bs množi svaki
-   takav clamp (i njegove granice) pa je omjer teksta i ćelije isti kao bez pojasa.
-   0.93 = koliko ploči ostane od okvira (100 - 7). */
+/* Sandwich piše samo broj (najviše 35), pa mu 7cqmin stigne uz zalihu. Little Killer
+   uz broj nosi i strelicu, pa mu treba šire - mjereno na živoj stranici, vidi todo.md. */
 .board-wrap.has-outside {
-  --bs: 0.93;
+  --g-left: 7cqmin;
+  --g-top: 7cqmin;
+}
+.board-wrap.has-diag {
+  --g-left: 9.5cqmin;
+  --g-top: 9.5cqmin;
+  --g-bottom: 9.5cqmin;
+}
+/* Pretinac ploče: nosi VELIČINU i služi kao size-container za sve u ploči.
+
+   Zašto zaseban element, a ne .board sama: container query jedinice mjere se prema
+   CONTENT boxu, a ploča ima okvir od 3px - da je ona container, cqmin bi bio manji za
+   6px i znamenka bi se za toliko smanjila i u klasiku (izmjereno 22.46px -> 22.08px).
+   Pretinac nema ni okvir ni padding, pa mu je content box točno veličina ploče.
+
+   Time sve u ploči (znamenka, bilješke, zbroj kaveza) mjeri PLOČU umjesto board-wrapa:
+   bez pojaseva su te dvije mjere identične pa se klasik ne mijenja, a s pojasom se
+   tekst smanji zajedno s ćelijom sam od sebe, bez ijednog množitelja. */
+.board-slot {
+  grid-column: 2;
+  grid-row: 2;
+  /* Najveći kvadrat koji stane nakon pojaseva - po osi, vidi .board-frame. Bez
+     pojaseva se svede na min(100cqw, 100cqh), dakle točno na staro ponašanje. */
+  width: min(
+    calc(100cqw - var(--g-left, 0px)),
+    calc(100cqh - var(--g-top, 0px) - var(--g-bottom, 0px))
+  );
+  aspect-ratio: 1 / 1;
+  container-type: size;
 }
 /* Pojas ponavlja RITAM ploče: isti broj traka, isti razmak (1px) i isti pomak od ruba
    (3px = okvir ploče), pa oznaka sjedne točno uz svoj redak/stupac bez računanja
@@ -321,10 +345,17 @@ main {
   grid-template-rows: repeat(9, 1fr);
   padding: 3px 0;
 }
+.out-bottom {
+  grid-column: 2;
+  grid-row: 3;
+  grid-template-columns: repeat(9, 1fr);
+  padding: 0 3px;
+}
 .out-cell {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 0.15em;
   font-size: clamp(9px, 4.4cqmin, 21px);
   font-weight: 600;
   line-height: 1;
@@ -333,13 +364,18 @@ main {
      isti stupac brojeva, a ne kao razbacane oznake. */
   font-variant-numeric: tabular-nums;
 }
+/* Strelica stoji uz broj sa strane BLIŽE ploči, pa oko ide s broja na dijagonalu koju
+   označava. Manja je i blijeđa od broja - broj je podatak, strelica samo pokazivač. */
+.out-arrow {
+  font-size: 0.85em;
+  font-weight: 400;
+  opacity: 0.75;
+}
 .board {
   display: grid;
-  grid-column: 2;
-  grid-row: 2;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
-  /* Ploča popuni ono što joj okvir da (vidi .board-frame). */
+  /* Ploča popuni svoj pretinac (vidi .board-slot). */
   width: 100%;
   height: 100%;
   background: var(--line-strong);
@@ -355,7 +391,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(clamp(12px, 6.4cqmin, 30px) * var(--bs, 1));
+  font-size: clamp(12px, 6.4cqmin, 30px);
   font-weight: 400;
   color: var(--user);
   cursor: pointer;
@@ -563,7 +599,7 @@ main {
   position: absolute;
   top: 4px;
   left: 4px;
-  font-size: calc(clamp(5px, 2.1cqmin, 10px) * var(--bs, 1));
+  font-size: clamp(5px, 2.1cqmin, 10px);
   line-height: 1;
   color: var(--cage-sum);
   font-weight: 500;
@@ -581,7 +617,7 @@ main {
   padding-top: 34%;
 }
 .cell.has-cage-sum .notes span {
-  font-size: calc(clamp(5px, 2.1cqmin, 10px) * var(--bs, 1));
+  font-size: clamp(5px, 2.1cqmin, 10px);
 }
 
 /* Linijske varijante (Thermo tuba, Palindrome i Whisper linija) dijele cijelu
@@ -852,7 +888,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: calc(clamp(6px, 2.5cqmin, 12px) * var(--bs, 1));
+  font-size: clamp(6px, 2.5cqmin, 12px);
   color: var(--note);
   font-weight: 500;
   line-height: 1;

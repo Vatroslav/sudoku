@@ -363,12 +363,14 @@ const Sudoku = (() => {
     const renbans = (c && c.renbans) || null;
     const zippers = (c && c.zippers) || null;
     const arrows = (c && c.arrows) || null;
+    const littles = (c && c.littles) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
       edges: (c && c.edges) || null,
       // Sandwich nema izvedeni oblik - wire je već ono što isValid gleda (vidi gore).
       sandwich: (c && c.sandwich) || null,
+      littles,
       thermos,
       palindromes,
       clones,
@@ -384,6 +386,7 @@ const Sudoku = (() => {
       rnb: prepRenbans(renbans),
       zip: prepZippers(zippers),
       arw: prepArrows(arrows),
+      lk: prepLittles(littles),
       // Jedno polje partnera za obje varijante jednakosti - vidi prepMates.
       mate: prepMates(palindromes, clones),
       cag: prepCages(cages),
@@ -408,6 +411,7 @@ const Sudoku = (() => {
     "kropki",
     "xv",
     "sandwich",
+    "littlekiller",
     "thermo",
     "palindrome",
     "whisper",
@@ -615,6 +619,89 @@ const Sudoku = (() => {
     return rest >= min && rest <= max;
   }
 
+  // --- Little Killer: zbroj znamenki na dijagonali ---
+  // Oznaka stoji izvan ploče, sa strelicom koja pokazuje niz dijagonalu. Wire oblik je
+  // polje { side, k, dir, sum }: `side`+`k` je PRETINAC u pojasu (gore[k] iznad stupca
+  // k, lijevo[k] lijevo od retka k, dolje[k] ispod stupca k), `dir` smjer u ploču.
+  // Ćelije se ne spremaju - izvedu se iz toga, pa nevaljana geometrija ne može ni ući.
+  //
+  // Ključna razlika prema Killeru: dijagonala NIJE jedinica, pa se znamenka smije
+  // ponoviti. Zato granica nije MIN_SUM/MAX_SUM (različite znamenke) nego obična
+  // [1,9] po praznoj ćeliji - isti oblik kao arrowRange.
+  //
+  // Zbroj ne ovisi o smjeru čitanja, pa su ↘ i ↖ ISTA dijagonala; strelica bira samo s
+  // koje je strane oznaka. Zato je tri strane dovoljno: nijedna dijagonala nema oba
+  // kraja na istoj strani, pa izbacivanje desne ne čini nijednu nedostupnom (provjereno
+  // na svih 30). Desna je izabrana jer lijevu i gornju već koristi Sandwich, a donji
+  // pojas ne košta ploču - u portretu ulazi u praznu visinu ispod nje.
+  const LITTLE_SIDES = {
+    top: {
+      entry: (k) => [0, k],
+      dirs: [
+        [1, 1],
+        [1, -1],
+      ],
+    },
+    left: {
+      entry: (k) => [k, 0],
+      dirs: [
+        [1, 1],
+        [-1, 1],
+      ],
+    },
+    bottom: {
+      entry: (k) => [8, k],
+      dirs: [
+        [-1, 1],
+        [-1, -1],
+      ],
+    },
+  };
+  // Ćelije dijagonale iz pretinca `side`[k] u smjeru `dir`. Jedini izvor te geometrije -
+  // dijele ga derive, isValid i render, pa se ne mogu razići.
+  function littleCells(side, k, dir) {
+    const def = LITTLE_SIDES[side];
+    if (!def || !Number.isInteger(k) || k < 0 || k > 8) return [];
+    let [r, c] = def.entry(k);
+    const [dr, dc] = dir;
+    const out = [];
+    while (r >= 0 && r < 9 && c >= 0 && c < 9) {
+      out.push(r * 9 + c);
+      r += dr;
+      c += dc;
+    }
+    return out;
+  }
+  // Sve upotrebljive (pretinac, smjer) opcije. Duljina 1 otpada - takva "dijagonala"
+  // je zadan broj napisan izvan ploče, ne oznaka (isti argument kao kavez od jedne
+  // ćelije). Mjereno: 48 opcija koje pokrivaju svih 30 dijagonala, 16 po strani.
+  const LITTLE_OPTIONS = [];
+  for (const [side, def] of Object.entries(LITTLE_SIDES))
+    for (let k = 0; k < 9; k++)
+      for (const dir of def.dirs) {
+        const cells = littleCells(side, k, dir);
+        if (cells.length >= 2) LITTLE_OPTIONS.push({ side, k, dir, cells });
+      }
+  const littleSlot = (g) => g.side + ":" + g.k;
+  const littleKey = (cells) =>
+    cells
+      .slice()
+      .sort((a, b) => a - b)
+      .join(",");
+
+  // Indeks ćelija -> polje { cells, sum }. Za razliku od tuba i kaveza, dijagonale se
+  // SMIJU sjeći (dvije obitelji), pa je po ćeliji moguće više od jedne - odatle polje.
+  function prepLittles(littles) {
+    if (!littles || !littles.length) return null;
+    const at = new Array(81).fill(null);
+    for (const g of littles) {
+      const cells = littleCells(g.side, g.k, g.dir);
+      if (cells.length < 2) continue;
+      for (const i of cells) (at[i] || (at[i] = [])).push({ cells, sum: g.sum });
+    }
+    return at;
+  }
+
   // variants = normalizirano polje aktivnih regijskih varijanti (vidi normVariants).
   // clues = per-puzzle podaci (vidi prepClues); ovdje se čitaju:
   //   jig - kad je postavljen, box-provjeru zamjenjuje regija ćelije (row/col ostaju).
@@ -629,7 +716,7 @@ const Sudoku = (() => {
   //     Čita se izravno, bez izvedenog oblika: oznaka se traži po RETKU/STUPCU ćelije,
   //     a to su dva dijeljenja - jeftinije nego 81-polje koje bi trebalo održavati.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, mate, cag, whi, rnb, zip, arw, sandwich } = clues;
+    const { jig, parity, edges, thm, mate, cag, whi, rnb, zip, arw, sandwich, lk } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -751,6 +838,22 @@ const Sudoku = (() => {
       for (const j of cells) if (j !== idx && board[j] === val) return false;
       const [lo, hi] = cageRange(board, cells, sum, idx);
       if (val < lo || val > hi) return false;
+    }
+    // Little Killer: zbroj dijagonale. Ponavljanje je DOPUŠTENO (dijagonala nije
+    // jedinica), pa se ne provjerava - samo stane li ostatak u prazne ćelije, gdje
+    // svaka nosi 1-9. Ćelija leži na najviše dvije klune dijagonale (po jedna iz svake
+    // obitelji), pa je petlja kratka.
+    if (lk && lk[idx]) {
+      for (const g of lk[idx]) {
+        let known = 0,
+          empty = 0;
+        for (const j of g.cells) {
+          const b = j === idx ? val : board[j];
+          if (b) known += b;
+          else empty++;
+        }
+        if (known + empty > g.sum || known + 9 * empty < g.sum) return false;
+      }
     }
     // Sandwich: zbroj između 1 i 9 u retku i stupcu ove ćelije. Ide ZADNJI jer je od
     // svih provjera najskuplja (prolazi cijelu liniju, dvaput) - ostale je do ovdje
@@ -943,6 +1046,58 @@ const Sudoku = (() => {
       else cols[i] = sandwichSum(solution, colCells[i]);
     }
     return { rows, cols };
+  }
+
+  // Little Killer: prikaži podskup dijagonalnih zbrojeva izvedenih iz rješenja.
+  //
+  // Derive je najjednostavniji dosad - geometrija je fiksna (48 unaprijed poznatih
+  // opcija), pa nema ni šetnje ni pretrage: promiješaj opcije i uzmi koliko treba.
+  // Nema `blocked` po ćelijama jer oznaka ne troši ćeliju (kao Sandwich), ali ima
+  // dvije vlastite zabrane:
+  //   1. jedan PRETINAC nosi najviše jednu oznaku - dva broja u istom pretincu se ne
+  //      bi dalo pročitati, a strelica ih ne razlikuje dovoljno,
+  //   2. ista DIJAGONALA se ne označava dvaput - dostupna je iz dva pretinca (osim 14
+  //      koje su dostupne samo iz jednog), a dva broja s istim zbrojem na istoj
+  //      dijagonali su ista tvrdnja napisana dvaput.
+  const MAX_LITTLES = 16;
+  const LITTLE_DENSITY = { min: 0.5, max: 0.9 };
+  // Dno kao kod Sandwicha - raspon po ploči, ne fiksna vrijednost (vidi SANDWICH_KEEP
+  // i mjerenje uz njega).
+  const LITTLE_KEEP = { min: 6, max: 12 };
+  // takenSlots = Set pretinaca koje je već zauzela druga oznaka izvan ploče (Sandwich).
+  function deriveLittles(solution, boost = 0, takenSlots = null) {
+    const want = Math.round(MAX_LITTLES * pickDensity(scaled(LITTLE_DENSITY, boost)));
+    const usedSlot = new Set(takenSlots || []);
+    const usedDiag = new Set();
+    const littles = [];
+    for (const opt of shuffle(LITTLE_OPTIONS.slice())) {
+      if (littles.length >= want) break;
+      if (usedSlot.has(littleSlot(opt))) continue;
+      const key = littleKey(opt.cells);
+      if (usedDiag.has(key)) continue;
+      usedSlot.add(littleSlot(opt));
+      usedDiag.add(key);
+      littles.push({
+        side: opt.side,
+        k: opt.k,
+        dir: opt.dir,
+        sum: opt.cells.reduce((a, i) => a + solution[i], 0),
+      });
+    }
+    return littles;
+  }
+
+  // Pretinci koje Sandwich zauzima na ploči: lijevo[k] za redak k, gore[k] za stupac k.
+  // Little Killer ih čita da ne bi pisao drugi broj na isto mjesto - isti dogovor kao
+  // Kropki/XV oko brida (v1.27.0), samo je ovdje zajednički resurs pretinac u pojasu.
+  function sandwichSlots(sandwich) {
+    const out = new Set();
+    if (!sandwich) return out;
+    for (let k = 0; k < 9; k++) {
+      if (sandwich.rows[k] >= 0) out.add("left:" + k);
+      if (sandwich.cols[k] >= 0) out.add("top:" + k);
+    }
+    return out;
   }
 
   // Thermo: termometar je put ćelija (bulb prvi) duž kojeg vrijednosti STROGO rastu.
@@ -1460,6 +1615,21 @@ const Sudoku = (() => {
     kropki: 18,
     evenodd: 15,
     sandwich: 10,
+    // Little Killer je jedina varijanta kojoj je prva probana vrijednost bila DVA
+    // koraka previsoka, i to se vidjelo tek na kombinaciji s Thermom (pravilo iz
+    // v1.35.0). Mjereno na 40 Hard ploča po vrijednosti, par littlekiller+thermo:
+    //   10 -> medijan 49ms, max 23s, 3/40 iznad 5s
+    //    8 -> medijan 23ms, ali JEDAN pokušaj od 748s (12.5 min)
+    //    6 -> medijan 11ms, max 453ms, 0/40 iznad 5s
+    // Solo ploča za to plaća jedan zadani broj (22-28 umjesto 21-28), a broj oznaka
+    // se ne mijenja - jeftina zamjena za red veličine mirniji rep.
+    //
+    // Mehanizam je jasan, nije samo šum: niža snaga diže dno raspona (floorFor), pa
+    // `dig` prestane goniti ploču ispod onoga što kombinacija može podnijeti. Zbroj
+    // dijagonale je slaba tvrdnja po ćeliji - veže do 9 ćelija bez zabrane ponavljanja -
+    // pa Little Killer jednostavno ne nosi 10 bodova rješenja koliko su nosili Zipper
+    // i Arrow.
+    littlekiller: 6,
     thermo: 12,
     // Whisper: pravilo iz v1.35.0 (mjeriti na kombinacijama) ovdje je bilo presudno,
     // i to oštrije nego kod Disjointa. Solo ploča ne primijeti razliku - sa 12 daje
@@ -1541,6 +1711,7 @@ const Sudoku = (() => {
       zippers,
       arrows,
       sandwich,
+      littles,
     } = clues;
     const edgesIn = (lo, hi) => {
       if (!edges) return 0;
@@ -1558,6 +1729,7 @@ const Sudoku = (() => {
       return sandwich
         ? [...sandwich.rows, ...sandwich.cols].reduce((a, s) => a + (s >= 0 ? 1 : 0), 0)
         : 0;
+    if (v === "littlekiller") return littles ? littles.length : 0;
     if (v === "thermo") return thermos ? thermos.length : 0;
     if (v === "palindrome") return palindromes ? palindromes.length : 0;
     if (v === "whisper") return whispers ? whispers.length : 0;
@@ -1602,6 +1774,8 @@ const Sudoku = (() => {
     // označena, dakle da se pojas oko ploče čita kao dio slagalice, a ne kao par
     // zalutalih brojeva.
     sandwich: SANDWICH_KEEP.min,
+    // Isto kao Sandwich - apsolutno dno, a po ploči se bira iz raspona (LITTLE_KEEP).
+    littlekiller: LITTLE_KEEP.min,
     thermo: THERMO_KEEP_MIN,
     palindrome: PALINDROME_KEEP_MIN,
     whisper: WHISPER_KEEP_MIN,
@@ -1642,6 +1816,7 @@ const Sudoku = (() => {
       zippers,
       arrows,
       sandwich,
+      littles,
     } = clues;
     const cands = [];
     // Sandwich: jedinica je JEDNA oznaka (jedan redak ili stupac) - za razliku od tube
@@ -1652,6 +1827,9 @@ const Sudoku = (() => {
         if (sandwich.rows[k] >= 0) cands.push(["sr", k]);
         if (sandwich.cols[k] >= 0) cands.push(["sc", k]);
       }
+    // Little Killer: jedinica je jedna dijagonalna oznaka, kao Sandwicheva - geometrija
+    // (dijagonala) postoji i bez nje, pa se miče cijela oznaka, ne dio.
+    if (littles) for (const g of littles) cands.push(["lk", g]);
     if (edges)
       for (let i = 0; i < 81; i++) {
         if (edges.h[i]) cands.push(["h", i]);
@@ -1705,6 +1883,9 @@ const Sudoku = (() => {
     // SAMO kad oznaka ima - inače bi pomaknuo RNG niz i pločama bez nje.
     const keepSandwich = sandwich
       ? SANDWICH_KEEP.min + Math.floor(Math.random() * (SANDWICH_KEEP.max - SANDWICH_KEEP.min + 1))
+      : 0;
+    const keepLittles = littles
+      ? LITTLE_KEEP.min + Math.floor(Math.random() * (LITTLE_KEEP.max - LITTLE_KEEP.min + 1))
       : 0;
     const stoji = () => {
       const r = Solver.solveAndGrade(puzzle, variants, clues);
@@ -1792,6 +1973,16 @@ const Sudoku = (() => {
         clues.cag = prepCages(cages);
         continue;
       }
+      if (kind === "lk") {
+        // Dno se bira po ploči (vidi keepLittles), pa ne ide kroz `mayDrop`.
+        if ((left.littlekiller || 0) <= keepLittles) continue;
+        const k = littles.indexOf(ref);
+        littles.splice(k, 1);
+        if (stoji()) left.littlekiller--;
+        else littles.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        clues.lk = prepLittles(littles); // wire lista se promijenila, osvježi izvedeno
+        continue;
+      }
       if (kind === "sr" || kind === "sc") {
         // Ne ide kroz `mayDrop`: dno se bira po ploči (vidi keepSandwich), ne iz KEEP_MIN.
         if ((left.sandwich || 0) <= keepSandwich) continue;
@@ -1838,6 +2029,7 @@ const Sudoku = (() => {
         parity: clues.parity,
         edges: clues.edges,
         sandwich: clues.sandwich,
+        littles: clues.littles,
         thermos: clues.thermos,
         palindromes: clues.palindromes,
         clones: clues.clones,
@@ -1896,6 +2088,19 @@ const Sudoku = (() => {
     // Sandwich ne ulazi u deriveGeom: jedina oznaka koja ne zauzima NIJEDNU ćeliju
     // (stoji izvan ploče), pa se ni s kim ne natječe za prostor i ne treba `blocked`.
     const useSandwich = variants.includes("sandwich");
+    const useLittle = variants.includes("littlekiller");
+    // Oznake IZVAN ploče dijele pretince u pojasu, pa se izvode zajedno i redom.
+    // SANDWICH IDE PRVI jer ima manje slobode: bira između 18 pretinaca (gore/lijevo) i
+    // treba ih barem 6, dok Little Killer bira između 48 opcija i ima cijeli donji pojas
+    // koji Sandwich ne dira. Isto pravilo kao kod klona (v1.33.0) - prva ide oznaka s
+    // najmanje slobode - i isti dogovor kao Kropki/XV oko brida (v1.27.0).
+    const deriveOutside = (solution, boost) => {
+      const sandwich = useSandwich ? deriveSandwich(solution, boost) : null;
+      return {
+        sandwich,
+        littles: useLittle ? deriveLittles(solution, boost, sandwichSlots(sandwich)) : null,
+      };
+    };
     const useThermo = variants.includes("thermo");
     const usePal = variants.includes("palindrome");
     const useClone = variants.includes("clone");
@@ -1988,7 +2193,7 @@ const Sudoku = (() => {
         regions: geom.regions,
         parity: useEven ? deriveParity(solution, boost) : null,
         edges: useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null,
-        sandwich: useSandwich ? deriveSandwich(solution, boost) : null,
+        ...deriveOutside(solution, boost),
         ...deriveGeom(solution, boost),
       });
       // Izvod koji nije dao ni dno oznaka (rijetko - tube/linije kojima je klon
@@ -2046,7 +2251,7 @@ const Sudoku = (() => {
         regions: geom.regions,
         parity: useEven ? deriveParity(solution) : null,
         edges: useEdges ? deriveEdges(solution, useKropki, useXv) : null,
-        sandwich: useSandwich ? deriveSandwich(solution) : null,
+        ...deriveOutside(solution, 0),
         ...deriveGeom(solution, 0),
       });
       // Dno oznaka vrijedi i ovdje, ali s izlazom: ovo je zadnja linija obrane, pa
