@@ -32,8 +32,17 @@
       </div>
 
       <main>
-        <div class="board-wrap">
-          <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+        <!-- Okvir ploče. Postoji zbog Sandwicha - prve varijante čija oznaka NE stoji u
+             ćeliji nego izvan ploče, uz svoj redak (lijevo) ili stupac (gore). Pojas je
+             traka grida, pa ploča sama za toliko postane manja umjesto da oznake vise
+             preko ruba ili da se ploča pomakne iz centra. Bez Sandwicha je pojas širine
+             0 i ploča zauzme cijeli okvir - dakle točno kao prije. -->
+        <div class="board-wrap" id="board-wrap">
+          <div class="board-frame">
+            <div class="out-strip out-top" id="out-top"></div>
+            <div class="out-strip out-left" id="out-left"></div>
+            <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
+          </div>
           <div id="win-overlay" class="win-overlay hidden">
             <div class="win-card">
               <div class="win-title">Solved!</div>
@@ -202,6 +211,16 @@
                    varijante nemaju ovu zamku, čitaju se doslovno. -->
               <span class="variant-desc"
                 >Digits on each line form an unbroken run (like 4-5-6-7), in any order.</span
+              >
+            </span>
+            <span class="variant-toggle" aria-hidden="true"></span>
+          </button>
+          <button class="variant-row" data-variant="sandwich">
+            <span class="variant-info">
+              <span class="variant-name">Sandwich</span>
+              <span class="variant-desc"
+                >A number outside the grid is the sum of the digits between the 1 and the 9 in that
+                row or column.</span
               >
             </span>
             <span class="variant-toggle" aria-hidden="true"></span>

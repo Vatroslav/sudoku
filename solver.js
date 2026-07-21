@@ -305,6 +305,117 @@ const Solver = (() => {
     return [Math.max(1, rest - MAX_SUM[k]), Math.min(9, rest - MIN_SUM[k])];
   }
 
+  // Sandwich: { rows, cols } po devet zbrojeva između 1 i 9 (-1 = linija bez oznake).
+  // Gornja granica je 35 (2+3+…+8 - sve što može stati između krajeva).
+  function validSandwich(sw) {
+    if (!sw || !Array.isArray(sw.rows) || !Array.isArray(sw.cols)) return false;
+    if (sw.rows.length !== 9 || sw.cols.length !== 9) return false;
+    for (const s of [...sw.rows, ...sw.cols])
+      if (!Number.isInteger(s) || s < -1 || s > 35) return false;
+    return true;
+  }
+
+  // Sandwich propagacija. Jedina varijanta koja NE ide kroz raspon po ćeliji, i razlog
+  // je u samom pravilu: dok se ne zna GDJE stoje 1 i 9, ne zna se ni koje ćelije zbroj
+  // broji. Pitanje "koliko ova ćelija smije nositi" tako nema odgovor prije pitanja
+  // "gdje su krajevi" - obrnuto od tube i kaveza, gdje je skup ćelija zadan unaprijed.
+  //
+  // Zato se propagira ENUMERACIJOM: prođi sve parove pozicija na kojima 1 i 9 još mogu
+  // stajati, odbaci parove kojima zadani zbroj nije dostižan, i svakoj ćeliji ostavi
+  // UNIJU onoga što joj preostali parovi dopuštaju. Unija je nužna (ne presjek) - dok
+  // je više parova živo, ćelija smije nositi ono što dopušta bilo koji od njih.
+  //
+  // Snaga ide iz dva smjera odjednom:
+  //   - pozicije: 1 i 9 nestaju sa svake ćelije na kojoj nijedan par ne prolazi,
+  //   - zbroj: ćelija koja je UNUTAR sendviča u svakom preživjelom paru dobiva
+  //     kavezno ograničenje (koliko joj ostane nakon ostalih članova).
+  // Ćelija izvan sendviča ne gubi ništa osim 1 i 9 - i to je točno, ne propust.
+  function sandwichPrune(grid, cand, cells, target) {
+    if (target < 0) return;
+    // Gdje 1 i 9 još mogu stajati. Upisana znamenka fiksira poziciju na jednu.
+    let fixed1 = -1,
+      fixed9 = -1,
+      usedMask = 0;
+    for (let k = 0; k < 9; k++) {
+      const b = grid[cells[k]];
+      if (!b) continue;
+      usedMask |= 1 << b;
+      if (b === 1) fixed1 = k;
+      else if (b === 9) fixed9 = k;
+    }
+    const posOf = (want, fixed) => {
+      if (fixed >= 0) return [fixed];
+      const out = [];
+      for (let k = 0; k < 9; k++) {
+        const i = cells[k];
+        if (!grid[i] && cand[i] && cand[i].has(want)) out.push(k);
+      }
+      return out;
+    };
+    const pos1 = posOf(1, fixed1),
+      pos9 = posOf(9, fixed9);
+    if (!pos1.length || !pos9.length) return;
+    // Bazen: znamenke 2-8 koje liniji još stoje na raspolaganju. Sve što ulazi u
+    // sendvič dolazi odavde (1 i 9 su krajevi, ne sadržaj).
+    const pool = [];
+    for (let v = 2; v <= 8; v++) if (!(usedMask & (1 << v))) pool.push(v);
+    // Prefiksi zbrojeva: minK[n] = n najmanjih iz bazena, maxK[n] = n najvećih. Time
+    // je "stane li ostatak u n različitih znamenki" provjera u O(1), a ne kombinatorika.
+    const minK = [0],
+      maxK = [0];
+    for (let n = 0; n < pool.length; n++) {
+      minK.push(minK[n] + pool[n]);
+      maxK.push(maxK[n] + pool[pool.length - 1 - n]);
+    }
+    const allowed = [];
+    for (let k = 0; k < 9; k++) allowed.push(new Set());
+    let any = false;
+    for (const a of pos1)
+      for (const b of pos9) {
+        if (a === b) continue;
+        const lo = Math.min(a, b),
+          hi = Math.max(a, b);
+        let known = 0,
+          empty = 0;
+        for (let k = lo + 1; k < hi; k++) {
+          const g = grid[cells[k]];
+          if (g) known += g;
+          else empty++;
+        }
+        if (empty > pool.length) continue;
+        const rest = target - known;
+        if (rest < minK[empty] || rest > maxK[empty]) continue; // par ne može dati zbroj
+        any = true;
+        allowed[a].add(1);
+        allowed[b].add(9);
+        // Vrijednosti dopuštene praznoj ćeliji UNUTAR sendviča. Iste su za sve njih
+        // (isti ostatak, isti broj praznih, isti bazen), pa se računaju jednom po paru:
+        // v prolazi ako se ostalih empty-1 članova može složiti od bazena bez v.
+        const inside = new Set();
+        for (let t = 0; t < pool.length && empty > 0; t++) {
+          const v = pool[t];
+          const need = rest - v;
+          if (need < 0) break;
+          const rMin = t < empty - 1 ? minK[empty] - v : minK[empty - 1];
+          const rMax = t >= pool.length - (empty - 1) ? maxK[empty] - v : maxK[empty - 1];
+          if (need >= rMin && need <= rMax) inside.add(v);
+        }
+        for (let k = 0; k < 9; k++) {
+          if (k === a || k === b || grid[cells[k]]) continue;
+          const src = k > lo && k < hi ? inside : pool;
+          for (const v of src) allowed[k].add(v);
+        }
+      }
+    // Nijedan par ne prolazi = ploča je već proturječna (pokvaren save ili krivi upis).
+    // Kandidate tada NE diramo: brisanje svega bi ovdje izgledalo kao "riješeno".
+    if (!any) return;
+    for (let k = 0; k < 9; k++) {
+      const i = cells[k];
+      if (!cand[i]) continue;
+      for (const v of [...cand[i]]) if (!allowed[k].has(v)) cand[i].delete(v);
+    }
+  }
+
   // Raspon [lo,hi] dopušten na poziciji p termometra. Mora se poklapati sa sudoku.js
   // thermoRange (generator i solver dijele definiciju odnosa).
   function thermoRange(grid, path, p) {
@@ -477,6 +588,10 @@ const Solver = (() => {
   // Arrow: per-puzzle indeks ćelija -> { path, pos } ili null. Propagacija ide u OBA
   // smjera - upis u rep steže krug, upis u krug steže rep - pa se prolazi cijeli put.
   let curArrows = null;
+  // Sandwich: per-puzzle { rows, cols } zbrojevi ili null. Jedina varijanta koja se ne
+  // propagira po ćeliji nego po CIJELOJ liniji odjednom (vidi sandwichPrune), pa se ne
+  // izvodi 81-polje - prune se zove nad retkom/stupcem koji oznaku nosi.
+  let curSandwich = null;
   // Nonconsecutive: obična zastavica, jedina varijanta bez ikakvog per-puzzle podatka
   // (pravilo vrijedi za cijelu ploču). Propagacija je Kropki naopako: bijela točka
   // kaže "ovaj par JEST uzastopan", ovdje NIJEDAN ortogonalni par nije - pa se
@@ -606,6 +721,24 @@ const Solver = (() => {
         cand[idx] = new Set(both);
         cand[j] = new Set(both);
       }
+    // Sandwich: ide ZADNJI i u petlji, za razliku od svih ostalih varijanti. Prune
+    // čita kandidate (odakle 1 i 9 još mogu doći), pa mu treba gotov skup - a kad
+    // stegne redak, stupci koji ga sijeku dobiju novu informaciju i obrnuto. Petlja
+    // vrti dok se nešto miče; dvije-tri runde su u praksi dovoljne, granica je
+    // osigurač da se ovdje ne troši vrijeme koje klasične tehnike ionako pokupe.
+    if (curSandwich) {
+      for (let round = 0; round < 4; round++) {
+        let before = 0;
+        for (let i = 0; i < 81; i++) if (cand[i]) before += cand[i].size;
+        for (let k = 0; k < 9; k++) {
+          sandwichPrune(grid, cand, rows[k], curSandwich.rows[k]);
+          sandwichPrune(grid, cand, cols[k], curSandwich.cols[k]);
+        }
+        let after = 0;
+        for (let i = 0; i < 81; i++) if (cand[i]) after += cand[i].size;
+        if (after === before) break;
+      }
+    }
     return cand;
   }
 
@@ -701,6 +834,13 @@ const Solver = (() => {
     if (curMate && curMate[idx] >= 0) {
       const j = curMate[idx];
       if (cand[j]) for (const u of [...cand[j]]) if (u !== val) cand[j].delete(u);
+    }
+    // Sandwich: upis mijenja i gdje krajevi mogu stajati i koliko je zbroju ostalo, pa
+    // se cijeli redak i stupac računaju iznova. Upis 1 ili 9 je pritom najjači potez u
+    // varijanti - jednim udarcem prepolovi broj mogućih parova.
+    if (curSandwich) {
+      sandwichPrune(grid, cand, rows[Math.floor(idx / 9)], curSandwich.rows[Math.floor(idx / 9)]);
+      sandwichPrune(grid, cand, cols[idx % 9], curSandwich.cols[idx % 9]);
     }
   }
 
@@ -1020,6 +1160,7 @@ const Solver = (() => {
   //   renbans - Renban linije (polje putova); nevaljano se ignorira.
   //   zippers - Zipper linije (polje putova neparne duljine); nevaljano se ignorira.
   //   arrows  - Arrow putovi [krug, ...rep]; nevaljano se ignorira.
+  //   sandwich - Sandwich zbrojevi ({ rows, cols }, -1 = bez oznake); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
@@ -1035,6 +1176,7 @@ const Solver = (() => {
       renbans,
       zippers,
       arrows,
+      sandwich,
     } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
@@ -1051,6 +1193,7 @@ const Solver = (() => {
     curRenbans = validRenbans(renbans) && renbans.length ? prepRenbans(renbans) : null;
     curZippers = validZippers(zippers) && zippers.length ? prepZippers(zippers) : null;
     curArrows = validArrows(arrows) && arrows.length ? prepArrows(arrows) : null;
+    curSandwich = validSandwich(sandwich) ? sandwich : null;
     const active = variantKey(variants);
     // Nonconsecutive se čita iz VARIJANTI, ne iz clues - jedina koja nema per-puzzle
     // podatak (pravilo vrijedi za cijelu ploču, kao antiknight).

@@ -17,6 +17,7 @@
     "evenodd",
     "kropki",
     "xv",
+    "sandwich",
     "thermo",
     "palindrome",
     "whisper",
@@ -37,6 +38,7 @@
     evenodd: "Even/Odd",
     kropki: "Kropki",
     xv: "XV",
+    sandwich: "Sandwich",
     thermo: "Thermo",
     palindrome: "Palindrome",
     whisper: "German Whispers",
@@ -273,6 +275,15 @@
     validThermos(z) && z.every((p) => p.length % 2 === 1 && p.length >= 3);
   // Arrow: put je [krug, ...rep], dakle barem 3 ćelije.
   const validArrows = (a) => validThermos(a) && a.every((p) => p.length >= 3);
+  // Sandwich: { rows, cols } po devet zbrojeva, -1 = linija bez oznake. Gornja granica
+  // je 35 (2+3+…+8, sve što može stati između krajeva).
+  const validSandwich = (sw) =>
+    !!sw &&
+    Array.isArray(sw.rows) &&
+    Array.isArray(sw.cols) &&
+    sw.rows.length === 9 &&
+    sw.cols.length === 9 &&
+    [...sw.rows, ...sw.cols].every((s) => Number.isInteger(s) && s >= -1 && s <= 35);
   // Clone: par regija istog oblika ([[a...],[b...]]) - odnos je po indeksu, pa render
   // treba samo ćelije. Oblik se ne provjerava; bitno je da su parovi cjeloviti i da
   // se ćelije ne ponavljaju (jedna ćelija = najviše jedan klon).
@@ -342,6 +353,10 @@
   const diffLabelEl = document.getElementById("difficulty-label");
   const techniqueHintEl = document.getElementById("technique-hint");
   const lineLegendEl = document.getElementById("line-legend");
+  // Sandwich: pojas oznaka izvan ploče (lijevo uz retke, gore uz stupce).
+  const boardWrapEl = document.getElementById("board-wrap");
+  const outTopEl = document.getElementById("out-top");
+  const outLeftEl = document.getElementById("out-left");
   const notesStateEl = document.getElementById("notes-state");
   const winOverlay = document.getElementById("win-overlay");
   const winStats = document.getElementById("win-stats");
@@ -480,6 +495,7 @@
         renbans: (clues && clues.renbans) || null,
         zippers: (clues && clues.zippers) || null,
         arrows: (clues && clues.arrows) || null,
+        sandwich: (clues && clues.sandwich) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -688,6 +704,12 @@
         if (!validArrows(clues.arrows)) return false;
       } else {
         clues.arrows = null;
+      }
+      // Sandwich: zbrojevi po retku i stupcu.
+      if (state.variants.includes("sandwich")) {
+        if (!validSandwich(clues.sandwich)) return false;
+      } else {
+        clues.sandwich = null;
       }
       return true;
     } catch (e) {
@@ -1201,6 +1223,33 @@
     }
   }
 
+  // Sandwich: zbrojevi izvan ploče. Prva oznaka koja ne stane ni u ćeliju ni na brid -
+  // pravilo govori o CIJELOM retku/stupcu, pa nema ćeliju kojoj bi pripala.
+  //
+  // Pojas se puni i kad varijante nema (praznim ćelijama): tako grid uvijek ima svojih
+  // devet traka i poravnanje ne ovisi o tome koliko je oznaka prikazano. Širinu pojasa
+  // (i time veličinu ploče) nosi klasa `has-outside` na wrapu - vidi CSS.
+  function renderSandwich(sandwich) {
+    if (!outTopEl || !outLeftEl || !boardWrapEl) return;
+    const on = !!sandwich;
+    boardWrapEl.classList.toggle("has-outside", on);
+    outTopEl.textContent = "";
+    outLeftEl.textContent = "";
+    if (!on) return;
+    const fill = (host, values) => {
+      for (let k = 0; k < 9; k++) {
+        const cell = document.createElement("span");
+        cell.className = "out-cell";
+        // -1 = linija bez oznake. Prazna ćelija, ne izostavljena: mjesto mora ostati
+        // zauzeto da preostale oznake i dalje stoje uz svoj redak.
+        if (values[k] >= 0) cell.textContent = values[k];
+        host.appendChild(cell);
+      }
+    };
+    fill(outTopEl, sandwich.cols);
+    fill(outLeftEl, sandwich.rows);
+  }
+
   // --- Render ---
   function render() {
     if (!state) return;
@@ -1213,8 +1262,11 @@
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom. Putovi
     // linijskih varijanti NISU ovdje: njih čita LINE_KINDS preko state.clues, da
     // render i legenda ne mogu imati različit popis.
-    const { regions, parity, edges, clones, cages } = state.clues;
+    const { regions, parity, edges, clones, cages, sandwich } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
+    // Sandwich mijenja VELIČINU ploče (pojas joj uzme rub), pa ide prije petlje po
+    // ćelijama - ne da se ćelije crtaju pa se ploča ispod njih pomakne.
+    renderSandwich(validSandwich(sandwich) ? sandwich : null);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
       techniqueHintEl.classList.remove("hidden");

@@ -99,6 +99,23 @@ const Sudoku = (() => {
     lineNeighbors.push(list);
   }
 
+  // Sandwich: ćelije retka i stupca kao putovi duljine 9. Prva varijanta kojoj je
+  // JEDINICA nositelj oznake (a ne ćelija, brid, put ili mrlja), pa joj treba upravo
+  // ovaj oblik - redoslijed U retku je dio pravila (oznaka govori što leži IZMEĐU
+  // 1 i 9), za razliku od solverovih units gdje je redoslijed nebitan.
+  const rowCells = [],
+    colCells = [];
+  for (let k = 0; k < 9; k++) {
+    const r = [],
+      c = [];
+    for (let j = 0; j < 9; j++) {
+      r.push(k * 9 + j);
+      c.push(j * 9 + k);
+    }
+    rowCells.push(r);
+    colCells.push(c);
+  }
+
   // Thermo: raspon [lo,hi] dopušten na poziciji p termometra. Dva izvora, oba nužna:
   //   1. POZICIJA sama - ispod p je p strogo manjih, iznad njega path.length-1-p
   //      strogo većih, pa vrijednost ne može biti bilo koja (bulb duljine 4 je <= 6).
@@ -350,6 +367,8 @@ const Sudoku = (() => {
       regions,
       parity: (c && c.parity) || null,
       edges: (c && c.edges) || null,
+      // Sandwich nema izvedeni oblik - wire je već ono što isValid gleda (vidi gore).
+      sandwich: (c && c.sandwich) || null,
       thermos,
       palindromes,
       clones,
@@ -388,6 +407,7 @@ const Sudoku = (() => {
     "evenodd",
     "kropki",
     "xv",
+    "sandwich",
     "thermo",
     "palindrome",
     "whisper",
@@ -520,6 +540,81 @@ const Sudoku = (() => {
     return true;
   }
 
+  // --- Sandwich: zbroj znamenki IZMEĐU 1 i 9 u retku/stupcu ---
+  // Oznaka stoji izvan ploče, uz svoj redak (lijevo) ili stupac (gore). Wire oblik je
+  // { rows, cols } - po devet brojeva, -1 gdje oznake nema, inače 0-35 (2+…+8).
+  //
+  // Odnos je za jezgru NOV po dvije stvari:
+  //   1. Veže CIJELU jedinicu odjednom, kao kavez - ali kavez nosi svoje ćelije sa
+  //      sobom, a ovdje su ćelije red/stupac koji ionako postoje.
+  //   2. Zbroj ovisi o POZICIJI dviju znamenki (1 i 9), ne o vrijednostima svih. Dok
+  //      se obje ne upišu, ne zna se ni KOJE ćelije zbroj uopće broji - zato provjera
+  //      ne može biti raspon po ćeliji (thermoRange/cageRange) nego provjera cijelog
+  //      retka.
+
+  // Zbroj znamenki strogo između 1 i 9 u danom nizu vrijednosti (rješenje).
+  function sandwichSum(solution, cells) {
+    let a = -1,
+      b = -1;
+    for (let k = 0; k < 9; k++) {
+      const v = solution[cells[k]];
+      if (v === 1) a = k;
+      else if (v === 9) b = k;
+    }
+    const lo = Math.min(a, b),
+      hi = Math.max(a, b);
+    let s = 0;
+    for (let k = lo + 1; k < hi; k++) s += solution[cells[k]];
+    return s;
+  }
+
+  // Smije li linija (uz `val` na `idx`) još dati zadani zbroj?
+  //
+  // Provjera je NAMJERNO slaba dok oba kraja nisu upisana: prije toga se ne zna koje
+  // ćelije zbroj broji, a slaba provjera je sigurna (odbija samo nemoguće) - kad je
+  // ploča puna, oba kraja su nužno tu i tada provjera postane TOČNA jednakost. To je
+  // dovoljno da countSolutions/dig sude ispravno. Rezanje kandidata prije toga radi
+  // solver, gdje se isplati (vidi sandwichPrune u solver.js).
+  function sandwichOk(board, cells, target, idx, val) {
+    if (target < 0) return true;
+    let p1 = -1,
+      p9 = -1,
+      usedMask = 0;
+    for (let k = 0; k < 9; k++) {
+      const b = cells[k] === idx ? val : board[cells[k]];
+      if (!b) continue;
+      usedMask |= 1 << b;
+      if (b === 1) p1 = k;
+      else if (b === 9) p9 = k;
+    }
+    if (p1 < 0 || p9 < 0) return true; // krajevi nisu poznati -> raspon još ne postoji
+    const lo = Math.min(p1, p9),
+      hi = Math.max(p1, p9);
+    let known = 0,
+      empty = 0;
+    for (let k = lo + 1; k < hi; k++) {
+      const b = cells[k] === idx ? val : board[cells[k]];
+      if (b) known += b;
+      else empty++;
+    }
+    const rest = target - known;
+    if (rest < 0) return false;
+    if (empty === 0) return rest === 0;
+    // Prazne ćelije unutar sendviča nose RAZLIČITE znamenke iz onoga što je liniji
+    // ostalo (1 i 9 su potrošeni - oni su krajevi), pa zbroj leži između najmanjih i
+    // najvećih toliko njih.
+    const pool = [];
+    for (let v = 2; v <= 8; v++) if (!(usedMask & (1 << v))) pool.push(v);
+    if (pool.length < empty) return false;
+    let min = 0,
+      max = 0;
+    for (let k = 0; k < empty; k++) {
+      min += pool[k];
+      max += pool[pool.length - 1 - k];
+    }
+    return rest >= min && rest <= max;
+  }
+
   // variants = normalizirano polje aktivnih regijskih varijanti (vidi normVariants).
   // clues = per-puzzle podaci (vidi prepClues); ovdje se čitaju:
   //   jig - kad je postavljen, box-provjeru zamjenjuje regija ćelije (row/col ostaju).
@@ -530,8 +625,11 @@ const Sudoku = (() => {
   //   thm - 81-polje { path, pos } (vidi prepThermos), Thermo tube.
   //   mate - 81-polje indeksa partnera koji mora nositi ISTU vrijednost (vidi
   //     prepMates); pune ga Palindrome linije i Clone regije.
+  //   sandwich - { rows, cols } po devet zbrojeva između 1 i 9 (-1 = bez oznake).
+  //     Čita se izravno, bez izvedenog oblika: oznaka se traži po RETKU/STUPCU ćelije,
+  //     a to su dva dijeljenja - jeftinije nego 81-polje koje bi trebalo održavati.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, mate, cag, whi, rnb, zip, arw } = clues;
+    const { jig, parity, edges, thm, mate, cag, whi, rnb, zip, arw, sandwich } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -653,6 +751,15 @@ const Sudoku = (() => {
       for (const j of cells) if (j !== idx && board[j] === val) return false;
       const [lo, hi] = cageRange(board, cells, sum, idx);
       if (val < lo || val > hi) return false;
+    }
+    // Sandwich: zbroj između 1 i 9 u retku i stupcu ove ćelije. Ide ZADNJI jer je od
+    // svih provjera najskuplja (prolazi cijelu liniju, dvaput) - ostale je do ovdje
+    // već odbile sve što se dalo odbiti jeftinije.
+    if (sandwich) {
+      const row9 = sandwich.rows[row],
+        col9 = sandwich.cols[col];
+      if (row9 >= 0 && !sandwichOk(board, rowCells[row], row9, idx, val)) return false;
+      if (col9 >= 0 && !sandwichOk(board, colCells[col], col9, idx, val)) return false;
     }
     return true;
   }
@@ -804,6 +911,38 @@ const Sudoku = (() => {
     if (useKropki) reveal(edgeCands(solution, dotType), KROPKI_DENSITY);
     if (useXv) reveal(edgeCands(solution, xvType), XV_DENSITY);
     return { h, v };
+  }
+
+  // Sandwich: prikaži podskup od 18 zbrojeva (9 redaka + 9 stupaca) izvedenih iz
+  // rješenja. Za razliku od Kropkija i XV-a ovdje NEMA kvalifikacije - svaka linija
+  // ima svoj zbroj, pa je bazen uvijek pun i gustoća je udio od 18.
+  //
+  // Zbroj 0 (1 i 9 su susjedi) NIJE izostavljen iako izgleda kao "nema oznake": on je
+  // najjača oznaka koju varijanta ima jer 1 i 9 slijepi zajedno ostavljaju samo osam
+  // mjesta na liniji. Zato je odsutnost oznake označena s -1, a ne s 0.
+  const SANDWICH_DENSITY = { min: 0.5, max: 0.9 };
+  // Koliko oznaka prune smije ostaviti. RASPON, ne jedna vrijednost, i to po presedanu
+  // Killera (CAGE_KEEP_CELLS) - ovdje izmjereno na 20 Hard ploča po gustoći: s fiksnim
+  // dnom od 6 prune svaku ploču sveže na isto (prosjek 6.3 oznaka i pri baznoj gustoći
+  // 0.35-0.55 i pri 0.7-1), pa se nasumičnost tiho gubila. S rasponom neka ploča ostane
+  // gusto oznakovana a neka gola; kad dno ispadne više od izvedenog, prune ne dira.
+  //
+  // `min` je apsolutno dno i ono ide u KEEP_MIN.sandwich - marksThin njime odbacuje
+  // pokušaj još u generaciji, dakle prije nego se za tu ploču izvuče dno prunea.
+  const SANDWICH_KEEP = { min: 6, max: 12 };
+  function deriveSandwich(solution, boost = 0) {
+    const rows = new Array(9).fill(-1),
+      cols = new Array(9).fill(-1);
+    const all = [];
+    for (let k = 0; k < 9; k++) all.push(["r", k], ["c", k]);
+    shuffle(all);
+    const count = Math.round(all.length * pickDensity(scaled(SANDWICH_DENSITY, boost)));
+    for (let k = 0; k < count; k++) {
+      const [axis, i] = all[k];
+      if (axis === "r") rows[i] = sandwichSum(solution, rowCells[i]);
+      else cols[i] = sandwichSum(solution, colCells[i]);
+    }
+    return { rows, cols };
   }
 
   // Thermo: termometar je put ćelija (bulb prvi) duž kojeg vrijednosti STROGO rastu.
@@ -1320,6 +1459,7 @@ const Sudoku = (() => {
     killer: 16,
     kropki: 18,
     evenodd: 15,
+    sandwich: 10,
     thermo: 12,
     // Whisper: pravilo iz v1.35.0 (mjeriti na kombinacijama) ovdje je bilo presudno,
     // i to oštrije nego kod Disjointa. Solo ploča ne primijeti razliku - sa 12 daje
@@ -1400,6 +1540,7 @@ const Sudoku = (() => {
       renbans,
       zippers,
       arrows,
+      sandwich,
     } = clues;
     const edgesIn = (lo, hi) => {
       if (!edges) return 0;
@@ -1413,6 +1554,10 @@ const Sudoku = (() => {
     if (v === "evenodd") return parity ? parity.reduce((a, p) => a + (p ? 1 : 0), 0) : 0;
     if (v === "kropki") return edgesIn(1, 2); // tipovi 1-2 = točke
     if (v === "xv") return edgesIn(3, 4); // tipovi 3-4 = slova
+    if (v === "sandwich")
+      return sandwich
+        ? [...sandwich.rows, ...sandwich.cols].reduce((a, s) => a + (s >= 0 ? 1 : 0), 0)
+        : 0;
     if (v === "thermo") return thermos ? thermos.length : 0;
     if (v === "palindrome") return palindromes ? palindromes.length : 0;
     if (v === "whisper") return whispers ? whispers.length : 0;
@@ -1452,6 +1597,11 @@ const Sudoku = (() => {
     evenodd: 6,
     kropki: 6,
     xv: 5, // manje parova kvalificira (zbroj 5/10) pa je i prirodan broj niži
+    // Sandwich: kao Killer, dno se bira po ploči iz raspona - ovdje je apsolutno dno
+    // (vidi SANDWICH_KEEP). Šest od osamnaest znači da je barem trećina linija
+    // označena, dakle da se pojas oko ploče čita kao dio slagalice, a ne kao par
+    // zalutalih brojeva.
+    sandwich: SANDWICH_KEEP.min,
     thermo: THERMO_KEEP_MIN,
     palindrome: PALINDROME_KEEP_MIN,
     whisper: WHISPER_KEEP_MIN,
@@ -1491,8 +1641,17 @@ const Sudoku = (() => {
       renbans,
       zippers,
       arrows,
+      sandwich,
     } = clues;
     const cands = [];
+    // Sandwich: jedinica je JEDNA oznaka (jedan redak ili stupac) - za razliku od tube
+    // i linije, gdje je jedinica cijela geometrija, ovdje geometrija ne postoji: redak
+    // je tu i bez oznake. Zato se miče kao točka, ne kao put.
+    if (sandwich)
+      for (let k = 0; k < 9; k++) {
+        if (sandwich.rows[k] >= 0) cands.push(["sr", k]);
+        if (sandwich.cols[k] >= 0) cands.push(["sc", k]);
+      }
     if (edges)
       for (let i = 0; i < 81; i++) {
         if (edges.h[i]) cands.push(["h", i]);
@@ -1541,6 +1700,11 @@ const Sudoku = (() => {
     const keepCages = cages
       ? CAGE_KEEP_CELLS.min +
         Math.floor(Math.random() * (CAGE_KEEP_CELLS.max - CAGE_KEEP_CELLS.min + 1))
+      : 0;
+    // Isto za Sandwich, i iz istog razloga (vidi SANDWICH_KEEP). Random se opet poziva
+    // SAMO kad oznaka ima - inače bi pomaknuo RNG niz i pločama bez nje.
+    const keepSandwich = sandwich
+      ? SANDWICH_KEEP.min + Math.floor(Math.random() * (SANDWICH_KEEP.max - SANDWICH_KEEP.min + 1))
       : 0;
     const stoji = () => {
       const r = Solver.solveAndGrade(puzzle, variants, clues);
@@ -1628,6 +1792,16 @@ const Sudoku = (() => {
         clues.cag = prepCages(cages);
         continue;
       }
+      if (kind === "sr" || kind === "sc") {
+        // Ne ide kroz `mayDrop`: dno se bira po ploči (vidi keepSandwich), ne iz KEEP_MIN.
+        if ((left.sandwich || 0) <= keepSandwich) continue;
+        const src = kind === "sr" ? sandwich.rows : sandwich.cols;
+        const backup = src[ref];
+        src[ref] = -1;
+        if (stoji()) left.sandwich--;
+        else src[ref] = backup; // bez nje ploča stane -> treba ju
+        continue;
+      }
       const src = kind === "p" ? parity : edges[kind];
       const backup = src[ref];
       // Brid nosi ili točku (tip 1-2, Kropki) ili slovo (3-4, XV) - dvije varijante
@@ -1663,6 +1837,7 @@ const Sudoku = (() => {
         regions: clues.regions,
         parity: clues.parity,
         edges: clues.edges,
+        sandwich: clues.sandwich,
         thermos: clues.thermos,
         palindromes: clues.palindromes,
         clones: clues.clones,
@@ -1718,6 +1893,9 @@ const Sudoku = (() => {
     const useKropki = variants.includes("kropki");
     const useXv = variants.includes("xv");
     const useEdges = useKropki || useXv;
+    // Sandwich ne ulazi u deriveGeom: jedina oznaka koja ne zauzima NIJEDNU ćeliju
+    // (stoji izvan ploče), pa se ni s kim ne natječe za prostor i ne treba `blocked`.
+    const useSandwich = variants.includes("sandwich");
     const useThermo = variants.includes("thermo");
     const usePal = variants.includes("palindrome");
     const useClone = variants.includes("clone");
@@ -1810,6 +1988,7 @@ const Sudoku = (() => {
         regions: geom.regions,
         parity: useEven ? deriveParity(solution, boost) : null,
         edges: useEdges ? deriveEdges(solution, useKropki, useXv, boost) : null,
+        sandwich: useSandwich ? deriveSandwich(solution, boost) : null,
         ...deriveGeom(solution, boost),
       });
       // Izvod koji nije dao ni dno oznaka (rijetko - tube/linije kojima je klon
@@ -1867,6 +2046,7 @@ const Sudoku = (() => {
         regions: geom.regions,
         parity: useEven ? deriveParity(solution) : null,
         edges: useEdges ? deriveEdges(solution, useKropki, useXv) : null,
+        sandwich: useSandwich ? deriveSandwich(solution) : null,
         ...deriveGeom(solution, 0),
       });
       // Dno oznaka vrijedi i ovdje, ali s izlazom: ovo je zadnja linija obrane, pa

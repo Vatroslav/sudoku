@@ -125,6 +125,11 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       boji ćelije** - tanki potezi bi se stopili s linijom ploče (pogotovo s debelom
       granicom bloka), pa slovo reže liniju kao u tiskanim XV slagalicama.
       Migracija: spremljene Kropki partije (`state.dots`) preuzimaju se u `state.edges`.
+- [x] Sandwich (zbroj znamenki između 1 i 9 u retku/stupcu, v1.42.0). Sedma s liste
+      kandidata i **prva oznaka izvan ploče** - time je otvoren render kanal koji je
+      dotad bio jedina nedotaknuta skupina. Ujedno prva relacija kojoj se ne zna nad
+      kojim ćelijama vrijedi (skup ovisi o tome gdje padnu 1 i 9), pa se propagira
+      enumeracijom umjesto rasponom - vidi sekciju niže.
 
 - [x] Thermo (vrijednosti rastu duž termometra, v1.30.0). **Nije ispala
       geometrija-first** - vidi zasebnu sekciju niže.
@@ -1500,19 +1505,144 @@ u ovoj sesiji - vidi tehnički dug.
   oznake, kao kod Disjoint Groups. Time je potvrđeno i da je izostanak rendera bio
   ispravan izbor za drugu varijantu zaredom koja mijenja pravilo umjesto da nosi oznaku.
 
-## Stanje popisa kandidata (nakon v1.41.0)
+## Sandwich (v1.42.0)
+
+Broj izvan ploče je zbroj znamenki između 1 i 9 u tom retku/stupcu. Sedma s liste
+kandidata i **prva varijanta čija oznaka ne stoji ni u ćeliji ni na bridu**.
+
+Izmjereno (Hard, 60 ploča): **medijan 11ms, p90 91ms, max 122ms** sam; najgori par
+(sandwich+thermo, 50 ploča) medijan 25ms / p90 401ms / max 3.8s, **0/50 iznad 5s**.
+Normal 2ms - jednako brz kao classic. Oznaka po ploči 6-12 (prosjek 9.1) od mogućih 18.
+
+### Doc je pogodio da je nova, ali je promašio u čemu
+
+`dorada-varijante.md` ju je vodio kao "trivijalno se izvede, ali oznaka stoji izvan
+ploče - to je pravi novi posao, ne derive". Prvi dio je točan (derive je četiri retka:
+nađi 1 i 9, zbroji što je između). Ostatak je promašen na obje strane:
+
+- **Render je ispao jeftiniji nego što se činilo.** Pojas nije novi sloj nego jedna
+  traka grida oko ploče (`.board-frame`, `grid-template-columns: var(--gutter) 1fr`).
+  Kako je pojas jednako širok lijevo i gore, ploča ostaje kvadrat bez ijednog dodatnog
+  računa, a bez Sandwicha je `--gutter: 0` pa je raspored za sve ostale partije
+  nepromijenjen. Poravnanje ne traži pozicioniranje: pojas ponovi ritam ploče (9 traka,
+  gap 1px, padding 3px = okvir) i sjedne točno - izmjereno **0.00px odstupanja** na
+  sva četiri kuta, na tri veličine ekrana.
+- **Solver je bio pravi novi posao**, a doc ga nije ni spomenuo.
+
+### Prva relacija kojoj se ne zna NAD ČIME vrijedi
+
+Sve dosadašnje oznake vežu unaprijed poznat skup ćelija: tuba svoj put, kavez svoje
+ćelije, brid svoja dva susjeda. Zato su sve svedive na isto pitanje - "koji raspon
+ovoj ćeliji ostaje" (`thermoRange`, `cageRange`, `renbanRange`, `zipperRange`,
+`arrowRange`) ili "zadovoljava li ovaj par" (`edgeOk`, `whisperOk`).
+
+Sandwich to pitanje ne može ni postaviti: **koje ćelije zbroj broji ovisi o tome gdje
+padnu 1 i 9**. Dok se krajevi ne znaju, ne postoji skup nad kojim bi se raspon računao.
+
+Odatle dvije posljedice kakvih dosad nije bilo:
+
+- **Solver propagira ENUMERACIJOM, ne rasponom.** `sandwichPrune` prođe sve parove
+  pozicija na kojima 1 i 9 još mogu stajati, odbaci parove kojima zadani zbroj nije
+  dostižan, i svakoj ćeliji ostavi **uniju** onoga što joj preživjeli parovi dopuštaju.
+  Unija, ne presjek - dok je više parova živo, ćelija smije nositi ono što dopušta bilo
+  koji od njih. To je jedino mjesto u repou gdje se kandidati skupljaju, a ne režu.
+- **`isValid` je NAMJERNO slab.** Dok oba kraja nisu upisana, vraća `true` - ne zna nad
+  čime bi sudio. Kad su oba tu, provjeri stane li ostatak u toliko različitih znamenki
+  iz onoga što je liniji preostalo; kad je linija puna, to postane **točna jednakost**.
+  Za `countSolutions`/`dig` je to dovoljno: na punoj ploči su krajevi nužno upisani, pa
+  se nijedno krivo rješenje ne može prošuljati. Rezanje prije toga radi solver, gdje se
+  isplati. Slaba provjera je pritom **sigurna** po konstrukciji - odbija samo nemoguće.
+
+Da propagacija nije samo teoretski zdrava, provjereno je izravno: na **1826 djelomičnih
+ploča i 56935 praznih ćelija** (5 kombinacija, ploče popunjavane točnim vrijednostima
+nasumičnim redom) **nijedan točan kandidat nije izgubljen**. Bez te provjere unsound
+prune ne bi pao odmah nego bi tiho isporučio ploče bez rješenja.
+
+Snaga je mjerljiva: na svježoj Hard ploči propagacija reže **20.9%** kandidata, a
+**0/15 ploča** se da riješiti bez nje.
+
+### Jedina oznaka koja ne troši ćeliju
+
+Sve dosadašnje oznake zauzimaju prostor na ploči, pa se izvode u nizu i svaka zaobilazi
+ćelije prethodnih (`blocked` kroz `deriveGeom`, redoslijed po vezanosti - v1.33.0).
+Sandwich ne troši **nijednu** ćeliju, pa:
+
+- ne ulazi u `deriveGeom` nego stoji uz `parity`/`edges`,
+- ne treba `blocked` ni redoslijed izvođenja,
+- **nema nespojivih kombinacija** - ne može se sudariti ni s čim.
+
+Uz to nema izvedenog oblika (`thm`/`cag`/`mate`): wire je već ono što `isValid` gleda,
+jer se oznaka traži po retku/stupcu ćelije, a to su dva dijeljenja.
+
+### Prune je opet tiho pojeo nasumičnost
+
+S fiksnim dnom od 6 oznaka izmjereno je (20 Hard ploča po gustoći): **prosjek 6.3
+oznake bez obzira na baznu gustoću** - i pri 0.35-0.55 i pri 0.7-1. Prune svaku ploču
+sveže na dno, pa je `SANDWICH_DENSITY` bio knob koji ne radi ništa.
+
+To je **isti nalaz koji je Killer dao u v1.34.0** (`CAGE_KEEP_CELLS`), samo u drugoj
+jedinici, i rješenje je preslikano: dno je RASPON (`SANDWICH_KEEP` 6-12) koji se izvlači
+po ploči. Rezultat: 6-12 oznaka (prosjek 9.1) umjesto uvijek 6.
+
+**Pouka koja se sad ponovila dvaput: kad se uvodi KEEP_MIN, provjeriti mjerenjem veže
+li dno svaku ploču na istu vrijednost.** Fiksno dno i nasumična gustoća su u sukobu -
+gustoća gubi, tiho.
+
+### `STRENGTH: 10` prošlo iz prve, treći put zaredom
+
+Kao Zipper i Arrow. Razlog je isti - odnos je jak u oba smjera: oznaka steže i gdje 1 i
+9 SMIJU stajati i što ćelije između njih nose, a nula (1 i 9 kao susjedi) fiksira par
+odmah. Najgori par ostaje ispod 4s, bez ijedne ploče iznad 5s.
+
+Nula se pritom **ne izostavlja iako izgleda kao "nema oznake"** - najjača je oznaka
+koju varijanta ima. Zato odsutnost nosi -1, a ne 0. Izmjereno: 118 od 546 prikazanih
+zbrojeva je nula (22%), prosjek 11.9, a i teoretski maksimum 35 se pojavi.
+
+### Provjere
+
+- **Regresija**: 44 ploče (22 kombinacije × 2 težine, zasijan RNG) identične do na novo
+  prazno `sandwich: null` polje - nijedan redak uklonjen ni promijenjen. Novi `Math.random`
+  poziv za dno prunea zove se SAMO kad oznaka postoji, inače bi pomaknuo RNG niz i
+  pločama bez Sandwicha.
+- **Generator**: na svakoj ploči provjereno da zbroj između 1 i 9 U RJEŠENJU odgovara
+  prikazanoj oznaci, **uz kontrolu** da isti test na klasičnoj ploči padne (43 prekršaja) -
+  inače bi prolazio i kad pravilo ne bi radilo.
+- **Solver soundness**: 56935 provjera, nijedan točan kandidat izgubljen (vidi gore).
+- **Hint**: 1495 prijedloga, **nula krivih**, nula kontradikcija; 25/30 ploča riješeno
+  samim upisima (ostalih 5 stane na eliminacijskom koraku koji harness ne primjenjuje).
+  Najbolji rezultat dosad uz Nonconsecutive.
+- **Render**: poravnanje 0.00px na sva četiri kuta na 375×812, 320×568 i 812×375
+  (landscape). Najširi mogući zbroj (35) ima 7.4px zalihe na mobitelu i 5.4px na
+  najužem ekranu. Bez Sandwicha ploča je i dalje puna širina wrapa (351px = 351px),
+  a font ćelije točno 1/0.93 od Sandwich verzije - dakle raspored ostalih partija je
+  nepromijenjen. Nula grešaka u konzoli; oznake prežive reload.
+- **Meni**: test iz v1.40.1 proširen i prolazi - abecedni redoslijed (Sandwich između
+  Renbana i Therma), svaki redak ima varijantu i labelu, `app.js` i `sudoku.js` dijele
+  isti popis. **Varijanti je sada 19.**
+- **Vizualna potvrda igranjem**: NIJE napravljena - screenshot u ovom okruženju
+  konzistentno pada u timeout, pa je render provjeren mjerenjem (geometrija, prelijevanje
+  teksta, boja). Po pouci iz v1.40.0 to je ono što treba potvrditi igranjem.
+
+## Stanje popisa kandidata (nakon v1.42.0)
 
 Popis iz [dorada-varijante.md](dorada-varijante.md), otvoren nakon što je originalna
-wish-lista iscrpljena u v1.34.x, sada je **isporučen do dvije stavke**:
+wish-lista iscrpljena u v1.34.x, sada je **isporučen do jedne stavke**:
 
-| isporučeno                                                              | preostalo               |
-| ----------------------------------------------------------------------- | ----------------------- |
-| Disjoint Groups, German Whispers, Renban, Zipper, Arrow, Nonconsecutive | Sandwich, Little Killer |
+| isporučeno                                                                        | preostalo     |
+| --------------------------------------------------------------------------------- | ------------- |
+| Disjoint Groups, German Whispers, Renban, Zipper, Arrow, Nonconsecutive, Sandwich | Little Killer |
 
-Obje preostale traže **oznaku izvan ploče** - prvi novi render kanal otkako igra
-postoji (layout, mobitel, skaliranje). To je jedina skupina koja nije ni dotaknuta, i
-razlog zašto je ostavljena za kraj stoji: sve dosadašnje oznake staju unutar ćelije ili
-na brid između dvije.
+**Render kanal izvan ploče je time otvoren i dokazan** (v1.42.0), pa razlog zbog kojeg
+je ta skupina ostavljena za kraj više ne vrijedi. Little Killer nasljeđuje gotov
+`.board-frame` s pojasom; posao koji mu preostaje je drugačiji:
+
+- oznaka mu stoji uz **dijagonalu**, ne uz redak - dakle u pojasu, ali s pripadnom
+  strelicom smjera, i na uglovima gdje se pojasevi sastaju (Sandwich taj kut ne koristi),
+- odnos je čisti zbroj nad zadanim skupom ćelija, dakle **natrag na `cageRange` oblik** -
+  Sandwicheva enumeracija mu ne treba, jer dijagonala je poznata unaprijed.
+
+Uz njega ostaje otvoreno i **Daily Variant Mix** (v1.23.0 ideja, neplanirano) te
+tehnički dug oko Thermo repova, izmjeren u v1.41.0.
 
 Uz njih ostaje otvoreno i **Daily Variant Mix** (v1.23.0 ideja, neplanirano) te
 tehnički dug oko Thermo repova, izmjeren u v1.41.0.

@@ -121,9 +121,16 @@ Vidi [todo.md](todo.md).
 
 **Skuplje - novi render kanal:**
 
-- **Sandwich** - zbroj znamenki između 1 i 9 u retku/stupcu. Trivijalno se izvede, ali
-  oznaka stoji **izvan ploče** - prvi put da nešto treba mjesto van grida (layout,
-  mobitel, skaliranje). To je pravi novi posao, ne derive.
+- ~~**Sandwich**~~ - **isporučen u v1.42.0**, sedmi s ove liste. Procjena je bila točna
+  da se trivijalno izvede i da oznaka izvan ploče znači novi posao, ali je promašila na
+  obje strane: **render je ispao jeftin** (jedna traka grida oko ploče - pojas jednako
+  širok lijevo i gore pa ploča ostaje kvadrat sama od sebe, poravnanje 0.00px bez
+  ijednog izračuna pozicije), a **pravi novi posao je bio solver**, kojeg ovaj popis
+  nije ni spomenuo. Sandwich je prva relacija kojoj se ne zna nad kojim ćelijama
+  vrijedi - koje ćelije zbroj broji ovisi o tome gdje padnu 1 i 9 - pa se ne da svesti
+  na raspon po ćeliji kao sve dosadašnje. Propagira se enumeracijom parova pozicija i
+  **unijom** dopuštenog, jedino mjesto u repou gdje se kandidati skupljaju umjesto da
+  se režu. Detalji u [todo.md](todo.md).
 - ~~**Arrow**~~ - **isporučen u v1.40.0**, peti s ove liste i prvi iz "skuplje" skupine.
   Procjena je bila točna u oba dijela, ali je promašila zašto: derive nije teži zbog
   računa nego zbog toga što je **jedini kojem šetnja ne vrijedi** - uvjet vrijedi tek
@@ -131,7 +138,11 @@ Vidi [todo.md](todo.md).
   se činilo (prsten + naslijeđena linija), a krug se pokazao vrijednim iz drugog
   razloga: jedina je linijska varijanta kojoj boja nije jedina razlika, što je upravo
   ono što je trebalo na šestoj. Detalji u [todo.md](todo.md).
-- **Little Killer** - dijagonalni zbroj izvan ploče; isti render problem kao Sandwich.
+- **Little Killer** - dijagonalni zbroj izvan ploče. Render kanal je Sandwich već
+  otvorio (`.board-frame` + pojas), pa je "isti render problem" time riješen unaprijed;
+  preostaje mu strelica smjera i kut pojasa koji Sandwich ne koristi. Logikom je
+  **lakši** od Sandwicha, ne teži: dijagonala je poznata unaprijed, pa se vraća na
+  `cageRange` oblik i enumeracija mu ne treba.
 
 **Nije derivacijsko - traži diranje generatora:**
 
