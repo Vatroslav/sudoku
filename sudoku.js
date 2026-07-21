@@ -118,6 +118,19 @@ const Sudoku = (() => {
     return [lo, hi];
   }
 
+  // German Whispers: susjedi na liniji razlikuju se za BAREM 5. Mora se poklapati sa
+  // solver.js whisperOk (generator i solver dijele definiciju odnosa, kao edgeOk).
+  //
+  // Geometrijom je linija (kao Thermo/Palindrome), ali LOGIKOM je bliži Kropkiju:
+  // odnos veže samo susjedni PAR, ne poziciju u putu. Zato nema `whisperRange` -
+  // dopušteni skup nije interval nego unija dva repa (uz susjeda 3 dopušteno je 8-9,
+  // uz 7 samo 1-2), a to u [lo,hi] ne stane. Provjerava se par po par, kao edgeOk.
+  const whisperOk = (a, b) => Math.abs(a - b) >= 5;
+  // Peta znamenka ne može stajati NIGDJE na liniji: |5-x| >= 5 traži x <= 0 ili
+  // x >= 10. Vrijedi na praznoj ploči, bez ijednog popunjenog susjeda - odatle
+  // varijanta vuče najveći dio snage (isti odnos kao "pozicija sama" kod Thermo).
+  const WHISPER_BAN = 5;
+
   // Killer: raspon [lo,hi] dopušten ćelija u kavezu zadanog zbroja. Isti oblik kao
   // thermoRange (granice, ne provjera para) pa solver može rezati kandidate odmah.
   //
@@ -162,6 +175,11 @@ const Sudoku = (() => {
       for (let p = 0; p < path.length; p++) at[path[p]] = { path, pos: p };
     return at;
   }
+
+  // Whispers: isti izvedeni oblik kao tube ({ path, pos } po ćeliji) - linije se ne
+  // preklapaju pa je po ćeliji najviše jedna. Pozicija se ovdje ne koristi za raspon
+  // nego samo da se nađu susjedi na liniji (path[pos±1]).
+  const prepWhispers = prepThermos;
 
   // Palindrome i Clone svode se na ISTI odnos - "ove dvije ćelije nose istu
   // vrijednost" - pa dijele izvedeni oblik: 81-polje indeksa partnera (-1 = nema ga).
@@ -213,6 +231,7 @@ const Sudoku = (() => {
     const palindromes = (c && c.palindromes) || null;
     const clones = (c && c.clones) || null;
     const cages = (c && c.cages) || null;
+    const whispers = (c && c.whispers) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
@@ -221,9 +240,11 @@ const Sudoku = (() => {
       palindromes,
       clones,
       cages,
+      whispers,
       // jig se drži uz regions: isValid ne smije po ćeliji tražiti tko je u kojoj regiji.
       jig: regions ? { map: regions, cells: regionsToCells(regions) } : null,
       thm: prepThermos(thermos),
+      whi: prepWhispers(whispers),
       // Jedno polje partnera za obje varijante jednakosti - vidi prepMates.
       mate: prepMates(palindromes, clones),
       cag: prepCages(cages),
@@ -248,6 +269,7 @@ const Sudoku = (() => {
     "xv",
     "thermo",
     "palindrome",
+    "whisper",
     "clone",
     "killer",
   ];
@@ -381,7 +403,7 @@ const Sudoku = (() => {
   //   mate - 81-polje indeksa partnera koji mora nositi ISTU vrijednost (vidi
   //     prepMates); pune ga Palindrome linije i Clone regije.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, mate, cag } = clues;
+    const { jig, parity, edges, thm, mate, cag, whi } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -442,6 +464,18 @@ const Sudoku = (() => {
       const { path, pos } = thm[idx];
       const [lo, hi] = thermoRange(board, path, pos);
       if (val < lo || val > hi) return false;
+    }
+    // German Whispers: 5 nikad (vrijedi bez ijednog susjeda), inače provjeri samo
+    // POPUNJENE susjede na liniji - drugi smjer stigne kad na njega dođe red, kao
+    // kod brid-oznaka.
+    if (whi && whi[idx]) {
+      if (val === WHISPER_BAN) return false;
+      const { path, pos } = whi[idx];
+      for (const q of [pos - 1, pos + 1]) {
+        if (q < 0 || q >= path.length) continue;
+        const b = board[path[q]];
+        if (b && !whisperOk(val, b)) return false;
+      }
     }
     // Palindrome/Clone: partner mora nositi ISTU vrijednost. Provjerava se samo kad
     // je popunjen - drugi smjer stigne kad na njega dođe red (kao kod brid-oznaka).
@@ -732,6 +766,55 @@ const Sudoku = (() => {
     return pals;
   }
 
+  // German Whispers: linija duž koje se SUSJEDI razlikuju za barem 5.
+  //
+  // Derive je šetnja kao kod Thermo, samo s drugim uvjetom koraka - najbliže
+  // copy-pasteu jezgre dosad. Dvije razlike koje nisu očite:
+  //
+  //  1. **Ponavljanje ćelije mora se provjeriti ručno.** Kod tube strogi rast to
+  //     jamči besplatno (vrijednost bi morala biti veća od same sebe), pa
+  //     deriveThermos gleda samo tuđe tube. Whisper odnos je simetričan - 1-7-1 je
+  //     valjan niz - i put bi se rado vratio na sebe. Odatle `mine` (kao Palindrome).
+  //  2. **Šetnja ne kreće iz niskih vrijednosti** (Thermo kreće, jer iz 9 nema kamo).
+  //     Ovdje su i 1 i 9 jednako dobri startovi; jedino 5 nema nijednog partnera pa
+  //     ispada sam od sebe, bez posebne provjere.
+  const WHISPER_LEN = { min: 3, max: 6 };
+  const MAX_WHISPERS = 12;
+  const WHISPER_DENSITY = { min: 0.3, max: 0.5 };
+  // Isti argument kao THERMO_KEEP_MIN/PALINDROME_KEEP_MIN - linija je strukturni
+  // objekt i jedna usamljena se čita kao greška. Vrijednost je izmjerena, vidi todo.md.
+  const WHISPER_KEEP_MIN = 4;
+  // blocked = ćelije koje je zauzela druga oznaka (Clone/Thermo/Palindrome).
+  function deriveWhispers(solution, boost = 0, blocked = null) {
+    const want = Math.round(MAX_WHISPERS * pickDensity(scaled(WHISPER_DENSITY, boost)));
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
+    const whispers = [];
+    for (const start of shuffle([...Array(81).keys()])) {
+      if (whispers.length >= want) break;
+      if (used[start]) continue;
+      const maxLen =
+        WHISPER_LEN.min + Math.floor(Math.random() * (WHISPER_LEN.max - WHISPER_LEN.min + 1));
+      const path = [start];
+      const mine = new Set([start]);
+      let cur = start;
+      while (path.length < maxLen) {
+        const next = shuffle(
+          lineNeighbors[cur].filter(
+            (n) => !used[n] && !mine.has(n) && whisperOk(solution[n], solution[cur])
+          )
+        );
+        if (!next.length) break;
+        cur = next[0];
+        path.push(cur);
+        mine.add(cur);
+      }
+      if (path.length < WHISPER_LEN.min) continue;
+      for (const i of path) used[i] = true;
+      whispers.push(path);
+    }
+    return whispers;
+  }
+
   // Clone: dvije regije istog oblika nose iste znamenke u odgovarajućim ćelijama.
   // Wire oblik je par putova jednake duljine ([[a0,a1,...],[b0,b1,...]]) - odnos je
   // "po indeksu", pa se čita bez ikakve geometrije (vidi prepMates).
@@ -913,6 +996,13 @@ const Sudoku = (() => {
     kropki: 18,
     evenodd: 15,
     thermo: 12,
+    // Whisper: pravilo iz v1.35.0 (mjeriti na kombinacijama) ovdje je bilo presudno,
+    // i to oštrije nego kod Disjointa. Solo ploča ne primijeti razliku - sa 12 daje
+    // 16-28 zadanih uz 10ms - ali whisper+clone tada skoči na **195s max** (prosjek
+    // 10s). Sa 10 je isti par 155ms, dakle tisuću puta brže za dvije točke snage.
+    // Uzeto 10, a ne 8: solo raspon je bolji (19-28 prema 20-28), a najgori rep ostaje
+    // 2.5s (whisper+thermo) - u rangu zatečenog clone+thermo.
+    whisper: 10,
     xv: 10,
     palindrome: 10,
     clone: 10,
@@ -947,7 +1037,7 @@ const Sudoku = (() => {
   // jigsaw, antiknight, antiking) vraćaju null - one mijenjaju PRAVILA, pa su na ploči
   // i bez ijedne oznake i nema se što brojati.
   function markCount(v, clues) {
-    const { parity, edges, thermos, palindromes, clones, cages } = clues;
+    const { parity, edges, thermos, palindromes, clones, cages, whispers } = clues;
     const edgesIn = (lo, hi) => {
       if (!edges) return 0;
       let n = 0;
@@ -962,6 +1052,7 @@ const Sudoku = (() => {
     if (v === "xv") return edgesIn(3, 4); // tipovi 3-4 = slova
     if (v === "thermo") return thermos ? thermos.length : 0;
     if (v === "palindrome") return palindromes ? palindromes.length : 0;
+    if (v === "whisper") return whispers ? whispers.length : 0;
     if (v === "clone") return clones ? clones.length : 0;
     // Killer je jedini kojem jedinica NIJE oznaka nego POKRIVENA ĆELIJA: kavez od 2 i
     // kavez od 5 ne nose isto, a ono što se čita kao Killer je pokrivenost ploče
@@ -997,6 +1088,7 @@ const Sudoku = (() => {
     xv: 5, // manje parova kvalificira (zbroj 5/10) pa je i prirodan broj niži
     thermo: THERMO_KEEP_MIN,
     palindrome: PALINDROME_KEEP_MIN,
+    whisper: WHISPER_KEEP_MIN,
     clone: 1, // par regija je "nešto i njegova kopija" - jedan je ISPRAVNA slika
     killer: CAGE_KEEP_CELLS.min, // jedini mjeren u ĆELIJAMA - vidi markCount
   };
@@ -1019,7 +1111,7 @@ const Sudoku = (() => {
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
   function pruneMarks(puzzle, solution, variants, clues, maxTier) {
-    const { parity, edges, thermos, palindromes, clones, cages } = clues;
+    const { parity, edges, thermos, palindromes, clones, cages, whispers } = clues;
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -1040,6 +1132,10 @@ const Sudoku = (() => {
     // Killer: jedinica je CIJELI kavez. Smanjivanje kaveza nije micanje oznake nego
     // drugi zbroj nad drugim ćelijama, dakle druga slagalica (kao tuba i linija).
     if (cages) for (const g of cages) cands.push(["g", g]);
+    // Whispers: kao tuba i linija, jedinica je CIJELA linija. Ovdje je razlog čak
+    // izravniji - odnos veže susjedne parove, pa skraćivanje raskida par koji je
+    // možda jedini nosio informaciju.
+    if (whispers) for (const w of whispers) cands.push(["w", w]);
     if (!cands.length) return;
     // Živi broj oznaka po varijanti - pada kako prune miče. Ispod KEEP_MIN se ne ide,
     // pa odabrana varijanta ostane na ploči i kad joj kombinacija oduzme sav posao.
@@ -1070,6 +1166,17 @@ const Sudoku = (() => {
         else thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
         // thermos je wire polje; izvedeni thm bi inače ostao na staroj listi tuba.
         clues.thm = prepThermos(thermos);
+        continue;
+      }
+      if (kind === "w") {
+        if (!mayDrop("whisper")) continue;
+        const k = whispers.indexOf(ref);
+        whispers.splice(k, 1);
+        if (stoji()) left.whisper--;
+        else whispers.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        // whispers je wire polje; izvedeni whi bi inače ostao na staroj listi linija
+        // (ista zamka kao kod thm - vidi todo.md).
+        clues.whi = prepWhispers(whispers);
         continue;
       }
       if (kind === "l") {
@@ -1144,6 +1251,7 @@ const Sudoku = (() => {
         palindromes: clues.palindromes,
         clones: clues.clones,
         cages: clues.cages,
+        whispers: clues.whispers,
       },
     };
   }
@@ -1195,6 +1303,7 @@ const Sudoku = (() => {
     const usePal = variants.includes("palindrome");
     const useClone = variants.includes("clone");
     const useKiller = variants.includes("killer");
+    const useWhisper = variants.includes("whisper");
     // Oznake koje zauzimaju ĆELIJU (a ne brid) izvode se u nizu i svaka zaobilazi
     // ćelije prethodnih: dvije linije kroz istu ćeliju render crta preko sebe, a klon
     // boji cijelu ćeliju pa bi linija ispod njega nestala.
@@ -1208,10 +1317,19 @@ const Sudoku = (() => {
     const deriveGeom = (solution, boost) => {
       const clones = useClone ? deriveClones(solution, boost) : null;
       const taken = (paths) => lineCells([...(clones ? clones.flat() : []), ...paths]);
-      const thermos = useThermo ? deriveThermos(solution, boost, taken([])) : null;
-      const palindromes = usePal ? derivePalindromes(solution, boost, taken(thermos || [])) : null;
+      // Whisper ide odmah iza klona, PRIJE tube i linije: od svih linijskih oznaka
+      // ima najmanje slobode. Tuba traži susjeda veće vrijednosti (u prosjeku pola
+      // njih kvalificira), a whisper razliku od barem 5 - vrijednost 4 ima točno
+      // jednog mogućeg partnera (9), a 5 nijednog. Isto pravilo kao kod klona
+      // (v1.33.0): prva ide oznaka s najmanje slobode, ne zadnja dodana.
+      const whispers = useWhisper ? deriveWhispers(solution, boost, taken([])) : null;
+      const thermos = useThermo ? deriveThermos(solution, boost, taken(whispers || [])) : null;
+      const palindromes = usePal
+        ? derivePalindromes(solution, boost, taken([...(whispers || []), ...(thermos || [])]))
+        : null;
       return {
         clones,
+        whispers,
         thermos,
         palindromes,
         // Kavez ide ZADNJI jer je najmanje vezan: mrlji treba samo da se vrijednost ne
@@ -1219,7 +1337,11 @@ const Sudoku = (() => {
         // sa susjedom. Ono što ostane nakon njih kavezu je i dalje dovoljno - obrnut
         // redoslijed bi im pojeo ploču (vidi mjerenje kod Clonea).
         cages: useKiller
-          ? deriveCages(solution, boost, taken([...(thermos || []), ...(palindromes || [])]))
+          ? deriveCages(
+              solution,
+              boost,
+              taken([...(whispers || []), ...(thermos || []), ...(palindromes || [])])
+            )
           : null,
       };
     };

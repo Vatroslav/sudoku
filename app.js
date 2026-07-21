@@ -18,6 +18,7 @@
     "xv",
     "thermo",
     "palindrome",
+    "whisper",
     "clone",
     "killer",
   ];
@@ -33,6 +34,7 @@
     xv: "XV",
     thermo: "Thermo",
     palindrome: "Palindrome",
+    whisper: "German Whispers",
     clone: "Clone",
     killer: "Killer",
   };
@@ -240,6 +242,7 @@
     return true;
   }
   const validPalindromes = validThermos; // isti oblik puta, samo bez smjera
+  const validWhispers = validThermos; // isto - razlikuje se odnos, ne geometrija
   // Clone: par regija istog oblika ([[a...],[b...]]) - odnos je po indeksu, pa render
   // treba samo ćelije. Oblik se ne provjerava; bitno je da su parovi cjeloviti i da
   // se ćelije ne ponavljaju (jedna ćelija = najviše jedan klon).
@@ -442,6 +445,7 @@
         palindromes: (clues && clues.palindromes) || null,
         clones: (clues && clues.clones) || null,
         cages: (clues && clues.cages) || null,
+        whispers: (clues && clues.whispers) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -626,6 +630,12 @@
         if (!validCages(clues.cages)) return false;
       } else {
         clues.cages = null;
+      }
+      // German Whispers: isti oblik kao Thermo/Palindrome (putovi susjednih ćelija).
+      if (state.variants.includes("whisper")) {
+        if (!validWhispers(clues.whispers)) return false;
+      } else {
+        clues.whispers = null;
       }
       return true;
     } catch (e) {
@@ -1127,7 +1137,7 @@
     const antikingMode = state.variants.includes("antiking");
     const disjointMode = state.variants.includes("disjoint");
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
-    const { regions, parity, edges, thermos, palindromes, clones, cages } = state.clues;
+    const { regions, parity, edges, thermos, palindromes, clones, cages, whispers } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
@@ -1143,12 +1153,13 @@
     // Jigsaw: ploča dobiva klasu za deblje/svjetlije granice regija (vidi CSS).
     boardEl.classList.toggle("jigsaw", jigsawMode);
 
-    // Linijske varijante (Thermo tube, Palindrome linije) dijele cijelu render
-    // mašineriju - razlikuju se samo bojom i kuglicom na dnu tube. Generator ih ne
-    // pušta kroz istu ćeliju (vidi derivePalindromes `blocked`).
+    // Linijske varijante (Thermo tube, Palindrome i Whisper linije) dijele cijelu
+    // render mašineriju - razlikuju se samo bojom i kuglicom na dnu tube. Generator
+    // ih ne pušta kroz istu ćeliju (vidi `blocked` u derive funkcijama).
     const lines = [
       { kind: "thermo", paths: thermos },
       { kind: "pal", paths: palindromes },
+      { kind: "whisper", paths: whispers },
     ].filter((l) => Array.isArray(l.paths) && l.paths.length);
 
     // Indeks ćelija -> { path, pos } po vrsti linije. Linije su nepromjenjive tijekom

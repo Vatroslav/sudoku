@@ -195,6 +195,10 @@ const Solver = (() => {
   // Palindrome: linije čije se vrijednosti čitaju isto u oba smjera. Oblik je isti kao
   // kod tuba (put ćelija po potezu kralja, bez preklopa) pa dijele validaciju.
   const validPalindromes = validThermos;
+  // German Whispers: isti oblik (put po potezu kralja) pa i ista validacija i isti
+  // izvedeni indeks. Odnos je drugi - vidi whisperOk.
+  const validWhispers = validThermos;
+  const prepWhispers = prepThermos;
   // Clone: parovi regija istog oblika ([[a...],[b...]], odnos je po indeksu). Oblik
   // regije se ne provjerava - solver iz njega čita samo parove, a render skup ćelija.
   function validClones(clones) {
@@ -285,6 +289,11 @@ const Solver = (() => {
 
   // Zadovoljava li par a,b prikazanu oznaku tipa t. Mora se poklapati sa sudoku.js
   // edgeOk (generator i solver dijele definiciju odnosa).
+  // German Whispers: susjedi na liniji razlikuju se za barem 5. Mora se poklapati sa
+  // sudoku.js whisperOk (generator i solver dijele definiciju odnosa, kao edgeOk).
+  const whisperOk = (a, b) => Math.abs(a - b) >= 5;
+  const WHISPER_BAN = 5; // |5-x| >= 5 nema rješenja u 1-9, pa 5 ne stoji na liniji
+
   function edgeOk(a, b, t) {
     const hi = Math.max(a, b),
       lo = Math.min(a, b);
@@ -358,6 +367,11 @@ const Solver = (() => {
   // zasebne tehnike - kavez samo steže kandidate (raspon zbroja i zabrana ponavljanja
   // unutar kaveza), klasične tehnike dovrše.
   let curCages = null;
+  // German Whispers: per-puzzle indeks ćelija -> { path, pos } ili null. Kao Kropki
+  // nema zasebne tehnike, ali za razliku od njega reže i na PRAZNOJ ploči: 5 ne stoji
+  // nigdje na liniji, pa svaka whisper ćelija odmah gubi kandidata bez ijednog
+  // popunjenog susjeda. Ostatak ide kroz susjede (computeCandidates i place).
+  let curWhispers = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -406,6 +420,17 @@ const Solver = (() => {
         const [lo, hi] = cageRange(grid, cells, sum, idx);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
       }
+      // German Whispers: 5 otpada bez ikakvog konteksta, a svaki POPUNJEN susjed na
+      // liniji ostavlja samo drugi kraj skale (uz 3 prolaze 8-9, uz 7 samo 1-2).
+      if (curWhispers && curWhispers[idx]) {
+        s.delete(WHISPER_BAN);
+        const { path, pos } = curWhispers[idx];
+        for (const q of [pos - 1, pos + 1]) {
+          if (q < 0 || q >= path.length) continue;
+          const b = grid[path[q]];
+          if (b) for (const v of [...s]) if (!whisperOk(v, b)) s.delete(v);
+        }
+      }
       // Palindrome/Clone: popunjen partner fiksira vrijednost. (Par praznih se presijeca
       // niže - tek kad su OBA skupa izračunata.)
       if (curMate && curMate[idx] >= 0 && grid[curMate[idx]] !== 0) {
@@ -447,6 +472,17 @@ const Solver = (() => {
         if (!cand[j]) continue;
         const [lo, hi] = thermoRange(grid, path, q);
         for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
+      }
+    }
+    // German Whispers: upis steže samo SUSJEDE na liniji, ne cijelu liniju - odnos je
+    // lokalan (kao Kropki), za razliku od tube i kaveza gdje jedan upis nosi posljedicu
+    // do kraja puta. Dalji članovi se stegnu kad na njih dođe red.
+    if (curWhispers && curWhispers[idx]) {
+      const { path, pos } = curWhispers[idx];
+      for (const q of [pos - 1, pos + 1]) {
+        if (q < 0 || q >= path.length) continue;
+        const j = path[q];
+        if (cand[j]) for (const u of [...cand[j]]) if (!whisperOk(val, u)) cand[j].delete(u);
       }
     }
     // Killer: upis stegne SVE prazne ćelije svog kaveza, ne samo susjedne - potroši i
@@ -778,10 +814,11 @@ const Solver = (() => {
   //   palindromes - Palindrome linije (polje putova); nevaljano se ignorira.
   //   clones - Clone parovi regija (polje parova putova); nevaljano se ignorira.
   //   cages  - Killer kavezi (polje { cells, sum }); nevaljano se ignorira.
+  //   whispers - German Whispers linije (polje putova); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
-    const { regions, parity, edges, thermos, palindromes, clones, cages } = clues || {};
+    const { regions, parity, edges, thermos, palindromes, clones, cages, whispers } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
@@ -793,6 +830,7 @@ const Solver = (() => {
     curMate =
       okPal || okClone ? prepMates(okPal ? palindromes : null, okClone ? clones : null) : null;
     curCages = validCages(cages) && cages.length ? prepCages(cages) : null;
+    curWhispers = validWhispers(whispers) && whispers.length ? prepWhispers(whispers) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);

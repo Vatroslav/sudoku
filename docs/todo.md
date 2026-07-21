@@ -130,6 +130,9 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
       geometrija-first** - vidi zasebnu sekciju niže.
 - [x] Palindrome (linija čita isto u oba smjera, v1.32.0). Kao Thermo, **nije ispala
       geometrija-first** - vidi zasebnu sekciju niže.
+- [x] German Whispers (susjedi na liniji razlikuju se za barem 5, v1.36.0). Druga s
+      liste kandidata. Geometriju posuđuje od Thermo, logiku od Kropkija - vidi
+      sekciju niže.
 - [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
       svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
@@ -835,11 +838,21 @@ bilo koju kombinaciju.
 - **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) **bajt-identično**
   prije i poslije. Nema ni novog praznog polja u `clues` - za razliku od svih
   derivacijskih varijanti, koje su ga svaka dodale (`palindromes: null`, `clones: null`,
-  `cages: null`).
+  `cages: null`). _(Ponovno provjereno pri izradi Whispera, nakon što je nađen isti
+  harness bug opisan niže - usporedba je isprva pokrivala samo puzzle/solution, ne i
+  oznake. S ispravljenim harnessom tvrdnja stoji.)_
 - **Hint**: **nula krivih prijedloga** u svim mjerenim kombinacijama (Hard i Normal).
-  Riješeno samim hintovima: disjoint Normal 10/10, Hard 7/10, +x 10/10 - iznad
-  zatečenog prosjeka na istom harnessu (killer sam 0/10, clone sam 0/10, kropki+xv
-  0/10; zastoji su eliminacijski koraci koje harness ne primjenjuje).
+  Riješeno samim hintovima (Hard): disjoint 10/10, +x 10/10, +clone 9/10, +thermo 8/10,
+  +killer i +evenodd 6/10; Normal 10/10.
+  - **Ispravak brojki iz v1.35.0.** Prvo mjerenje je prijavljivalo 0-2/10 za skoro sve
+    (i za zatečene kombinacije) i to je pripisano harnessu koji "ne primjenjuje
+    eliminacijske korake". Uzrok je bio **bug u harnessu**: oznake žive u `r.clues`, a
+    harness ih je čitao s vrha rezultata, pa je solveru pri svakom hintu predavao
+    PRAZAN clues - rješavao je ploču bez oznaka i naravno zapinjao. Ispravljeno mjerenje
+    daje 6-10/10, a zatečene kombinacije 6-10/10 (killer sam 6/10, clone sam 10/10,
+    kropki+xv 7/10) umjesto nekadašnjih 0/10. Tvrdnja "nula krivih prijedloga" je
+    preživjela ispravak - prijedlozi se provjeravaju protiv rješenja, pa ih slabiji
+    solver čini rjeđima, nikad krivima.
 - **UI logika**: browser pane u ovoj sesiji nije registrirao klikove na meni overlay
   (screenshotovi timeoutali) - isto kao u Clone sesiji. Nespojivost i `randomVariants`
   su zato provjereni Node testom koji logiku EKSTRAHIRA iz `app.js` regexom umjesto da
@@ -851,6 +864,122 @@ bilo koju kombinaciju.
   treći put iz istog razloga: render se svodi na već dokazan sloj ili ga uopće nema.
   Kod Disjointa nema ni jedne nove CSS klase, pa je rizik bio najmanji dosad - Thermo,
   jedini koji je tražio tri runde popravaka, jedini je i crtao preko granice ćelije.
+
+## German Whispers (v1.36.0)
+
+Linija duž koje se SUSJEDI razlikuju za barem 5. Druga varijanta s liste kandidata
+([dorada-varijante.md](dorada-varijante.md)), i prva koja je tamo bila procijenjena
+kao "jeftino - derive + postojeći `.line-*` render". Procjena je bila točna: derive je
+šetnja kao `deriveThermos` s drugim uvjetom koraka, a render je preuzet bez ijedne nove
+CSS klase osim boje.
+
+Izmjereno (Hard): **prosjek 17ms, max 231ms** sam; kombinacije 8-527ms prosjek uz
+najgori rep 2.5s (whisper+thermo). Normal 3ms. Linija po ploči 4-8, duljina 3-6.
+
+### Geometrija je Thermo, logika je Kropki
+
+Ovo je prva varijanta koja te dvije strane posuđuje od **različitih** prethodnika, i
+zato je jeftina: geometrijom je linija (put po potezu kralja, bez preklopa) pa dijeli
+`validThermos`, `prepThermos` i cijeli `.line-*` render; logikom je odnos susjednog
+PARA pa se ponaša kao `edgeOk`.
+
+**Nema `whisperRange`** iako Thermo i Killer oba imaju svoj `*Range`. Dopušteni skup
+nije interval nego unija dva repa - uz susjeda 3 prolaze samo 8-9, uz 7 samo 1-2 - a to
+u `[lo,hi]` ne stane. Provjerava se par po par, kao kod brid-oznaka.
+
+**Peta znamenka ne stoji nigdje na liniji** (|5-x| >= 5 traži x <= 0 ili x >= 10).
+To je jedina informacija koju varijanta daje na PRAZNOJ ploči, bez ijednog popunjenog
+susjeda, i funkcionalno je ekvivalent onome što je kod Thermo "pozicija sama". Odatle
+whisper vuče velik dio snage; u `computeCandidates` je jedan `s.delete(5)`.
+
+Dvije stvari koje `deriveThermos` ima besplatno, a ovdje se moraju napisati:
+
+1. **Provjera da se put ne vrati na sebe.** Kod tube to jamči strogi rast (vrijednost
+   bi morala biti veća od same sebe), pa `deriveThermos` gleda samo tuđe tube. Whisper
+   odnos je simetričan - 1-7-1 je valjan niz - pa put rado napravi petlju. Odatle
+   `mine` Set, posuđen od `derivePalindromes`.
+2. **Šetnja nema prirodan smjer.** Thermo kreće iz niskih vrijednosti sam od sebe (iz 9
+   se nema kamo), što je točno ono što bulb treba. Ovdje su 1 i 9 jednako dobri
+   startovi, a 5 ispada sam od sebe jer nema nijednog partnera.
+
+### Redoslijed izvođenja: whisper ide PRIJE tube i linije
+
+Pravilo iz v1.33.0 ("prva ide oznaka s najmanje slobode") ovdje traži mjesto odmah iza
+klona. Tuba traži susjeda veće vrijednosti - u prosjeku pola njih kvalificira; whisper
+traži razliku od barem 5, a **vrijednost 4 ima točno jednog mogućeg partnera (9), 5
+nijednog**. Niz je time: klon -> whisper -> tuba -> linija -> kavez.
+
+### `STRENGTH: 10` - pravilo iz v1.35.0 ovdje spašava tri minute
+
+Disjoint je pokazao da se `STRENGTH` regijske varijante mora mjeriti na kombinacijama.
+Whisper pokazuje da to vrijedi i za **oznakovne** varijante, i to oštrije:
+
+| STRENGTH | whisper sam  | +clone             | +thermo      |
+| -------- | ------------ | ------------------ | ------------ |
+| 12       | 10ms (16-28) | **10074ms (195s)** | 341ms (4.8s) |
+| **10**   | 17ms (19-28) | **31ms (155ms)**   | 210ms (2.5s) |
+| 8        | 7ms (20-28)  | 15ms (50ms)        | 21ms (102ms) |
+
+Dvije točke snage su razlika između 155ms i **195 sekundi** na istom paru. Solo ploča
+tu razliku ne vidi uopće (10ms prema 17ms) - da se `STRENGTH` kalibrirao samo na njoj,
+kao što se radilo do v1.34.x, whisper+clone bi bio isporučen kao par koji se generira
+tri minute.
+
+Uzeto 10 umjesto 8 jer daje bolji solo raspon (19-28 prema 20-28) uz rep koji ostaje u
+rangu zatečenog clone+thermo.
+
+### Boja: prva varijanta kojoj su dvije susjedne već zauzete
+
+Tuba je hladno plava (`--thermo`), palindrom hladno zelena (`--palindrome`). Whisper
+mora raditi u sva tri para (najviše dvije linijske varijante su aktivne odjednom), pa
+je uzet **topao** ton (`--whisper: #4d3f3c`) - razlikuje se od obiju po temperaturi, ne
+po tonu koji bi se s njima natjecao. Svjetlina je namjerno ista (luma ~66 prema 65 i 71) da nijedna linija ne dominira pločom.
+
+### Provjere
+
+- **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) identične do na novo
+  prazno `whispers: null` polje u `clues` - isti obrazac kao Palindrome/Clone/Killer.
+- **Generator**: na svakoj ploči provjereno da susjedi na liniji stvarno razlikuju za
+  > = 5 u rješenju, da 5 nije nigdje na liniji, da je svaki korak potez kralja i da se
+  > linije ne preklapaju (sve kombinacije, obje težine).
+- **Hint**: **nula krivih prijedloga**. Riješeno samim hintovima (Hard): +clone 10/10,
+  +killer 9/10, whisper sam 8/10, +x 8/10, +disjoint 8/10, +thermo 6/10; Normal 10/10.
+- **`KEEP_MIN` = 4**: izmjereno 4-8 linija po ploči u svim kombinacijama, nijedna
+  ispod dna (isti razlog kao `THERMO_KEEP_MIN` - usamljena linija se čita kao greška).
+- **Render NIJE vizualno provjeren** - browser pane je i u ovoj sesiji bio polovičan
+  (screenshot timeouta, JS izvršavanje blokirano). Potvrđeno je samo da se Whisper Hard
+  partija generira i iscrtava **bez ijedne greške u konzoli**, kroz stvarne klikove u
+  meniju. To je slabija provjera nego kod Clonea, i to **svjesno preko granice koju
+  Clone sekcija postavlja** ("za sve što prelazi granicu ćelije - nije podnošljiv
+  rizik"): whisper linija crta segmente preko granica ćelija.
+  Razlog zašto je svejedno shipano: mašinerija je **naslijeđena bez izmjene** -
+  `.line-seg`/`.line-joint`/`.line-clip` su isti kôd koji Thermo i Palindrome već
+  koriste, a jedina nova stvar je CSS varijabla boje i jedan unos u `lines` polju.
+  Palindrome je istu mašineriju naslijedio i prošao iz prve. **Prvo što treba
+  pogledati ako nešto ne valja je boja** (`--whisper`), jer je ona jedini dio koji
+  nije naslijeđen ni izmjeren.
+
+### Nađen bug u mjernim harnessima (i ispravljene tvrdnje iz v1.35.0)
+
+Pri prvoj provjeri generatora ispalo je **0 linija na svakoj ploči**, iako je derive
+očito radio. Uzrok nije bio u kodu nego u harnessu: oznake se vraćaju u `r.clues`, a
+harness ih je čitao s vrha rezultata (`r.whispers`).
+
+Isti previd bio je i u druga dva harnessa iz v1.35.0, s dvije različite posljedice:
+
+- **Regresijski**: sva `clues` polja su bila `undefined`, pa je "bajt-identično"
+  zapravo uspoređivalo samo `puzzle`/`solution`/`techniques`. Ponovljeno s ispravljenim
+  harnessom - **tvrdnja stoji**, ali do sada nije bila dokazana.
+- **Hint**: solver je pri svakom pozivu dobivao prazan `clues`, dakle rješavao ploču
+  BEZ oznaka. Odatle stope 0-2/10, koje su pogrešno pripisane harnessu koji "ne
+  primjenjuje eliminacijske korake". Ispravljeno: 6-10/10 svugdje, uključujući zatečene
+  kombinacije (killer sam 0/10 -> 6/10, clone sam 0/10 -> 10/10).
+
+**Zašto to nije proizvelo lažno "sve u redu":** obje tvrdnje koje su preživjele
+(bajt-identičnost, nula krivih prijedloga) provjeravaju se protiv rješenja, pa ih
+slabiji ulaz čini strožima ili rjeđima, nikad lažno pozitivnima. Pouka je svejedno da
+harness mora **puknuti kad ne nađe što traži** umjesto da tiho radi s `undefined` -
+zato oba sada bacaju iznimku ako `r.clues` nema.
 
 ## Poznato / tehnički dug
 

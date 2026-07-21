@@ -31,6 +31,12 @@
      isti ton svjetline, drugi ton boje - da se u kombinaciji Thermo+Palindrome na
      prvi pogled vidi koja je linija koja. */
   --palindrome: #3c4d42;
+  /* German Whispers je treća linijska varijanta, pa boja mora raditi u SVA TRI para
+     (najviše dvije su aktivne odjednom): uz tubu, uz palindrom, i sama. Tuba je
+     hladno plava a palindrom hladno zelena - whisper je zato jedina TOPLA, što ga
+     razlikuje od obiju bez oslanjanja na ton koji bi se s njima natjecao. Ista
+     svjetlina kao ostale dvije (luma ~66 prema 65 i 71) da nijedna ne dominira. */
+  --whisper: #4d3f3c;
   /* Clone: boja veže par regija, pa ih mora biti onoliko koliko ima parova (4) i
      moraju se razlikovati na prvi pogled - zato tonovi, a ne nijanse istog tona.
      Translucentne su da odabir i peer-highlight ostanu vidljivi ispod, i namjerno
@@ -443,9 +449,9 @@ main {
   font-size: clamp(5px, 2.1cqmin, 10px);
 }
 
-/* Linijske varijante (Thermo tuba, Palindrome linija) dijele cijelu mašineriju -
-   razlikuju se samo bojom (klasa .thermo / .pal na svakom komadu) i kuglicom, koju
-   ima samo Thermo. Ista razina kao parity ::before (z-index -1: iznad boje/highlighta
+/* Linijske varijante (Thermo tuba, Palindrome i Whisper linija) dijele cijelu
+   mašineriju - razlikuju se samo bojom (klasa .thermo / .pal / .whisper na svakom
+   komadu) i kuglicom, koju ima samo Thermo. Ista razina kao parity ::before (z-index -1: iznad boje/highlighta
    ćelije, ispod znamenke), ali u spanovima - ::before/::after su zauzeti, a linija
    ionako treba dva segmenta po ćeliji (na skretanju).
 
@@ -466,6 +472,11 @@ main {
 .cell .line-joint.pal,
 .cell .line-clip.pal > span {
   background: var(--palindrome);
+}
+.cell .line-seg.whisper,
+.cell .line-joint.whisper,
+.cell .line-clip.whisper > span {
+  background: var(--whisper);
 }
 .cell .line-seg {
   position: absolute;

@@ -85,8 +85,11 @@ ne po privlačnosti.
 
 **Jeftino - derive + postojeći `.line-*` render:**
 
-- **German Whispers** - susjedne ćelije na liniji razlikuju se za barem 5. Derive je
-  šetnja kao `deriveThermos`, samo drugi uvjet koraka; najbliže copy-pasteu jezgre.
+- ~~**German Whispers**~~ - **isporučen u v1.36.0**, drugi s ove liste. Procjena
+  ("šetnja kao `deriveThermos`, najbliže copy-pasteu jezgre") se obistinila za derive i
+  render, ali je promašila jednu stvar: logika NIJE Thermo nego Kropki - dopušteni skup
+  je unija dva repa pa `whisperRange` ne postoji. Mjerenje je potvrdilo pravilo iz
+  v1.35.0 i proširilo ga s regijskih na oznakovne varijante. Detalji u [todo.md](todo.md).
 - **Renban** - linija nosi uzastopan skup znamenki u bilo kojem redoslijedu. Derive:
   šetnja pa provjera je li skup uzastopan (ili gradnja rastućeg pa premetanje puta).
 - **Zipper line** - parovi simetrični oko sredine daju isti zbroj. Derive raste iz
