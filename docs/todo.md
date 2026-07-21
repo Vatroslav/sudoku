@@ -1389,10 +1389,37 @@ puno/prazno nosi značenje. Time se Arrow razlikuje od Therma i bez oslanjanja n
   eliminacijski koraci koje harness ne primjenjuje.
 - **Boje**: min deltaE 21.8 na svih 15 parova, čitano sa žive stranice.
 - **Legenda**: test proširen na Arrow i prolazi.
-- **Render NIJE vizualno provjeren** - prsten je nova CSS klasa, dakle prvi put otkako
-  je pouka o naslijeđenom renderu zapisana da se crta **nešto novo**. Rizik je ovdje
-  stvarniji nego kod Renbana i Zippera. Prvo pogledati stoji li prsten centrirano i
-  ostaje li znamenka u njemu čitljiva.
+- **Render**: pri izradi nije bio vizualno provjeren, i to je bio prvi put otkako je
+  pouka o naslijeđenom renderu zapisana da se crta **nešto novo** (prsten je nova CSS
+  klasa, ne naslijeđeni `.line-*`). **Vatra odigrao Arrow + Even/Odd i potvrdio da je
+  dobro** - prsten stoji i znamenka u njemu ostaje čitljiva. Time je i preračun boja na
+  šest (v1.40.0) potvrđen u praksi.
+
+## Abecedni redoslijed menija (v1.40.1)
+
+Vatra je javio da varijante nisu složene abecedno. Provjera je pokazala da uzrok nije
+Arrow nego **Killer, koji je od svog dodavanja (v1.34.0) stajao na 3. mjestu** umjesto
+na jedanaestom. U commitu koji ga je dodao nema traga da je to bila namjera.
+
+Moja greška je bila druge vrste: vidio sam Killera izvan reda, **pretpostavio da je
+namjerno istaknut** i onda Arrow složio "abecedno među ostalima" - dakle iza njega.
+Time je jedna zatečena anomalija postala dvije. Trebalo je provjeriti git povijest
+prije nego što se odstupanje proglasi odlukom.
+
+Popravak je premještanje Killera na abecedno mjesto (između Jigsaw i Kropki). Uz to je
+napisan **test koji redoslijed štiti**, jer se dosad oslanjao na to da netko primijeti:
+
+- meni mora biti složen abecedno po imenu koje igrač vidi (`variant-name`), ne po id-u -
+  id-evi se razlikuju od imena na tri mjesta (`x` → Diagonal, `evenodd` → Even/Odd,
+  `whisper` → German Whispers),
+- svaki redak menija mora postojati u `REGION_VARIANTS`,
+- svaka varijanta iz koda mora imati redak u meniju.
+
+Zadnje dvije provjere su usput ispravile i **krivo brojanje u dosadašnjim porukama**:
+varijanti ima **17**, ne 19 kako je tvrđeno nakon Arrowa. Nijedna nije nedostajala ni
+visjela - brojka je jednostavno bila krivo zbrojena.
+
+## Poznato / tehnički dug
 
 ## Poznato / tehnički dug
 
