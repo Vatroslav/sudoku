@@ -12,6 +12,7 @@
     "x",
     "hyper",
     "jigsaw",
+    "disjoint",
     "evenodd",
     "kropki",
     "xv",
@@ -26,6 +27,7 @@
     x: "Diagonal",
     hyper: "Hyper",
     jigsaw: "Jigsaw",
+    disjoint: "Disjoint Groups",
     evenodd: "Even/Odd",
     kropki: "Kropki",
     xv: "XV",
@@ -136,6 +138,13 @@
     const wc = c >= 1 && c <= 3 ? 0 : c >= 5 && c <= 7 ? 1 : -1;
     return wr === -1 || wc === -1 ? -1 : wr * 2 + wc;
   }
+
+  // Disjoint Groups: pozicija ćelije unutar svoje kutije (0-8). Ćelije s istom
+  // pozicijom čine jedinicu. Kao antiknight/antiking, varijanta NEMA trajnu
+  // dekoraciju na ploči - vidi se kroz peer-highlight (grupa je pravilna rešetka
+  // koraka 3, pa se odabirom ćelije odmah pročita). Devet trajnih tinti bi se
+  // sudaralo s hyper prozorima, Clone tonovima i korisničkim bojanjem.
+  const disjointPos = (idx) => (Math.floor(idx / 9) % 3) * 3 + ((idx % 9) % 3);
 
   // Antiknight: ćelije na potezu šahovskog konja (za peer-highlight i čišćenje
   // bilješki). Nema trajne dekoracije ploče - ograničenje se vidi kroz highlight.
@@ -764,6 +773,10 @@
       const w = hyperWindowOf(idx);
       if (w !== -1) for (const t of hyperWindows[w]) targets.add(t);
     }
+    if (state.variants.includes("disjoint")) {
+      const p = disjointPos(idx);
+      for (let t = 0; t < 81; t++) if (disjointPos(t) === p) targets.add(t);
+    }
     if (state.variants.includes("antiknight")) {
       for (const t of knightPeers[idx]) targets.add(t);
     }
@@ -1112,6 +1125,7 @@
     const hyperMode = state.variants.includes("hyper");
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
+    const disjointMode = state.variants.includes("disjoint");
     // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
     const { regions, parity, edges, thermos, palindromes, clones, cages } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
@@ -1275,6 +1289,7 @@
           const sw = hyperWindowOf(sel);
           if (sw !== -1 && sw === hyperWindowOf(i)) isPeer = true;
         }
+        if (disjointMode && disjointPos(sel) === disjointPos(i)) isPeer = true;
         if (antiknightMode && knightPeers[sel].includes(i)) isPeer = true;
         if (antikingMode && kingPeers[sel].includes(i)) isPeer = true;
         if (isPeer) cell.classList.add("peer");
@@ -1495,6 +1510,13 @@
   // varijanta je u skupu. Najviše 2 odjednom: kombinacija 3+ digne generaciju
   // (i na Normal) do neupotrebljivosti. Cap je UI - jezgra podržava bilo koliko.
   const MAX_VARIANTS = 2;
+  // Parovi koji se ne mogu kombinirati. Jigsaw ZAMJENJUJE kutije nepravilnim
+  // regijama, a Disjoint Groups je definiran kao "ista pozicija UNUTAR kutije" -
+  // bez kutija pozicija ne postoji. Jezgra bi svejedno vrtjela (disjoint gleda
+  // statične pozicije), ali ploča bi nosila dvije geometrije koje se ne poklapaju
+  // i pravilo se ne bi dalo pročitati. Cap je UI, kao MAX_VARIANTS.
+  const INCOMPATIBLE = { jigsaw: ["disjoint"], disjoint: ["jigsaw"] };
+  const blockedBy = (v) => menuVariants.some((m) => (INCOMPATIBLE[m] || []).includes(v));
   function syncVariantButtons() {
     const full = menuVariants.length >= MAX_VARIANTS;
     document.querySelectorAll(".variant-row").forEach((b) => {
@@ -1502,7 +1524,8 @@
       b.classList.toggle("active", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
       // Kad su dvije aktivne, onemogući dodavanje treće (zatamni neaktivne retke).
-      b.disabled = full && !on;
+      // Isto i za varijantu nespojivu s već odabranom.
+      b.disabled = !on && (full || blockedBy(b.dataset.variant));
     });
     // Napomena o sporijoj Hard generaciji - relevantna tek uz aktivnu varijantu,
     // crvena kad je odabrano više od jedne (tad generacija naglo poraste).
@@ -1520,7 +1543,14 @@
     const count = Math.min(Math.random() < 0.5 ? 1 : 2, MAX_VARIANTS);
     const picked = [];
     for (let k = 0; k < count && pool.length; k++) {
-      picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      const v = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      picked.push(v);
+      // Izbaci iz poola sve što se s odabranim ne slaže (vidi INCOMPATIBLE) -
+      // inače random zna ponuditi kombinaciju koju meni ne dopušta ručno složiti.
+      for (const bad of INCOMPATIBLE[v] || []) {
+        const at = pool.indexOf(bad);
+        if (at !== -1) pool.splice(at, 1);
+      }
     }
     return normVariants(picked);
   }
@@ -1560,7 +1590,7 @@
         const v = btn.dataset.variant;
         if (menuVariants.includes(v)) {
           menuVariants = menuVariants.filter((k) => k !== v);
-        } else if (menuVariants.length < MAX_VARIANTS) {
+        } else if (menuVariants.length < MAX_VARIANTS && !blockedBy(v)) {
           menuVariants = normVariants([...menuVariants, v]);
         }
         syncVariantButtons();

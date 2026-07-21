@@ -52,6 +52,15 @@ const Solver = (() => {
     "bottom-right window",
   ];
 
+  // Disjoint Groups: ćelije na ISTOJ poziciji unutar svoje kutije čine jedinicu
+  // (svih 9 gornjih-lijevih uglova nose 1-9, itd.) - 9 dodatnih units. Pozicija je
+  // (redak u kutiji, stupac u kutiji), pa su grupe raspoređene kao pravilna rešetka
+  // koraka 3. Statične su kao hyper prozori; jedina varijanta koja NE vrijedi uz
+  // jigsaw (nepravilna regija nema "poziciju u kutiji") - vidi INCOMPATIBLE u app.js.
+  const disjointPos = (idx) => (Math.floor(idx / 9) % 3) * 3 + ((idx % 9) % 3);
+  const disjointGroups = Array.from({ length: 9 }, () => []);
+  for (let i = 0; i < 81; i++) disjointGroups[disjointPos(i)].push(i);
+
   // Antiknight: isti broj zabranjen na potezu šahovskog konja - dodatni peers
   // (nije unit; ne dodaje regiju gdje svih 9 brojeva ide jednom).
   const knightPeers = [];
@@ -108,13 +117,14 @@ const Solver = (() => {
   // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
   // Antiknight nema svoje units (samo peers), pa mu je unos prazan. Jigsaw ZAMJENJUJE
   // box-units regijama (kroz ctxFor), pa mu je EXTRA_UNITS unos isto prazan.
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw"];
+  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "disjoint"];
   const EXTRA_UNITS = {
     antiking: [],
     antiknight: [],
     x: [diagMain, diagAnti],
     hyper: hyperWindows,
     jigsaw: [],
+    disjoint: disjointGroups,
   };
   // Dodatni peers po varijanti (idx -> polje "isti-broj-zabranjen" ćelija).
   const EXTRA_PEERS = { antiknight: knightPeers, antiking: kingPeers };
@@ -737,6 +747,8 @@ const Solver = (() => {
     ],
     hyper: hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] })),
     jigsaw: [],
+    // Naziv je pozicija u kutiji, ista imena kao kutije ("top-left cells").
+    disjoint: disjointGroups.map((cells, p) => ({ cells, name: `${BOX_NAMES[p]} cells` })),
   };
   const namedCtx = {};
   function namedFor(variants, regions) {

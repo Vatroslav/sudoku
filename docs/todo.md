@@ -74,6 +74,10 @@ Regijske (samo prošire units/peers - najjeftinije):
 - [x] Antiking (isti broj zabranjen na dijagonalnom susjedu - dodatni peers, v1.19.0).
       Isti `EXTRA_PEERS` mehanizam kao Antiknight, samo drugi offseti (4 dijagonalna
       susjeda; ortogonalni potezi kralja su suvišni - već ih hvata red/stupac).
+- [x] Disjoint Groups (ista pozicija u kutiji kroz svih 9 kutija = jedinica, v1.35.0).
+      Prva varijanta izvan originalne wish-liste (ona je iscrpljena u v1.34.x) i
+      **najjeftinija dosad**: 9 statičnih units u `EXTRA_UNITS`, jedna grana u
+      `isValid`, nula per-puzzle podataka i nula novog rendera. Vidi sekciju niže.
 - [x] Jigsaw (9 nepravilnih regija umjesto kvadrata, v1.20.0). Prva varijanta koja
       ZAMJENJUJE box-units (ne dodaje ih) i nosi per-puzzle geometriju (`state.regions`,
       81-polje id-eva 0-8). `sudoku.js` `generateRegions()` perturbira klasične kvadrate
@@ -741,6 +745,96 @@ su čista dekoracija - garantira se da se varijanta **vidi**, ne da radi. Necess
 varijanti tražila bi `countSolutions` po svakoj varijanti u svakom pokušaju i odbacivala
 većinu ploča; vidljivost je ono što je igraču nedostajalo. Ako se ikad pokaže da
 dekorativne oznake smetaju - to je sljedeći korak, ne ovaj.
+
+## Disjoint Groups (v1.35.0)
+
+Ćelije na istoj poziciji unutar svoje kutije (svih 9 gornjih-lijevih uglova, svih 9
+sredina...) čine jedinicu - 9 dodatnih units. Prva varijanta odabrana izvan originalne
+wish-liste; kandidati su popisani u [dorada-varijante.md](dorada-varijante.md).
+
+**Najjeftiniji dodatak dosad, i to u svakoj dimenziji.** Clone je držao rekord po
+retku koda u jezgri (naslijedio je `mate` polje od Palindromea); Disjoint je ispod
+toga jer ne nosi **nikakav** per-puzzle podatak: geometrija je statična kao hyper
+prozori, pa nema `derive*`, nema polja u `clues`, nema `KEEP_MIN`, nema prunea, nema
+migracije spremljenih partija. Cijela varijanta je 9 units u `EXTRA_UNITS` + jedna
+grana u `isValid` + jedan redak u peer-highlightu.
+
+Izmjereno (Hard, 20-25 ploča): **prosjek 9ms, max 35ms** sam - najbrža varijanta u
+repou (Palindrome 8ms je bio prethodni, ali uz 26ms max). Kombinacije 15-322ms
+prosjek, najgori rep 2.1s (disjoint+killer). Normal je 3ms.
+
+### `STRENGTH: 8` je odabran zbog KOMBINACIJA, ne zbog solo ploče
+
+Prvo mjerenje je reklo da je dno prenisko: sa `STRENGTH: 8` (dno 20) ploče doista
+staju na 20 zadanih, a sa 14 idu do 18 i sa 20 do 17. Po dosadašnjem pravilu ("izmjereni
+minimum oduzet od 28") ispalo bi ~11, a po Killerovom argumentu ("ploče s malo zadanih
+su ono što varijantu čini varijantom") i više.
+
+**Oba bi bila kriva, jer solo mjerenje ovdje ne vidi cijenu.** Dno se zbraja po
+kombinaciji (`floorFor`), pa svaka točka `STRENGTH`-a gura i svaku kombinaciju dublje:
+
+| STRENGTH | disjoint sam    | +thermo          | +clone           |
+| -------- | --------------- | ---------------- | ---------------- |
+| 14       | 49ms (18-28)    | **4360ms (63s)** | -                |
+| 10       | 43ms (19-27)    | 815ms (5.9s)     | **3419ms (36s)** |
+| **8**    | **9ms (20-28)** | 322ms (5.9s)     | 241ms (1.6s)     |
+
+Zatečeno najgore je clone+thermo (izmjereno 1511ms avg / 14.3s max na istom harnessu),
+pa je 63s bilo daleko izvan svega prihvaćenog. Sa 8 su sve kombinacije u sekundi-dvije,
+a solo raspon (20-28) je isti kao hyperov - što je i očekivano, obje su unit-varijante
+sličnog obuhvata.
+
+**Pouka za iduću regijsku varijantu: STRENGTH mjeriti na KOMBINACIJAMA, ne na solo
+ploči.** Kod oznakovnih varijanti solo mjerenje je bilo dovoljno jer one nose vlastite
+oznake; regijska varijanta nema što donijeti kombinaciji osim dubljeg dna.
+
+Usput opovrgnuta hipoteza: pretpostavio sam da disjoint+clone koči zato što klon par
+nosi ISTU vrijednost, a disjoint istu vrijednost zabranjuje na istoj poziciji u kutiji
+(pa se prostor parova sužava). Palindrome ima točno isti odnos jednakosti i mjeri
+**11ms** - hipoteza pala, uzrok je bio isključivo predubok `dig`.
+
+### Bez trajne dekoracije, kao Antiknight
+
+Prva namjera je bila obojati 9 grupa tintama, po uzoru na Hyper prozore. Odbačeno kad
+se pogledalo s čim bi dijelile ploču: 4 hyper prozora, 4 Clone tona, 9 korisničkih boja
+za bojanje ćelija i parity oznake. Devet trajnih tinti ne bi se dalo razlikovati ni od
+čega od toga.
+
+Presedan je **Antiknight/Antiking** (v1.16.0/v1.19.0): varijanta koja mijenja PRAVILO,
+a ne nosi oznaku, vidi se kroz peer-highlight. Kod disjointa je čitljivija nego kod
+njih - grupa je pravilna rešetka koraka 3, pa odabir ćelije odmah pokaže uzorak.
+`markCount` ga zato ne broji (vraća null, kao ostale regijske) i `KEEP_MIN` ga se ne
+tiče - nema oznake koja bi mogla nestati.
+
+### Jedina nespojiva kombinacija u repou: Jigsaw
+
+Jigsaw ZAMJENJUJE kutije nepravilnim regijama, a disjoint je definiran kao "ista
+pozicija UNUTAR kutije" - bez kutija pozicija ne postoji. Jezgra bi svejedno vrtjela
+(disjoint gleda statične pozicije bez obzira na regije), ali ploča bi nosila dvije
+geometrije koje se ne poklapaju.
+
+`INCOMPATIBLE` u `app.js` je zato prvi takav par: zatamni nespojiv redak u meniju, a
+`randomVariants` izbacuje nespojive iz poola pri izboru (inače random ponudi ono što
+meni ne da ručno složiti). Cap je UI, kao `MAX_VARIANTS` - jezgra i dalje podržava
+bilo koju kombinaciju.
+
+### Provjere
+
+- **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) **bajt-identično**
+  prije i poslije. Nema ni novog praznog polja u `clues` - za razliku od svih
+  derivacijskih varijanti, koje su ga svaka dodale (`palindromes: null`, `clones: null`,
+  `cages: null`).
+- **Hint**: **nula krivih prijedloga** u svim mjerenim kombinacijama (Hard i Normal).
+  Riješeno samim hintovima: disjoint Normal 10/10, Hard 7/10, +x 10/10 - iznad
+  zatečenog prosjeka na istom harnessu (killer sam 0/10, clone sam 0/10, kropki+xv
+  0/10; zastoji su eliminacijski koraci koje harness ne primjenjuje).
+- **UI logika**: browser pane u ovoj sesiji nije registrirao klikove na meni overlay
+  (screenshotovi timeoutali) - isto kao u Clone sesiji. Nespojivost i `randomVariants`
+  su zato provjereni Node testom koji logiku EKSTRAHIRA iz `app.js` regexom umjesto da
+  je prepisuje (promašen regex ruši test, ne propušta ga): 8 slučajeva tablice istinitosti
+  - 20000 poziva randoma bez ijedne nevaljane kombinacije. Render nije provjeren okom, ali
+    ni ne postoji - varijanta ne uvodi nijednu novu CSS klasu (vidi pouku iz Clone sekcije:
+    rizik je podnošljiv kad se ništa ne crta preko granice ćelije).
 
 ## Poznato / tehnički dug
 

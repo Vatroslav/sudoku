@@ -75,10 +75,13 @@ ne po privlačnosti.
 
 **Skoro besplatno - regijske, samo units:**
 
-- **Disjoint Groups** - ista pozicija unutar svakog bloka čini deveti unit (9 dodatnih
-  units). Mehanički identično Hyperu, nula novog rendera osim eventualne blage tinte.
-  Najjeftinije što se može dodati, ali i najmanje vidljivo - igraču ploča izgleda kao
-  klasik, pa pada u istu zamku koju rješava v1.34.1 ("varijanta se mora vidjeti").
+- ~~**Disjoint Groups**~~ - **isporučen u v1.35.0**, prvi s ove liste. Procjena troška
+  se obistinila (9 units, nula rendera, najjeftiniji dodatak dosad), a bojazan oko
+  vidljivosti je razriješena drukčije nego što je ovdje predviđeno: tinta je odbačena
+  jer bi se sudarala s hyper prozorima i Clone tonovima, a varijanta se oslonila na
+  peer-highlight po presedanu Antiknighta. Mjerenje je usput dalo pravilo koje ova
+  lista nije predviđala - **`STRENGTH` regijske varijante mjeri se na kombinacijama,
+  ne na solo ploči**. Detalji u [todo.md](todo.md).
 
 **Jeftino - derive + postojeći `.line-*` render:**
 

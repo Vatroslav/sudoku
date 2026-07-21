@@ -29,6 +29,13 @@ const Sudoku = (() => {
     return wr === -1 || wc === -1 ? -1 : wr * 2 + wc;
   }
 
+  // Disjoint Groups: ćelije na istoj poziciji unutar kutije čine jedinicu (9 grupa
+  // po 9 ćelija). Mora se poklapati sa solver.js disjointGroups - generator i solver
+  // dijele definiciju, kao kod hyper prozora.
+  const disjointPos = (idx) => (Math.floor(idx / 9) % 3) * 3 + ((idx % 9) % 3);
+  const disjointGroups = Array.from({ length: 9 }, () => []);
+  for (let i = 0; i < 81; i++) disjointGroups[disjointPos(i)].push(i);
+
   // Antiknight: isti broj zabranjen na potezu šahovskog konja (8 L-skokova).
   // Predizračunato po ćeliji - koristi se u vrućoj petlji generatora.
   const KNIGHT_OFFSETS = [
@@ -235,6 +242,7 @@ const Sudoku = (() => {
     "x",
     "hyper",
     "jigsaw",
+    "disjoint",
     "evenodd",
     "kropki",
     "xv",
@@ -395,6 +403,9 @@ const Sudoku = (() => {
     if (variants.includes("hyper")) {
       const w = hyperWindowOf(idx);
       if (w !== -1) for (const j of hyperWindows[w]) if (board[j] === val) return false;
+    }
+    if (variants.includes("disjoint")) {
+      for (const j of disjointGroups[disjointPos(idx)]) if (board[j] === val) return false;
     }
     if (variants.includes("antiknight")) {
       for (const j of knightPeers[idx]) if (board[j] === val) return false;
@@ -906,6 +917,13 @@ const Sudoku = (() => {
     palindrome: 10,
     clone: 10,
     hyper: 8,
+    // Disjoint dijeli snagu s hyperom (obje su unit-varijante sličnog obuhvata) i to
+    // je mjereno, ne pretpostavljeno. Zid je NIŽI - sa 14 ploče idu do 18 zadanih, sa
+    // 20 do 17 - ali dublje dno plaćaju KOMBINACIJE, ne solo ploča: sa 14 je
+    // disjoint+thermo skočio na max 63s, a disjoint+clone sa 10 na 36s (zatečeno
+    // najgore je clone+thermo, 14s). Sa 8 su oba u sekundi-dvije, uz solo raspon
+    // 20-28 - isti kao hyper. Dobitak od 2 zadana ne vrijedi 30× sporije kombinacije.
+    disjoint: 8,
     antiknight: 6,
     jigsaw: 6,
     x: 2,
@@ -1152,7 +1170,8 @@ const Sudoku = (() => {
   // točan tier, vraća najbliži pronađeni (uvijek nešto rješivo logikom).
   // variants: polje (ili legacy string) aktivnih regijskih varijanti - prazno =
   // classic, "jigsaw" (9 nepravilnih regija umjesto kvadrata), "x" (dvije
-  // dijagonale 1-9), "hyper" (4 prozora 1-9), "antiknight" (isti broj zabranjen
+  // dijagonale 1-9), "hyper" (4 prozora 1-9), "disjoint" (ista pozicija u kutiji
+  // kroz svih 9 kutija = jedinica), "antiknight" (isti broj zabranjen
   // na skoku konja), "antiking" (isti broj zabranjen na dijagonalnom susjedu),
   // "evenodd" (djelić ćelija označen parno/neparno), "kropki" (točke na bridovima),
   // "xv" (slova X/V na bridovima), ili kombinacija. Rezultat nosi `regions` (81-polje
