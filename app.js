@@ -1236,18 +1236,44 @@
     outTopEl.textContent = "";
     outLeftEl.textContent = "";
     if (!on) return;
-    const fill = (host, values) => {
+    // Čita li se cijeli sendvič već iz ZADANIH brojeva? Tada oznaka igraču ne govori
+    // ništa - samo zbraja ono što ionako vidi - pa je šum. Presedan su Kropki/XV
+    // oznake između dvije zadane ćelije (v1.27.0), samo je ovdje odnos duži: nije
+    // dovoljno da su krajevi zadani, nego i sve između njih.
+    //
+    // Degenerirani slučaj koji je ovo i pokrenuo: zadani 1 i 9 JEDAN DO DRUGOG. Između
+    // njih nema ničega, pa je oznaka nužno 0 i ne nosi nijedan bit.
+    //
+    // Gleda se `puzzle` (zadani), NE `values` (zadani + igračevi upisi): oznaka koja
+    // nestaje kako igrač upisuje bila bi i dezorijentirajuća i opasna - igračev upis
+    // smije biti kriv, a zadani ne.
+    const readable = (cells) => {
+      let p1 = -1,
+        p9 = -1;
+      for (let k = 0; k < 9; k++) {
+        const v = state.puzzle[cells[k]];
+        if (v === 1) p1 = k;
+        else if (v === 9) p9 = k;
+      }
+      if (p1 < 0 || p9 < 0) return false;
+      for (let k = Math.min(p1, p9) + 1; k < Math.max(p1, p9); k++)
+        if (!state.puzzle[cells[k]]) return false;
+      return true;
+    };
+    const fill = (host, values, cellsAt) => {
       for (let k = 0; k < 9; k++) {
         const cell = document.createElement("span");
         cell.className = "out-cell";
         // -1 = linija bez oznake. Prazna ćelija, ne izostavljena: mjesto mora ostati
         // zauzeto da preostale oznake i dalje stoje uz svoj redak.
-        if (values[k] >= 0) cell.textContent = values[k];
+        if (values[k] >= 0 && !readable(cellsAt(k))) cell.textContent = values[k];
         host.appendChild(cell);
       }
     };
-    fill(outTopEl, sandwich.cols);
-    fill(outLeftEl, sandwich.rows);
+    const rowAt = (k) => Array.from({ length: 9 }, (_, j) => k * 9 + j);
+    const colAt = (k) => Array.from({ length: 9 }, (_, j) => j * 9 + k);
+    fill(outTopEl, sandwich.cols, colAt);
+    fill(outLeftEl, sandwich.rows, rowAt);
   }
 
   // --- Render ---

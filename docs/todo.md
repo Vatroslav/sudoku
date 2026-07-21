@@ -1598,8 +1598,41 @@ Nula se pritom **ne izostavlja iako izgleda kao "nema oznake"** - najjača je oz
 koju varijanta ima. Zato odsutnost nosi -1, a ne 0. Izmjereno: 118 od 546 prikazanih
 zbrojeva je nula (22%), prosjek 11.9, a i teoretski maksimum 35 se pojavi.
 
+### Suvišna oznaka: sendvič koji se čita iz zadanih (v1.42.1)
+
+Vatrina zamjerka nakon odigrane partije: zadani 1 i 9 stajali su jedan do drugog, a
+oznaka je pisala 0. **Točno, ali nepotrebno** - igrač to vidi s ploče.
+
+Presedan je Kropki/XV oznaka između DVIJE zadane ćelije (v1.27.0), koja se iz istog
+razloga skriva. Odnos je ovdje samo duži, pa uvjet mora biti: **nije dovoljno da su
+krajevi zadani, nego i sve između njih**. Tada je oznaka zbrajanje onoga što igrač
+ionako gleda.
+
+Vatrin slučaj je degenerirani primjer tog pravila (1 i 9 susjedi -> između njih nema
+ničega -> zbroj je nužno 0). Da je popravljen samo taj slučaj, promašila bi se većina:
+ploča na kojoj je popravak potvrđen imala je suvišnu oznaku **12**, ne nulu - redak u
+kojem su i krajevi i sve između bili zadani.
+
+**Zašto render, a ne prune.** `pruneMarks` bi ovakvu oznaku maknuo kao suvišnu, ali ne
+stigne: ide **samo na Hard** (v1.29.1) i staje na dnu vidljivosti. A problem je najgušći
+baš na Normalu - izmjereno **6.0% oznaka skriveno na Normalu prema 2.0% na Hardu** (i
+0.8% uz thermo), jer Normal ima 34 zadana broja pa je cijeli sendvič puno češće vidljiv.
+Popravak na generatorskoj strani promašio bi točno onu težinu na kojoj je prijavljen.
+
+**Gleda se `puzzle`, ne `values`.** Oznaka koja nestaje kako igrač upisuje bila bi
+dezorijentirajuća, a i opasna: igračev upis smije biti kriv, zadani ne.
+
+**Bojazan da skrivanje potkopa `KEEP_MIN` je izmjerena, ne pretpostavljena.**
+`markCount` broji oznake u podacima, pa skrivena oznaka teoretski može spustiti VIDLJIV
+broj ispod dna od 6. Na 160 ploča (60 Normal, 60 Hard, 40 Hard+thermo) to se **nije
+dogodilo nijednom** - najmanje vidljivih bilo je 6 na Hardu i 7 na Normalu. Zato je
+ostavljeno kako jest; da je pao ispod, morao bi `markCount` znati za ploču.
+
 ### Provjere
 
+- **Suvišne oznake (v1.42.1)**: na živoj ploči provjereno da je svaka oznaka čiji se
+  sendvič čita iz zadanih skrivena, i - jednako važno - da **nijedna korisna nije
+  skrivena slučajno** (0 promašaja).
 - **Regresija**: 44 ploče (22 kombinacije × 2 težine, zasijan RNG) identične do na novo
   prazno `sandwich: null` polje - nijedan redak uklonjen ni promijenjen. Novi `Math.random`
   poziv za dno prunea zove se SAMO kad oznaka postoji, inače bi pomaknuo RNG niz i
