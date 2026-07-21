@@ -38,6 +38,19 @@
     clone: "Clone",
     killer: "Killer",
   };
+  // Linijske varijante: sve tri crtaju istu geometriju i razlikuje ih samo boja (i
+  // kuglica, koju ima samo Thermo). Jedna tablica za OBA potrošača - render linija i
+  // legendu ispod ploče - da se ne mogu razići: ploča ne smije prikazati liniju koju
+  // legenda ne spominje, ni obrnuto.
+  //   kind   - klasa na .line-* komadima (nosi boju kroz CSS)
+  //   key    - polje u state.clues iz kojeg dolaze putovi
+  //   cssVar - ista varijabla iz koje boju čita i linija, pa je uzorak u legendi
+  //            uvijek točno ono što se vidi na ploči
+  const LINE_KINDS = [
+    { kind: "thermo", variant: "thermo", key: "thermos", cssVar: "--thermo" },
+    { kind: "pal", variant: "palindrome", key: "palindromes", cssVar: "--palindrome" },
+    { kind: "whisper", variant: "whisper", key: "whispers", cssVar: "--whisper" },
+  ];
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
     if (!Array.isArray(v)) return [];
@@ -311,6 +324,7 @@
   const paletteEl = document.getElementById("palette");
   const diffLabelEl = document.getElementById("difficulty-label");
   const techniqueHintEl = document.getElementById("technique-hint");
+  const lineLegendEl = document.getElementById("line-legend");
   const notesStateEl = document.getElementById("notes-state");
   const winOverlay = document.getElementById("win-overlay");
   const winStats = document.getElementById("win-stats");
@@ -1127,6 +1141,26 @@
     return t;
   }
 
+  // Legenda linijskih varijanti: uzorak boje + ime, jedan unos po vrsti linije koja
+  // je STVARNO na ploči. Boja uzorka se ne prepisuje nego uzima iz iste CSS varijable
+  // koju crta i linija (--thermo/--palindrome/--whisper), pa legenda ne može prikazati
+  // drugu boju od one na ploči.
+  function renderLineLegend(lines) {
+    if (!lineLegendEl) return;
+    lineLegendEl.classList.toggle("hidden", lines.length === 0);
+    lineLegendEl.textContent = "";
+    for (const l of lines) {
+      const entry = document.createElement("span");
+      entry.className = "entry";
+      const swatch = document.createElement("span");
+      swatch.className = "swatch";
+      swatch.style.setProperty("--sw", `var(${l.cssVar})`);
+      entry.appendChild(swatch);
+      entry.appendChild(document.createTextNode(VARIANT_LABELS[l.variant]));
+      lineLegendEl.appendChild(entry);
+    }
+  }
+
   // --- Render ---
   function render() {
     if (!state) return;
@@ -1136,8 +1170,10 @@
     const antiknightMode = state.variants.includes("antiknight");
     const antikingMode = state.variants.includes("antiking");
     const disjointMode = state.variants.includes("disjoint");
-    // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom.
-    const { regions, parity, edges, thermos, palindromes, clones, cages, whispers } = state.clues;
+    // Oznake se ovdje čitaju na dvadesetak mjesta - raspakiraj ih jednom. Putovi
+    // linijskih varijanti NISU ovdje: njih čita LINE_KINDS preko state.clues, da
+    // render i legenda ne mogu imati različit popis.
+    const { regions, parity, edges, clones, cages } = state.clues;
     const jigsawMode = state.variants.includes("jigsaw") && Array.isArray(regions);
     if (state.techniques && state.techniques.length) {
       techniqueHintEl.textContent = "Hardest: " + state.techniques.join(", ");
@@ -1156,11 +1192,13 @@
     // Linijske varijante (Thermo tube, Palindrome i Whisper linije) dijele cijelu
     // render mašineriju - razlikuju se samo bojom i kuglicom na dnu tube. Generator
     // ih ne pušta kroz istu ćeliju (vidi `blocked` u derive funkcijama).
-    const lines = [
-      { kind: "thermo", paths: thermos },
-      { kind: "pal", paths: palindromes },
-      { kind: "whisper", paths: whispers },
-    ].filter((l) => Array.isArray(l.paths) && l.paths.length);
+    const lines = LINE_KINDS.map((k) => ({ ...k, paths: state.clues[k.key] })).filter(
+      (l) => Array.isArray(l.paths) && l.paths.length
+    );
+    // Legenda čita ISTI `lines` (dakle ono što je stvarno na ploči), ne popis
+    // odabranih varijanti: prune zna pojesti oznake pa varijanta smije biti odabrana
+    // a da linija na ploči nema - takvu legenda ne spominje.
+    renderLineLegend(lines);
 
     // Indeks ćelija -> { path, pos } po vrsti linije. Linije su nepromjenjive tijekom
     // partije, ali render se zove na svaki potez - 81 unosa je jeftinije od pretrage

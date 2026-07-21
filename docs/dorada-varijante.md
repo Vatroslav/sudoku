@@ -95,10 +95,16 @@ ne po privlačnosti.
 - **Zipper line** - parovi simetrični oko sredine daju isti zbroj. Derive raste iz
   sredine u parovima, točno kao `derivePalindromes`.
 
-Sve tri dijele `.line-seg` / `.line-joint` / `.line-clip` mašineriju (dvaput dokazanu,
-Thermo pa Palindrome), izvode se iz gotovog rješenja pa generator ostaje netaknut, i
-trebaju samo novu boju + `KEEP_MIN` + `STRENGTH`. Vrijedi i pravilo redoslijeda izvođenja
-iz v1.33.0: prva ide oznaka s najmanje slobode.
+Obje dijele `.line-seg` / `.line-joint` / `.line-clip` mašineriju (triput dokazanu -
+Thermo, Palindrome, Whispers), izvode se iz gotovog rješenja pa generator ostaje
+netaknut, i trebaju samo novu boju + `KEEP_MIN` + `STRENGTH`. Vrijedi i pravilo
+redoslijeda izvođenja iz v1.33.0 (prva ide oznaka s najmanje slobode) te pravilo iz
+v1.35.0 (`STRENGTH` se mjeri na kombinacijama).
+
+**Pitanje razlikovanja linija je riješeno unaprijed** (legenda ispod ploče, v1.37.0):
+četvrta i peta linijska varijanta trebaju boju koja se razlikuje samo od druge u paru,
+ne od svih ostalih odjednom. Ako neki par ipak ispadne pretijesan, rezerva je oznaka na
+kraju linije - vidi odbačene opcije u [todo.md](todo.md).
 
 **Skuplje - novi render kanal:**
 

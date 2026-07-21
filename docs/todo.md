@@ -987,6 +987,70 @@ slabiji ulaz čini strožima ili rjeđima, nikad lažno pozitivnima. Pouka je sv
 harness mora **puknuti kad ne nađe što traži** umjesto da tiho radi s `undefined` -
 zato oba sada bacaju iznimku ako `r.clues` nema.
 
+## Legenda linijskih varijanti (v1.37.0)
+
+Traka ispod ploče koja mapira boju na ime linijske varijante. Nastala je iz pitanja
+koje se pojavilo pri planiranju četvrte linijske varijante (Renban/Zipper): tri linije
+(Thermo, Palindrome, Whispers) crtaju ISTU geometriju pa ih razlikuje samo boja, a
+paleta je uska - linija stoji ispod znamenke pa mora ostati tamna, i tu nema pet
+razlučivih tonova.
+
+**Problem je bio krivo postavljen, i to je glavni nalaz.** Prvo se činilo da treba pet
+međusobno razlučivih boja. Ali na ploči su najviše DVIJE linije (`MAX_VARIANTS`), i
+igrač ih je sam odabrao u meniju - pravo pitanje nije "razlikujem li pet boja" nego
+"koja od ove dvije traži rast, a koja razliku 5". Boja je to pokušavala nositi sama;
+legenda odgovara izravno.
+
+Posljedice te preformulacije:
+
+- **Render se ne dira uopće** - nula rizika onog tipa koji je Thermo koštao tri runde.
+- **Prag za boju pada.** Boje moraju biti različite unutar para, ali više ne moraju
+  biti pamtljive same za sebe - a to je bio dio koji se lomio na četvrtoj.
+- **Skalira na koliko god varijanti.** Renban i Zipper trebaju samo boju koja se
+  razlikuje od druge u paru, ne od svih ostalih odjednom.
+
+### `LINE_KINDS` je jedan izvor za render I legendu
+
+Legenda se NE gradi iz popisa odabranih varijanti nego iz istog `lines` polja kojim se
+crtaju linije. Razlog je konkretan: `pruneMarks` zna pojesti sve oznake jedne varijante
+(vidi v1.34.1), pa varijanta smije biti odabrana a da linija na ploči nema - takvu
+legenda ne smije spominjati. Uzorak boje uzima se iz **iste CSS varijable** koju crta i
+linija (`--thermo`/`--palindrome`/`--whisper`), pa ne može prikazati drugu boju od one
+na ploči.
+
+Traka je namjerno IZVAN `.board-wrap`: ploča je `container-type: size` i sve unutar nje
+skalira se prema njoj, pa bi legenda ili rasla s pločom ili joj krala prostor pri
+svakom renderu.
+
+### Odbačene opcije (i zašto)
+
+- **Debljina linije** - trivijalna (jedna varijabla), ali debljina već nosi drugo
+  značenje (koliko je linija istaknuta), a pet razina staje samo ako najtanja postane
+  jedva vidljiva.
+- **Oznaka na kraju linije** - jeftina i presedan postoji (`.thermo-bulb`), za
+  Palindrome čak semantična (kuglice na oba kraja doslovno crtaju simetriju). Ostavljena
+  kao REZERVA ako se konkretan par pokaže pretijesnim. Ne rješava cijeli skup: Whispers
+  i Zipper nemaju simbol koji se sam objašnjava.
+- **Isprekidana / točkasta linija** - najjača razlika za oko, ali render crta svaku
+  ćeliju kao zasebnu pilulu pa bi se uzorak resetirao u svakoj ćeliji i ne bi se
+  poravnao preko granica. To je nova render mašinerija - jedini takav slučaj dosad
+  (Thermo) tražio je tri runde popravaka.
+- **Boja po SLOTU umjesto po varijanti** (prva odabrana linija uvijek plava, druga uvijek
+  smeđa) - rješava skaliranje zauvijek s točno dvije boje. Odbačeno jer bi Thermo mijenjao
+  boju ovisno o tome s čim je uparen, a plava tuba je uhodana kroz šest verzija.
+
+### Provjere
+
+- **Vizualno**: potvrđeno da se traka pojavljuje i nosi točno ime na Whisper Hard
+  partiji (kroz stvarne klikove). Browser pane je zatim opet stao - dvije linije
+  odjednom i skrivanje na Classicu **nisu** vidljivo provjereni.
+- **Node test umjesto oka**: provjere koje bi inače tražile pogled, sve nad stvarnim
+  datotekama (promašen regex ruši test): svaka vrsta ima `cssVar` definiran u `:root`
+  (inače je uzorak proziran - greška nevidljiva u kodu), svaka ima `.line-seg.<kind>`
+  pravilo koje tu varijablu koristi, svaka ima ime, i render/legenda dokazano čitaju
+  isti popis. Zadnja provjera je zaštita za IDUĆU liniju: doda se Renban, zaboravi se
+  legenda - test pukne.
+
 ## Poznato / tehnički dug
 
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).

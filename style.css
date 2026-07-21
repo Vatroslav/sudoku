@@ -189,6 +189,40 @@ main {
   padding: 0 2px;
 }
 
+/* Legenda linijskih varijanti. Tri varijante (Thermo/Palindrome/Whispers) crtaju
+   ISTU geometriju pa ih razlikuje samo boja - a paleta je uska: linija stoji ispod
+   znamenke pa mora ostati tamna, i tu nema pet jasno razlučivih tonova. Legenda skida
+   s boje teret da bude pamtljiva sama za sebe: na ploči su najviše dvije linije i
+   dovoljno je da se međusobno razlikuju, a traka kaže koja je koja.
+
+   Namjerno je izvan .board-wrap (ne overlay): ploča je container-type: size i sve
+   unutar nje se skalira prema njoj, pa bi legenda ili rasla s pločom ili joj krala
+   prostor pri svakom renderu. Ovako zauzme svoju visinu jednom, i to samo kad je
+   linijska varijanta aktivna (inače .hidden). */
+.line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  padding: 6px 8px 0;
+  font-size: 11px;
+  color: var(--line-strong);
+}
+.line-legend .entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* Uzorak nosi boju iz iste varijable koju crta i linija na ploči - ako se boja
+   ikad promijeni, legenda je prati bez dodatne izmjene. Zaobljen je jednako kao
+   .line-seg, da se čita kao komad linije a ne kao kvadratić uz tekst. */
+.line-legend .swatch {
+  width: 18px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--sw);
+}
+
 /* Board */
 .board-wrap {
   position: relative;
