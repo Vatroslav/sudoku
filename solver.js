@@ -208,6 +208,11 @@ const Solver = (() => {
   const validZippers = (z) =>
     validThermos(z) && z.every((p) => p.length % 2 === 1 && p.length >= 3);
   const prepZippers = prepThermos;
+  // Arrow: put je [krug, ...rep] pa vrijedi ista geometrija i isti izvedeni oblik kao
+  // kod tube. Duljina je najmanje 3 (krug + dva člana repa - jedan član bi značio da
+  // krug preslikava susjeda, što nije slagalica).
+  const validArrows = (a) => validThermos(a) && a.every((p) => p.length >= 3);
+  const prepArrows = prepThermos;
   function prepRenbans(renbans) {
     const at = new Array(81).fill(null);
     for (const path of renbans) for (const i of path) at[i] = { cells: path };
@@ -331,6 +336,31 @@ const Solver = (() => {
     return partner ? [1, 9 - partner] : [1, 8];
   }
 
+  // Arrow: krug je zbroj repa. Mora se poklapati sa sudoku.js arrowRange.
+  function arrowRange(grid, path, pos) {
+    const C = grid[path[0]];
+    if (pos === 0) {
+      let sum = 0,
+        empty = 0;
+      for (let q = 1; q < path.length; q++) {
+        const b = grid[path[q]];
+        if (b) sum += b;
+        else empty++;
+      }
+      return [Math.max(1, sum + empty), Math.min(9, sum + 9 * empty)];
+    }
+    let other = 0,
+      empty = 0;
+    for (let q = 1; q < path.length; q++) {
+      if (q === pos) continue;
+      const b = grid[path[q]];
+      if (b) other += b;
+      else empty++;
+    }
+    if (C) return [Math.max(1, C - other - 9 * empty), Math.min(9, C - other - empty)];
+    return [1, Math.max(1, Math.min(9, 9 - other - empty))];
+  }
+
   function renbanRange(grid, cells) {
     let m = 10,
       M = 0;
@@ -431,6 +461,9 @@ const Solver = (() => {
   // repou ide odavde: kad su sredina i jedan član para poznati, partner je FIKSIRAN
   // (C - a), a ne samo sužen.
   let curZippers = null;
+  // Arrow: per-puzzle indeks ćelija -> { path, pos } ili null. Propagacija ide u OBA
+  // smjera - upis u rep steže krug, upis u krug steže rep - pa se prolazi cijeli put.
+  let curArrows = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -498,6 +531,13 @@ const Solver = (() => {
         const [lo, hi] = zipperRange(grid, path, pos);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
       }
+      // Arrow: krug se steže zbrojem repa, član repa onim što je krugu ostalo. Već na
+      // praznoj ploči rep od tri člana diže krug na barem 3 - vidi arrowRange.
+      if (curArrows && curArrows[idx]) {
+        const { path, pos } = curArrows[idx];
+        const [lo, hi] = arrowRange(grid, path, pos);
+        for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+      }
       // Renban: znamenke na liniji su različite (linija nije jedinica pa ju peers ne
       // pokrivaju), a raspon steže prozor od L uzastopnih - vidi renbanRange.
       if (curRenbans && curRenbans[idx]) {
@@ -558,6 +598,17 @@ const Solver = (() => {
         if (q < 0 || q >= path.length) continue;
         const j = path[q];
         if (cand[j]) for (const u of [...cand[j]]) if (!whisperOk(val, u)) cand[j].delete(u);
+      }
+    }
+    // Arrow: upis steže cijeli put u OBA smjera - član repa podiže donju granicu
+    // kruga, a upisan krug ograniči svaki član repa. Zato prolaz po cijelom putu.
+    if (curArrows && curArrows[idx]) {
+      const { path } = curArrows[idx];
+      for (let q = 0; q < path.length; q++) {
+        const j = path[q];
+        if (!cand[j]) continue;
+        const [lo, hi] = arrowRange(grid, path, q);
+        for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
       }
     }
     // Zipper: upis stegne CIJELU liniju, ne samo partnera - upisana sredina odmah
@@ -916,6 +967,7 @@ const Solver = (() => {
   //   whispers - German Whispers linije (polje putova); nevaljano se ignorira.
   //   renbans - Renban linije (polje putova); nevaljano se ignorira.
   //   zippers - Zipper linije (polje putova neparne duljine); nevaljano se ignorira.
+  //   arrows  - Arrow putovi [krug, ...rep]; nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
@@ -930,6 +982,7 @@ const Solver = (() => {
       whispers,
       renbans,
       zippers,
+      arrows,
     } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
@@ -945,6 +998,7 @@ const Solver = (() => {
     curWhispers = validWhispers(whispers) && whispers.length ? prepWhispers(whispers) : null;
     curRenbans = validRenbans(renbans) && renbans.length ? prepRenbans(renbans) : null;
     curZippers = validZippers(zippers) && zippers.length ? prepZippers(zippers) : null;
+    curArrows = validArrows(arrows) && arrows.length ? prepArrows(arrows) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);

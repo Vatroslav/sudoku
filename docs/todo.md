@@ -139,6 +139,9 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 - [x] Zipper (parovi simetrični oko sredine zbrajaju se u vrijednost sredine, v1.39.0).
       Četvrta s liste kandidata, peta i zasad zadnja linijska - njome je iscrpljena
       cijela "jeftina" skupina. Prvi odnos koji FIKSIRA vrijednost umjesto da ju sužava.
+- [x] Arrow (krug nosi zbroj znamenki na repu, v1.40.0). Peta s liste kandidata, šesta
+      linijska i prva iz skupine označene kao skuplja. Jedini derive s pretragom uz
+      vraćanje - vidi sekciju niže.
 - [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
       svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
@@ -1303,6 +1306,93 @@ Renbana, hint brojke kod Whispersa). Zajedničko im je da je **prva hipoteza bil
 uvjerljiva i kriva**, a mjerenje jeftino. Kod boja je posebno važno jer se "izgleda
 dobro" ne da provjeriti čitanjem koda - deltaE je jedini način da se tvrdnja o
 razlučivosti obrani brojkom.
+
+## Arrow (v1.40.0)
+
+Krug nosi znamenku koja je ZBROJ znamenki na repu koji iz njega izlazi. Peta s liste
+kandidata i **šesta linijska varijanta**. Prva iz skupine koja je na popisu bila
+označena kao skuplja od "jeftinih".
+
+Izmjereno (Hard, 60 ploča): **medijan 12ms, p90 48ms, max 106ms** sam; najgori par
+(arrow+thermo) medijan 31ms / p90 536ms / max 1.8s, **0/60 iznad 5s**. Normal 3ms.
+Strelica po ploči 4-9, rep 2-4 ćelije (prosjek 2.4), krug prosječno 6.9.
+
+### Prva varijanta kojoj šetnja nije dovoljna
+
+Sve dosadašnje linije rastu korak po korak uz LOKALNI uvjet - veći susjed (Thermo),
+razlika >= 5 (Whispers), min-1/max+1 (Renban), par oko sredine (Zipper). Zajedničko im
+je da svaki prefiks vrijedi sam za sebe, pa se šetnja može zaustaviti bilo kad i
+isporučiti ono što ima.
+
+Arrow to nema: uvjet vrijedi tek kad je rep **gotov**, jer zbroj mora pogoditi krug
+točno. Put građen pohlepno završi kao promašaj i mora se odbaciti cijel. Zato je
+`deriveArrows` jedini derive s **pretragom uz vraćanje** (DFS), a ne šetnjom.
+
+Pretraga je svejedno jeftina jer je prostor sitan: rep ide najviše do 4, grananje je
+8 susjeda, a rez ide čim parcijalni zbroj premaši krug.
+
+**Rep je nužno kratak** i to je posljedica pravila, ne izbora: zbroj mora stati u
+znamenku, a četiri RAZLIČITE ćelije nose barem 1+2+3+4 = 10. Duži repovi postoje samo
+kad se vrijednosti ponavljaju, što je dopušteno jer rep nije jedinica - ali susjedi na
+putu se uvijek vide, pa se ponavljanje može dogoditi tek preko jedne ćelije. Izmjereno:
+prosječan rep 2.4 ćelije.
+
+Prosječan krug ispadne **6.9**, znatno iznad sredine skale, iz istog razloga iz kojeg
+Zipper ima visoku sredinu - veći zbroj ima više repova koji ga mogu složiti.
+
+### `STRENGTH: 10` prošlo iz prve, drugi put zaredom
+
+Kao Zipper, i iz istog razloga: odnos je jak u OBA smjera. Rep diže donju granicu kruga
+i prije ijednog upisa (tri člana znače krug >= 3), a upisan krug ograniči svaki član
+repa. Ploče zato ostaju rješive s malo zadanih i `dig` ne kopa u prazno. Renban i
+Whispers, koji stežu slabije, morali su na 8 odnosno 10 nakon što su repovi eksplodirali.
+
+### Boja: šesta je zahtijevala novi krug računa
+
+Prag od 20 (kalibriran igranjem u v1.39.1) nije se dao zadržati dodavanjem šeste u
+zatečeni raspored - ubacivanje u najveći preostali razmak dalo bi **~11**, dakle gore
+od onoga što je prijavljeno kao nerazlučivo. Ni 6 × 60° pri dotadašnjoj kromi ne bi
+prošlo (17.7).
+
+Rješenje je veća kroma (18 → 22) uz malo višu L\* (30 → 32): **najgori par 21.8**,
+provjereno na živoj stranici. Svih šest je i dalje u gamutu i zadržava svoj karakter.
+
+**Arrow je pritom jedini kojem boja nije jedina razlika** - krug na kraju repa nosi je
+i sam. To je ujedno ono što je Arrow činilo dobrim izborom za šestu liniju: da je
+sljedeća varijanta bila još jedna gola linija, boja bi morala nositi sav teret i prag
+se ne bi dao držati.
+
+**Napomena o mjeri svjetline:** L\* (Lab) je mjerodavan, luma nije. Svih šest je na
+L\* 32, dakle percepcijski jednako svijetle, ali im luma ispada 59-78 (Arrowova
+tirkizna najniža). Luma sustavno podcjenjuje plavo-tirkizne tonove; raniji komentari
+u CSS-u navodili su je kao kontrolu, što je ispravljeno.
+
+### Render: prsten, ne kuglica
+
+Krug se crta kao **prsten** (`.arrow-ring`), za razliku od pune Thermo kuglice.
+Razlog je pravilo: znamenka u krugu JE zbroj repa, dakle nosiva informacija koja mora
+ostati čitljiva. Kod tube kuglica smije progutati znamenku jer je ona tamo obična.
+
+Promjer je isti kao kuglica (58%) da se dvije oznake čitaju kao ista obitelj, a razlika
+puno/prazno nosi značenje. Time se Arrow razlikuje od Therma i bez oslanjanja na boju.
+
+### Provjere
+
+- **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) identične do na novo
+  prazno `arrows: null` polje.
+- **Generator**: na svakoj ploči provjereno da je zbroj repa jednak vrijednosti kruga U
+  RJEŠENJU, da je put [krug, ...rep] duljine >= 3, da je korak potez kralja i da se
+  putovi ne preklapaju.
+- **Hint**: **nula krivih prijedloga**. Riješeno samim hintovima (Hard): +x, +clone i
+  +killer 9/10, +zipper 8/10, +thermo 7/10, arrow sam 4/10; Normal 10/10. Solo brojka je
+  najniža dosad, ali u rangu zatečenih na istom harnessu (killer 6/10) - zastoji su
+  eliminacijski koraci koje harness ne primjenjuje.
+- **Boje**: min deltaE 21.8 na svih 15 parova, čitano sa žive stranice.
+- **Legenda**: test proširen na Arrow i prolazi.
+- **Render NIJE vizualno provjeren** - prsten je nova CSS klasa, dakle prvi put otkako
+  je pouka o naslijeđenom renderu zapisana da se crta **nešto novo**. Rizik je ovdje
+  stvarniji nego kod Renbana i Zippera. Prvo pogledati stoji li prsten centrirano i
+  ostaje li znamenka u njemu čitljiva.
 
 ## Poznato / tehnički dug
 

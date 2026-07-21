@@ -124,8 +124,13 @@ Vidi [todo.md](todo.md).
 - **Sandwich** - zbroj znamenki između 1 i 9 u retku/stupcu. Trivijalno se izvede, ali
   oznaka stoji **izvan ploče** - prvi put da nešto treba mjesto van grida (layout,
   mobitel, skaliranje). To je pravi novi posao, ne derive.
-- **Arrow** - krug + rep čiji zbroj daje broj u krugu. Derive je teži (rep mora stati u
-  vrijednost kruga), render kombinira liniju i krug.
+- ~~**Arrow**~~ - **isporučen u v1.40.0**, peti s ove liste i prvi iz "skuplje" skupine.
+  Procjena je bila točna u oba dijela, ali je promašila zašto: derive nije teži zbog
+  računa nego zbog toga što je **jedini kojem šetnja ne vrijedi** - uvjet vrijedi tek
+  kad je rep gotov, pa traži pretragu uz vraćanje. Render je pak ispao lakši nego što
+  se činilo (prsten + naslijeđena linija), a krug se pokazao vrijednim iz drugog
+  razloga: jedina je linijska varijanta kojoj boja nije jedina razlika, što je upravo
+  ono što je trebalo na šestoj. Detalji u [todo.md](todo.md).
 - **Little Killer** - dijagonalni zbroj izvan ploče; isti render problem kao Sandwich.
 
 **Nije derivacijsko - traži diranje generatora:**

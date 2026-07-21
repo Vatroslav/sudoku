@@ -44,16 +44,29 @@
 
      Svaka varijanta zadržava karakter koji je i prije imala (tuba plava, palindrom
      zelen, whisper topao, renban ljubičast, zipper oker) pa ploča ne izgleda kao
-     druga igra - boje su samo razmaknute i izjednačene. Luma ostaje 64-72, isti
-     pojas kao prije, dakle nijedna linija ne dominira i znamenka iznad ostaje čitljiva.
+     druga igra - boje su samo razmaknute i izjednačene.
 
-     Za ŠESTU liniju ovo se ne ponavlja: 6 × 60° spustilo bi najgori par natrag ispod
-     20. Tada ide rezerva - oznaka na kraju linije (vidi todo.md). */
-  --thermo: #1c4c5d;
-  --palindrome: #294e3e;
-  --whisper: #623c3e;
-  --renban: #4d425d;
-  --zipper: #4f462b;
+     Šesta (Arrow, v1.40.0) je zahtijevala novi krug računa. Na 6 × 60° i kromi 18
+     najgori par pada na 17.7, a ubacivanje šeste u zatečeni raspored od pet dalo bi
+     ~11 - gore od onoga što je prijavljeno kao nerazlučivo. Rješenje je veća kroma
+     (22) uz malo višu L* (32): najgori par 21.8, i dalje iznad praga.
+
+     PRAG JE 20, i to nije procjena nego kalibracija na čovjeku (v1.39.1): isti par
+     na 14.2 pročitan je kao "jedva vidljiva razlika", na 20.9 kao "dobro je".
+
+     Napomena o svjetlini: mjeri se L* (Lab), NE luma. Sve su na L* 32, dakle
+     percepcijski jednako svijetle, ali im luma (0.299R+0.587G+0.114B) ispada 59-78 -
+     Arrowova tirkizna najniža. Luma sustavno podcjenjuje plavo-tirkizne tonove i zato
+     ovdje nije mjerodavna; ranije verzije ovog komentara su je navodile kao kontrolu,
+     što je bilo pogrešno. */
+  --thermo: #274f6d;
+  --palindrome: #375234;
+  --whisper: #6d3e40;
+  --renban: #5b4362;
+  --zipper: #5c4829;
+  /* Arrow je jedini kojem boja nije jedina razlika - krug na kraju repa (prsten) nosi
+     je i sam. Zato mu je dodijeljena tirkizna, hue pozicija koja je preostala. */
+  --arrow: #015456;
   /* Clone: boja veže par regija, pa ih mora biti onoliko koliko ima parova (4) i
      moraju se razlikovati na prvi pogled - zato tonovi, a ne nijanse istog tona.
      Translucentne su da odabir i peer-highlight ostanu vidljivi ispod, i namjerno
@@ -545,6 +558,27 @@ main {
 .cell .line-joint.zipper,
 .cell .line-clip.zipper > span {
   background: var(--zipper);
+}
+.cell .line-seg.arrow,
+.cell .line-joint.arrow,
+.cell .line-clip.arrow > span {
+  background: var(--arrow);
+}
+/* Krug strelice: PRSTEN, ne puni disk kao kuglica tube. Znamenka u krugu je dio
+   pravila (ona je zbroj repa) pa mora ostati čitljiva - puna ispuna bi je progutala
+   jednako kao kuglica, samo što kod tube to ne smeta (tamo je znamenka obična).
+   Promjer je isti kao kuglica (58%) da se dvije oznake čitaju kao ista obitelj. */
+.cell .arrow-ring {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 58%;
+  height: 58%;
+  border-radius: 50%;
+  border: 2px solid var(--arrow);
+  box-sizing: border-box;
+  z-index: -1;
+  pointer-events: none;
 }
 .cell .line-seg {
   position: absolute;

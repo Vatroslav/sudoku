@@ -21,6 +21,7 @@
     "whisper",
     "renban",
     "zipper",
+    "arrow",
     "clone",
     "killer",
   ];
@@ -39,6 +40,7 @@
     whisper: "German Whispers",
     renban: "Renban",
     zipper: "Zipper",
+    arrow: "Arrow",
     clone: "Clone",
     killer: "Killer",
   };
@@ -56,6 +58,7 @@
     { kind: "whisper", variant: "whisper", key: "whispers", cssVar: "--whisper" },
     { kind: "renban", variant: "renban", key: "renbans", cssVar: "--renban" },
     { kind: "zipper", variant: "zipper", key: "zippers", cssVar: "--zipper" },
+    { kind: "arrow", variant: "arrow", key: "arrows", cssVar: "--arrow" },
   ];
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -266,6 +269,8 @@
   // Zipper traži i NEPARNU duljinu - bez sredine pravilo ne postoji.
   const validZippers = (z) =>
     validThermos(z) && z.every((p) => p.length % 2 === 1 && p.length >= 3);
+  // Arrow: put je [krug, ...rep], dakle barem 3 ćelije.
+  const validArrows = (a) => validThermos(a) && a.every((p) => p.length >= 3);
   // Clone: par regija istog oblika ([[a...],[b...]]) - odnos je po indeksu, pa render
   // treba samo ćelije. Oblik se ne provjerava; bitno je da su parovi cjeloviti i da
   // se ćelije ne ponavljaju (jedna ćelija = najviše jedan klon).
@@ -472,6 +477,7 @@
         whispers: (clues && clues.whispers) || null,
         renbans: (clues && clues.renbans) || null,
         zippers: (clues && clues.zippers) || null,
+        arrows: (clues && clues.arrows) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -674,6 +680,12 @@
         if (!validZippers(clues.zippers)) return false;
       } else {
         clues.zippers = null;
+      }
+      // Arrow: put [krug, ...rep].
+      if (state.variants.includes("arrow")) {
+        if (!validArrows(clues.arrows)) return false;
+      } else {
+        clues.arrows = null;
       }
       return true;
     } catch (e) {
@@ -1450,6 +1462,13 @@
             const bulb = document.createElement("span");
             bulb.className = "thermo-bulb";
             cell.appendChild(bulb);
+          } else if (l.kind === "arrow" && pos === 0) {
+            // Krug strelice je PRSTEN, ne puni disk kao kuglica tube: znamenka u njemu
+            // je dio pravila (ona je zbroj repa) pa mora ostati čitljiva. Prsten uz to
+            // razlikuje Arrow od Therma i bez oslanjanja na boju.
+            const ring = document.createElement("span");
+            ring.className = "arrow-ring";
+            cell.appendChild(ring);
           } else {
             // Spoj u središtu: segmenti kreću IZ središta pa im zaobljeni vrh tamo dođe
             // u točku - bez diska se linija na svakom vrhu stanji (vidi CSS). Kuglica taj

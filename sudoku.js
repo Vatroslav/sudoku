@@ -190,6 +190,45 @@ const Sudoku = (() => {
     return partner ? [1, 9 - partner] : [1, 8];
   }
 
+  // Arrow: krug nosi znamenku koja je ZBROJ znamenki na repu. Put je [krug, ...rep],
+  // dakle isti oblik kao tuba (pos 0 je poseban), pa dijeli izvedeni indeks i render.
+  // Mora se poklapati sa solver.js arrowRange.
+  //
+  // Ovo je Killer kojem zbroj nije zadan nego stoji U ĆELIJI, pa granica ima dva
+  // smjera: krug se steže odozdo brojem praznih u repu (svaki nosi barem 1), a član
+  // repa odozgo onim što je krugu ostalo.
+  //
+  // Rep je nužno kratak: zbroj mora stati u znamenku, a četiri RAZLIČITE ćelije nose
+  // barem 1+2+3+4 = 10. Duži repovi postoje samo kad se vrijednosti ponavljaju, što
+  // je dopušteno jer rep nije jedinica - ali susjedi na putu se uvijek vide (dodiruju
+  // se) pa se ponavljanje može dogoditi tek preko jedne ćelije.
+  function arrowRange(board, path, pos) {
+    const C = board[path[0]];
+    if (pos === 0) {
+      // Krug: zbroj repa. Prazni članovi nose barem 1, najviše 9.
+      let sum = 0,
+        empty = 0;
+      for (let q = 1; q < path.length; q++) {
+        const b = board[path[q]];
+        if (b) sum += b;
+        else empty++;
+      }
+      return [Math.max(1, sum + empty), Math.min(9, sum + 9 * empty)];
+    }
+    // Član repa: ono što ostane krugu nakon ostalih članova.
+    let other = 0,
+      empty = 0;
+    for (let q = 1; q < path.length; q++) {
+      if (q === pos) continue;
+      const b = board[path[q]];
+      if (b) other += b;
+      else empty++;
+    }
+    if (C) return [Math.max(1, C - other - 9 * empty), Math.min(9, C - other - empty)];
+    // Krug još nije poznat, ali je najviše 9 - to sam po sebi ograničava rep.
+    return [1, Math.max(1, Math.min(9, 9 - other - empty))];
+  }
+
   // Killer: raspon [lo,hi] dopušten ćelija u kavezu zadanog zbroja. Isti oblik kao
   // thermoRange (granice, ne provjera para) pa solver može rezati kandidate odmah.
   //
@@ -242,6 +281,8 @@ const Sudoku = (() => {
   // Zipper: pozicija JEST odnos (partner je zrcalni indeks, sredina je referenca), pa
   // je izvedeni oblik isti kao kod tube - { path, pos }.
   const prepZippers = prepThermos;
+  // Arrow: put je [krug, ...rep] pa je pozicija odnos (0 = krug) - isti oblik kao tuba.
+  const prepArrows = prepThermos;
   // Renban: odnos gleda CIJELU liniju odjednom (kao kavez), pa je izvedeni oblik
   // { cells } - pozicija ne igra ulogu jer je redoslijed na liniji slobodan.
   function prepRenbans(renbans) {
@@ -304,6 +345,7 @@ const Sudoku = (() => {
     const whispers = (c && c.whispers) || null;
     const renbans = (c && c.renbans) || null;
     const zippers = (c && c.zippers) || null;
+    const arrows = (c && c.arrows) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
@@ -315,12 +357,14 @@ const Sudoku = (() => {
       whispers,
       renbans,
       zippers,
+      arrows,
       // jig se drži uz regions: isValid ne smije po ćeliji tražiti tko je u kojoj regiji.
       jig: regions ? { map: regions, cells: regionsToCells(regions) } : null,
       thm: prepThermos(thermos),
       whi: prepWhispers(whispers),
       rnb: prepRenbans(renbans),
       zip: prepZippers(zippers),
+      arw: prepArrows(arrows),
       // Jedno polje partnera za obje varijante jednakosti - vidi prepMates.
       mate: prepMates(palindromes, clones),
       cag: prepCages(cages),
@@ -348,6 +392,7 @@ const Sudoku = (() => {
     "whisper",
     "renban",
     "zipper",
+    "arrow",
     "clone",
     "killer",
   ];
@@ -481,7 +526,7 @@ const Sudoku = (() => {
   //   mate - 81-polje indeksa partnera koji mora nositi ISTU vrijednost (vidi
   //     prepMates); pune ga Palindrome linije i Clone regije.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, mate, cag, whi, rnb, zip } = clues;
+    const { jig, parity, edges, thm, mate, cag, whi, rnb, zip, arw } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -569,6 +614,12 @@ const Sudoku = (() => {
     if (zip && zip[idx]) {
       const { path, pos } = zip[idx];
       const [lo, hi] = zipperRange(board, path, pos);
+      if (val < lo || val > hi) return false;
+    }
+    // Arrow: krug je zbroj repa. Raspon pokriva oba smjera - vidi arrowRange.
+    if (arw && arw[idx]) {
+      const { path, pos } = arw[idx];
+      const [lo, hi] = arrowRange(board, path, pos);
       if (val < lo || val > hi) return false;
     }
     // Palindrome/Clone: partner mora nositi ISTU vrijednost. Provjerava se samo kad
@@ -1019,6 +1070,59 @@ const Sudoku = (() => {
     return zippers;
   }
 
+  // Arrow: krug nosi zbroj znamenki na repu koji iz njega izlazi.
+  //
+  // Prva varijanta kojoj šetnja NIJE dovoljna. Sve dosadašnje linije rastu korak po
+  // korak uz lokalni uvjet (veći susjed, razlika >= 5, min-1/max+1) pa se svaki
+  // prefiks može isporučiti. Ovdje uvjet vrijedi tek kad je rep GOTOV - zbroj mora
+  // pogoditi krug točno - pa put koji se gradi pohlepno završi kao promašaj i mora
+  // se odbaciti cijel. Zato pretraga s vraćanjem (DFS), a ne šetnja.
+  //
+  // Pretraga je jeftina jer je prostor sitan: rep ide najviše do ARROW_LEN.max, a
+  // grananje je 8 susjeda, uz rez čim parcijalni zbroj premaši krug.
+  const ARROW_LEN = { min: 2, max: 4 };
+  const MAX_ARROWS = 12;
+  const ARROW_DENSITY = { min: 0.3, max: 0.5 };
+  const ARROW_KEEP_MIN = 4;
+  function deriveArrows(solution, boost = 0, blocked = null) {
+    const want = Math.round(MAX_ARROWS * pickDensity(scaled(ARROW_DENSITY, boost)));
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
+    const arrows = [];
+    // Nađi rep iz `cur` čiji zbroj daje točno `need`. `mine` drži i krug i dosadašnji
+    // rep, pa se put ne može vratiti na sebe ni progutati vlastiti krug.
+    const findTail = (cur, need, depth, mine) => {
+      for (const n of shuffle(lineNeighbors[cur])) {
+        if (used[n] || mine.has(n)) continue;
+        const v = solution[n];
+        if (v > need) continue; // rez: preskočio bi krug
+        const rest = need - v;
+        mine.add(n);
+        if (rest === 0 && depth + 1 >= ARROW_LEN.min) {
+          return [n];
+        }
+        if (rest > 0 && depth + 1 < ARROW_LEN.max) {
+          const sub = findTail(n, rest, depth + 1, mine);
+          if (sub) return [n, ...sub];
+        }
+        mine.delete(n);
+      }
+      return null;
+    };
+    for (const bulb of shuffle([...Array(81).keys()])) {
+      if (arrows.length >= want) break;
+      if (used[bulb]) continue;
+      const C = solution[bulb];
+      if (C < 3) continue; // najkraći rep (dva susjeda, različita) nosi barem 1+2
+      const mine = new Set([bulb]);
+      const tail = findTail(bulb, C, 0, mine);
+      if (!tail) continue;
+      const path = [bulb, ...tail];
+      for (const i of path) used[i] = true;
+      arrows.push(path);
+    }
+    return arrows;
+  }
+
   // Clone: dvije regije istog oblika nose iste znamenke u odgovarajućim ćelijama.
   // Wire oblik je par putova jednake duljine ([[a0,a1,...],[b0,b1,...]]) - odnos je
   // "po indeksu", pa se čita bez ikakve geometrije (vidi prepMates).
@@ -1227,6 +1331,12 @@ const Sudoku = (() => {
     // FIKSIRAN (C - a), a ne samo sužen - jedini takav slučaj u repou. Ploče zato
     // ostaju rješive i s malo zadanih, pa dig ne mora kopati u prazno.
     zipper: 10,
+    // Arrow: 10 je prošlo iz prve, kao i kod Zippera. Najgori par (arrow+thermo) na
+    // 60 ploča daje medijan 31ms, p90 536ms, max 1.8s, 0/60 iznad 5s; sam je 12ms
+    // medijan. Razlog je isti kao kod Zippera - odnos je jak u oba smjera (rep diže
+    // donju granicu kruga i prije ijednog upisa, krug ograniči svaki član repa) pa
+    // ploče ostaju rješive s malo zadanih i `dig` ne kopa u prazno.
+    arrow: 10,
     xv: 10,
     palindrome: 10,
     clone: 10,
@@ -1261,8 +1371,18 @@ const Sudoku = (() => {
   // jigsaw, antiknight, antiking) vraćaju null - one mijenjaju PRAVILA, pa su na ploči
   // i bez ijedne oznake i nema se što brojati.
   function markCount(v, clues) {
-    const { parity, edges, thermos, palindromes, clones, cages, whispers, renbans, zippers } =
-      clues;
+    const {
+      parity,
+      edges,
+      thermos,
+      palindromes,
+      clones,
+      cages,
+      whispers,
+      renbans,
+      zippers,
+      arrows,
+    } = clues;
     const edgesIn = (lo, hi) => {
       if (!edges) return 0;
       let n = 0;
@@ -1280,6 +1400,7 @@ const Sudoku = (() => {
     if (v === "whisper") return whispers ? whispers.length : 0;
     if (v === "renban") return renbans ? renbans.length : 0;
     if (v === "zipper") return zippers ? zippers.length : 0;
+    if (v === "arrow") return arrows ? arrows.length : 0;
     if (v === "clone") return clones ? clones.length : 0;
     // Killer je jedini kojem jedinica NIJE oznaka nego POKRIVENA ĆELIJA: kavez od 2 i
     // kavez od 5 ne nose isto, a ono što se čita kao Killer je pokrivenost ploče
@@ -1318,6 +1439,7 @@ const Sudoku = (() => {
     whisper: WHISPER_KEEP_MIN,
     renban: RENBAN_KEEP_MIN,
     zipper: ZIPPER_KEEP_MIN,
+    arrow: ARROW_KEEP_MIN,
     clone: 1, // par regija je "nešto i njegova kopija" - jedan je ISPRAVNA slika
     killer: CAGE_KEEP_CELLS.min, // jedini mjeren u ĆELIJAMA - vidi markCount
   };
@@ -1340,8 +1462,18 @@ const Sudoku = (() => {
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
   function pruneMarks(puzzle, solution, variants, clues, maxTier) {
-    const { parity, edges, thermos, palindromes, clones, cages, whispers, renbans, zippers } =
-      clues;
+    const {
+      parity,
+      edges,
+      thermos,
+      palindromes,
+      clones,
+      cages,
+      whispers,
+      renbans,
+      zippers,
+      arrows,
+    } = clues;
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -1372,6 +1504,9 @@ const Sudoku = (() => {
     // Zipper: kao ostale linije, jedinica je CIJELA linija - skraćivanje pomiče
     // sredinu, dakle mijenja svaki par odjednom.
     if (zippers) for (const z of zippers) cands.push(["z", z]);
+    // Arrow: jedinica je krug SA svojim repom - skraćivanje repa mijenja zbroj, dakle
+    // i znamenku koju krug mora nositi.
+    if (arrows) for (const a of arrows) cands.push(["a", a]);
     if (!cands.length) return;
     // Živi broj oznaka po varijanti - pada kako prune miče. Ispod KEEP_MIN se ne ide,
     // pa odabrana varijanta ostane na ploči i kad joj kombinacija oduzme sav posao.
@@ -1402,6 +1537,15 @@ const Sudoku = (() => {
         else thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
         // thermos je wire polje; izvedeni thm bi inače ostao na staroj listi tuba.
         clues.thm = prepThermos(thermos);
+        continue;
+      }
+      if (kind === "a") {
+        if (!mayDrop("arrow")) continue;
+        const k = arrows.indexOf(ref);
+        arrows.splice(k, 1);
+        if (stoji()) left.arrow--;
+        else arrows.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        clues.arw = prepArrows(arrows); // wire lista se promijenila, osvježi izvedeno
         continue;
       }
       if (kind === "z") {
@@ -1508,6 +1652,7 @@ const Sudoku = (() => {
         whispers: clues.whispers,
         renbans: clues.renbans,
         zippers: clues.zippers,
+        arrows: clues.arrows,
       },
     };
   }
@@ -1562,6 +1707,7 @@ const Sudoku = (() => {
     const useWhisper = variants.includes("whisper");
     const useRenban = variants.includes("renban");
     const useZipper = variants.includes("zipper");
+    const useArrow = variants.includes("arrow");
     // Oznake koje zauzimaju ĆELIJU (a ne brid) izvode se u nizu i svaka zaobilazi
     // ćelije prethodnih: dvije linije kroz istu ćeliju render crta preko sebe, a klon
     // boji cijelu ćeliju pa bi linija ispod njega nestala.
@@ -1589,11 +1735,16 @@ const Sudoku = (() => {
       // (kao Palindrome) koji uz to moraju zbrajati u sredinu, a i sjeme mu je
       // ograničeno na visoke vrijednosti (vidi ZIPPER_SEED_MIN).
       const zippers = useZipper ? deriveZippers(solution, boost, taken([])) : null;
-      const renbans = useRenban ? deriveRenbans(solution, boost, taken(zippers || [])) : null;
+      // Arrow odmah iza njega: rep mora pogoditi krug TOČNO, pa mu prefiks ne vrijedi
+      // ništa (vidi deriveArrows) i uz to zauzima najviše ćelija od svih linija
+      // (krug + rep do 4).
+      const arrows = useArrow ? deriveArrows(solution, boost, taken(zippers || [])) : null;
+      const beforeRenban = () => [...(zippers || []), ...(arrows || [])];
+      const renbans = useRenban ? deriveRenbans(solution, boost, taken(beforeRenban())) : null;
       const whispers = useWhisper
-        ? deriveWhispers(solution, boost, taken([...(zippers || []), ...(renbans || [])]))
+        ? deriveWhispers(solution, boost, taken([...beforeRenban(), ...(renbans || [])]))
         : null;
-      const lineSoFar = () => [...(zippers || []), ...(renbans || []), ...(whispers || [])];
+      const lineSoFar = () => [...beforeRenban(), ...(renbans || []), ...(whispers || [])];
       const thermos = useThermo ? deriveThermos(solution, boost, taken(lineSoFar())) : null;
       const palindromes = usePal
         ? derivePalindromes(solution, boost, taken([...lineSoFar(), ...(thermos || [])]))
@@ -1601,6 +1752,7 @@ const Sudoku = (() => {
       return {
         clones,
         zippers,
+        arrows,
         renbans,
         whispers,
         thermos,
