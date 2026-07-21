@@ -135,7 +135,10 @@ Vidi [todo.md](todo.md).
 
 **Nije derivacijsko - traži diranje generatora:**
 
-- **Nonconsecutive** - ortogonalni susjedi ne smiju biti uzastopni. Globalno pravilo, ne
-  oznaka izvedena iz rješenja, pa rješenje mora biti pronađeno UZ taj uvjet. Prva iskrena
-  kandidatura za praznu "geometrija-first" kategoriju - za razliku od četiri koje su tamo
-  bile krivo svrstane.
+- ~~**Nonconsecutive**~~ - **isporučen u v1.41.0**, šesti s ove liste i njime je popis
+  iscrpljen. Ovdje opisan kao "prva iskrena kandidatura za geometrija-first" - **i to
+  je bilo pretjerano**. Točno je da rješenje mora biti pronađeno uz uvjet (jedina takva
+  u repou, i jedina bez per-puzzle podatka), ali posao nije bio ni blizu onome što ta
+  kategorija sugerira: `isValid` grana je četiri retka kao kod Antiknighta, a solverska
+  propagacija je Kropki naopako. Jedina mjerljiva cijena je sporiji Normal (333ms prema
+  3ms), jer trošak nosi `fillBoard`. Detalji u [todo.md](todo.md).

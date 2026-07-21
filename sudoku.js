@@ -384,6 +384,7 @@ const Sudoku = (() => {
     "hyper",
     "jigsaw",
     "disjoint",
+    "nonconsecutive",
     "evenodd",
     "kropki",
     "xv",
@@ -414,6 +415,10 @@ const Sudoku = (() => {
     if (c < 8) out.push(i + 1);
     return out;
   };
+  // Ista susjedstva, ali PREDIZRAČUNATA - orthNeighbors alocira novo polje pri svakom
+  // pozivu, a Nonconsecutive ga treba u vrućoj petlji isValida (kao knightPeers).
+  const orthPeers = [];
+  for (let i = 0; i < 81; i++) orthPeers.push(orthNeighbors(i));
 
   function regionsToCells(regions) {
     const cells = Array.from({ length: 9 }, () => []);
@@ -551,6 +556,18 @@ const Sudoku = (() => {
     }
     if (variants.includes("disjoint")) {
       for (const j of disjointGroups[disjointPos(idx)]) if (board[j] === val) return false;
+    }
+    // Nonconsecutive: ortogonalni susjedi ne smiju nositi UZASTOPNE znamenke. Prva
+    // varijanta koja mijenja prostor rješenja umjesto da oznaku izvodi iz njega - zato
+    // je i jedina bez ijednog per-puzzle podatka koji bi išao u `clues`.
+    //
+    // Nije izraziva kroz peers (kao antiknight) jer ne zabranjuje ISTU vrijednost nego
+    // SUSJEDNU; solver je zato propagira odvojeno - vidi curNoncon u solver.js.
+    if (variants.includes("nonconsecutive")) {
+      for (const j of orthPeers[idx]) {
+        const b = board[j];
+        if (b && (b === val - 1 || b === val + 1)) return false;
+      }
     }
     if (variants.includes("antiknight")) {
       for (const j of knightPeers[idx]) if (board[j] === val) return false;
@@ -1350,6 +1367,7 @@ const Sudoku = (() => {
     disjoint: 8,
     antiknight: 6,
     jigsaw: 6,
+    nonconsecutive: 8,
     x: 2,
     antiking: 2,
   };

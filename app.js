@@ -13,6 +13,7 @@
     "hyper",
     "jigsaw",
     "disjoint",
+    "nonconsecutive",
     "evenodd",
     "kropki",
     "xv",
@@ -32,6 +33,7 @@
     hyper: "Hyper",
     jigsaw: "Jigsaw",
     disjoint: "Disjoint Groups",
+    nonconsecutive: "Nonconsecutive",
     evenodd: "Even/Odd",
     kropki: "Kropki",
     xv: "XV",
@@ -1604,12 +1606,26 @@
   // varijanta je u skupu. Najviše 2 odjednom: kombinacija 3+ digne generaciju
   // (i na Normal) do neupotrebljivosti. Cap je UI - jezgra podržava bilo koliko.
   const MAX_VARIANTS = 2;
-  // Parovi koji se ne mogu kombinirati. Jigsaw ZAMJENJUJE kutije nepravilnim
-  // regijama, a Disjoint Groups je definiran kao "ista pozicija UNUTAR kutije" -
-  // bez kutija pozicija ne postoji. Jezgra bi svejedno vrtjela (disjoint gleda
-  // statične pozicije), ali ploča bi nosila dvije geometrije koje se ne poklapaju
-  // i pravilo se ne bi dalo pročitati. Cap je UI, kao MAX_VARIANTS.
-  const INCOMPATIBLE = { jigsaw: ["disjoint"], disjoint: ["jigsaw"] };
+  // Parovi koji se ne mogu kombinirati. Cap je UI, kao MAX_VARIANTS - jezgra bi oba
+  // para svejedno vrtjela, problem je u tome što bi igrač dobio.
+  //
+  //   jigsaw + disjoint - Jigsaw ZAMJENJUJE kutije nepravilnim regijama, a Disjoint je
+  //     definiran kao "ista pozicija UNUTAR kutije". Bez kutija pozicija ne postoji;
+  //     ploča bi nosila dvije geometrije koje se ne poklapaju.
+  //
+  //   kropki + nonconsecutive - bijela točka znači "ovaj par JE uzastopan", a
+  //     nonconsecutive to zabranjuje na svakom bridu. Točke stoje baš na bridovima, pa
+  //     bijela ne može postojati: izmjereno 138 bijelih na 20 samostalnih Kropki ploča
+  //     prema **0** uz nonconsecutive (crne ostaju, one traže omjer 2). Ploča se dakle
+  //     uredno generira, ali igraču obećava pola pravila kojeg nema - isti argument
+  //     kao "varijanta se mora vidjeti" (v1.34.1), samo primijenjen na pola varijante.
+  //     XV je provjeren i NE degenerira (V 40->25, X 101->76), pa ostaje dopušten.
+  const INCOMPATIBLE = {
+    jigsaw: ["disjoint"],
+    disjoint: ["jigsaw"],
+    kropki: ["nonconsecutive"],
+    nonconsecutive: ["kropki"],
+  };
   const blockedBy = (v) => menuVariants.some((m) => (INCOMPATIBLE[m] || []).includes(v));
   function syncVariantButtons() {
     const full = menuVariants.length >= MAX_VARIANTS;

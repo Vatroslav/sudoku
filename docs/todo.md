@@ -142,6 +142,9 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 - [x] Arrow (krug nosi zbroj znamenki na repu, v1.40.0). Peta s liste kandidata, šesta
       linijska i prva iz skupine označene kao skuplja. Jedini derive s pretragom uz
       vraćanje - vidi sekciju niže.
+- [x] Nonconsecutive (susjedi preko brida ne smiju biti uzastopni, v1.41.0). Šesta i
+      zadnja s liste kandidata. Jedina varijanta koja mijenja prostor rješenja umjesto
+      da oznaku izvodi iz njega, i jedina bez ijednog per-puzzle podatka.
 - [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
       svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
@@ -1419,10 +1422,91 @@ Zadnje dvije provjere su usput ispravile i **krivo brojanje u dosadašnjim poruk
 varijanti ima **17**, ne 19 kako je tvrđeno nakon Arrowa. Nijedna nije nedostajala ni
 visjela - brojka je jednostavno bila krivo zbrojena.
 
-## Poznato / tehnički dug
+## Nonconsecutive (v1.41.0)
+
+Ćelije koje dijele brid ne smiju nositi uzastopne znamenke. Šesta i zadnja s liste
+kandidata, i **prva varijanta koja mijenja PROSTOR RJEŠENJA umjesto da oznaku izvodi
+iz gotovog rješenja**.
+
+Izmjereno (Hard): **prosjek 186ms, max 823ms** sam; kombinacije 214-421ms prosjek uz
+rep do 1.9s. Normal 333ms - najsporiji Normal u repou (classic je 3ms), i to je cijena
+koju plaća `fillBoard`, ne oznake.
+
+### Doc ju je precijenio, ali je bio u pravu u čemu je različita
+
+`dorada-varijante.md` ju je vodio kao "jedini koji stvarno traži diranje generatora" i
+"prva iskrena kandidatura za praznu geometrija-first kategoriju". Ispalo je:
+
+- **`isValid` grana je trivijalna** - četiri retka nad predizračunatim `orthPeers`,
+  jednako kao Antiknight.
+- **Propagacija u solveru već je postojala u drugom obliku.** Nonconsecutive je
+  Kropki naopako: bijela točka kaže "ovaj par JEST uzastopan", ovdje NIJEDAN ortogonalni
+  par nije - pa se umjesto zadržavanja odnosa brišu susjedne vrijednosti.
+- **Nema derive, oznaka, rendera ni migracije** - kao Disjoint Groups.
+
+Ono što JEST istina i po čemu je stvarno prva takva: rješenje se mora **pronaći uz taj
+uvjet**, dok sve varijante od v1.24.0 idu obrnuto. Posljedica je jedina u repou:
+**Normal je mjerljivo sporiji** (333ms prema 3ms za classic), jer trošak nosi
+`fillBoard`, koji na Normalu inače ne radi ništa posebno.
+
+**Nema per-puzzle podatka pa je regresija ispala BAJT-IDENTIČNA** - bez ijednog novog
+praznog polja u `clues`. Jedina varijanta dosad kojoj to nije trebalo; i Disjoint, koji
+je najbliži, mijenja `units` pa barem ulazi u cache-ključ.
+
+### Zabranjena kombinacija: Kropki
+
+Bijela Kropki točka znači "ovaj par je uzastopan", a točke stoje baš na bridovima koje
+Nonconsecutive zabranjuje. Bijela zato **ne može postojati**. Izmjereno na 20 Hard
+ploča po slučaju:
+
+| skup            | bijelih | crnih |
+| --------------- | ------- | ----- |
+| Kropki sam      | 138     | 73    |
+| Kropki + Noncon | **0**   | 120   |
+
+Ploča se uredno generira i rješiva je, ali igraču obećava pola pravila kojeg nema -
+isti argument kao "varijanta se mora vidjeti" (v1.34.1), samo primijenjen na pola
+varijante. Zato je par dodan u `INCOMPATIBLE`, drugi otkako taj mehanizam postoji.
+
+**XV je provjeren i NE degenerira** (V 40 → 25, X 101 → 76): zbroj 5 i 10 se i dalje
+mogu složiti od ne-uzastopnih parova (1+4, 4+6, 1+9), pa obje oznake prežive. Ostaje
+dopušten - degeneracija se mjeri, ne pretpostavlja po sličnosti pravila.
+
+### Zatečeni rep kod Therma, nađen usput
+
+`nonconsecutive+thermo` je u prvom mjerenju (N=20) dao **234s max**, što je izgledalo
+kao vlastiti problem. Na 50 ploča: medijan 241ms, p90 799ms, max 2.5s, **0/50 iznad 5s**.
+
+Kontrolno mjerenje istog oblika na **zatečenom** `clone+thermo` (bez ijedne izmjene iz
+ove sesije): medijan 13ms, ali **max 30.9s i 1/50 iznad 5s**. Thermo sam: max 536ms,
+0/50.
+
+Dakle debeo rep nose KOMBINACIJE S THERMOM i to je zatečeno stanje, ne posljedica novih
+varijanti. Isti fenomen objašnjava i Renbanov outlier od 374s (v1.38.0). Nije popravljano
+u ovoj sesiji - vidi tehnički dug.
+
+### Provjere
+
+- **Regresija**: 34 ploče **bajt-identično**, bez ijedne razlike (nema novog polja).
+- **Generator**: na svakoj ploči provjereno da nijedan par koji dijeli brid ne nosi
+  uzastopne znamenke, **uz kontrolu** da isti test na klasičnoj ploči padne (336
+  prekršaja na 10 ploča) - inače bi prolazio i kad pravilo ne bi radilo.
+- **Hint**: **nula krivih prijedloga**, i riješeno 8-10/10 - najbolji rezultat dosad.
+  Očekivano: pravilo daje eliminacije na cijeloj ploči, bez čekanja na oznaku.
+- **Nespojivost**: tablica istinitosti proširena na novi par; `randomVariants` sada
+  čita parove IZ `INCOMPATIBLE` umjesto da ih prepisuje (inače bi test i dalje
+  provjeravao samo stari par - zamalo se dogodilo).
 
 ## Poznato / tehnički dug
 
+- **Debeo rep kod kombinacija s Thermom** (izmjereno v1.41.0, zatečeno od ranije).
+  `clone+thermo` na 50 ploča: medijan 13ms, ali max **30.9s** i 1/50 iznad 5s. Thermo
+  sam je uredan (max 536ms), pa problem nastaje u kombinaciji. Isti fenomen dao je
+  outliere od 374s (renban+thermo, v1.38.0) i 234s (nonconsecutive+thermo, v1.41.0),
+  koji se ni jednom nisu reproducirali u ponovljenom mjerenju - dakle rijedak je, ali
+  dubok. Nosi ga Cancel + worker (v1.17.0). **Ako se ikad uzme:** mjeriti na barem 50
+  ploča s ispisom svake (N=20 daje 60× različite maksimume između pokretanja), i
+  gledati troši li se vrijeme u `dig`-u ili u odbačenim pokušajima prije njega.
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
   `Sudoku.generate` za "hard" traži slagalicu čija je najteža KLASIČNA tehnika
   tier-2. Kod varijanti je solver jači (dodatni units), pa slagalice češće ispadnu

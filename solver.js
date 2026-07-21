@@ -117,7 +117,15 @@ const Solver = (() => {
   // Aktivni skup varijanti kombinira ove - kontekst se gradi kao unija.
   // Antiknight nema svoje units (samo peers), pa mu je unos prazan. Jigsaw ZAMJENJUJE
   // box-units regijama (kroz ctxFor), pa mu je EXTRA_UNITS unos isto prazan.
-  const REGION_VARIANTS = ["antiking", "antiknight", "x", "hyper", "jigsaw", "disjoint"];
+  const REGION_VARIANTS = [
+    "antiking",
+    "antiknight",
+    "x",
+    "hyper",
+    "jigsaw",
+    "disjoint",
+    "nonconsecutive",
+  ];
   const EXTRA_UNITS = {
     antiking: [],
     antiknight: [],
@@ -125,6 +133,11 @@ const Solver = (() => {
     hyper: hyperWindows,
     jigsaw: [],
     disjoint: disjointGroups,
+    // Nonconsecutive nema svoje jedinice NI peers: ne zabranjuje istu vrijednost nego
+    // susjednu, pa se ne da izraziti ni kroz units ni kroz EXTRA_PEERS. U popisu je
+    // zato da uđe u variantKey (cache-ključ mora znati da je solver drukčiji), a
+    // propagacija ide zasebno - vidi curNoncon.
+    nonconsecutive: [],
   };
   // Dodatni peers po varijanti (idx -> polje "isti-broj-zabranjen" ćelija).
   const EXTRA_PEERS = { antiknight: knightPeers, antiking: kingPeers };
@@ -464,6 +477,23 @@ const Solver = (() => {
   // Arrow: per-puzzle indeks ćelija -> { path, pos } ili null. Propagacija ide u OBA
   // smjera - upis u rep steže krug, upis u krug steže rep - pa se prolazi cijeli put.
   let curArrows = null;
+  // Nonconsecutive: obična zastavica, jedina varijanta bez ikakvog per-puzzle podatka
+  // (pravilo vrijedi za cijelu ploču). Propagacija je Kropki naopako: bijela točka
+  // kaže "ovaj par JEST uzastopan", ovdje NIJEDAN ortogonalni par nije - pa se
+  // umjesto zadržavanja odnosa BRIŠU susjedne vrijednosti.
+  let curNoncon = false;
+  // Ortogonalna susjedstva, predizračunata (kao knightPeers).
+  const orthPeers = [];
+  for (let idx = 0; idx < 81; idx++) {
+    const r = Math.floor(idx / 9),
+      c = idx % 9;
+    const list = [];
+    if (r > 0) list.push(idx - 9);
+    if (r < 8) list.push(idx + 9);
+    if (c > 0) list.push(idx - 1);
+    if (c < 8) list.push(idx + 1);
+    orthPeers.push(list);
+  }
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -530,6 +560,17 @@ const Solver = (() => {
         const { path, pos } = curZippers[idx];
         const [lo, hi] = zipperRange(grid, path, pos);
         for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+      }
+      // Nonconsecutive: svaki POPUNJEN ortogonalni susjed skida dvije vrijednosti
+      // (svoju ±1). Radi na cijeloj ploči, bez ijedne oznake - odatle mu snaga.
+      if (curNoncon) {
+        for (const j of orthPeers[idx]) {
+          const b = grid[j];
+          if (b) {
+            s.delete(b - 1);
+            s.delete(b + 1);
+          }
+        }
       }
       // Arrow: krug se steže zbrojem repa, član repa onim što je krugu ostalo. Već na
       // praznoj ploči rep od tri člana diže krug na barem 3 - vidi arrowRange.
@@ -598,6 +639,14 @@ const Solver = (() => {
         if (q < 0 || q >= path.length) continue;
         const j = path[q];
         if (cand[j]) for (const u of [...cand[j]]) if (!whisperOk(val, u)) cand[j].delete(u);
+      }
+    }
+    // Nonconsecutive: upis skida svoju ±1 sa svakog ortogonalnog susjeda.
+    if (curNoncon) {
+      for (const j of orthPeers[idx]) {
+        if (!cand[j]) continue;
+        cand[j].delete(val - 1);
+        cand[j].delete(val + 1);
       }
     }
     // Arrow: upis steže cijeli put u OBA smjera - član repa podiže donju granicu
@@ -933,6 +982,9 @@ const Solver = (() => {
     ],
     hyper: hyperWindows.map((cells, i) => ({ cells, name: HYPER_NAMES[i] })),
     jigsaw: [],
+    // Nonconsecutive nema imenovanih jedinica (nema ih ni stvarnih) - eliminacije se
+    // vide kroz kandidate, kao kod antiknighta.
+    nonconsecutive: [],
     // Naziv je pozicija u kutiji, ista imena kao kutije ("top-left cells").
     disjoint: disjointGroups.map((cells, p) => ({ cells, name: `${BOX_NAMES[p]} cells` })),
   };
@@ -1000,6 +1052,9 @@ const Solver = (() => {
     curZippers = validZippers(zippers) && zippers.length ? prepZippers(zippers) : null;
     curArrows = validArrows(arrows) && arrows.length ? prepArrows(arrows) : null;
     const active = variantKey(variants);
+    // Nonconsecutive se čita iz VARIJANTI, ne iz clues - jedina koja nema per-puzzle
+    // podatak (pravilo vrijedi za cijelu ploču, kao antiknight).
+    curNoncon = active !== "classic" && active.split("+").includes("nonconsecutive");
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
     if (jig) {
