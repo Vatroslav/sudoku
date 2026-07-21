@@ -1619,9 +1619,15 @@ zbrojeva je nula (22%), prosjek 11.9, a i teoretski maksimum 35 se pojavi.
 - **Meni**: test iz v1.40.1 proširen i prolazi - abecedni redoslijed (Sandwich između
   Renbana i Therma), svaki redak ima varijantu i labelu, `app.js` i `sudoku.js` dijele
   isti popis. **Varijanti je sada 19.**
-- **Vizualna potvrda igranjem**: NIJE napravljena - screenshot u ovom okruženju
-  konzistentno pada u timeout, pa je render provjeren mjerenjem (geometrija, prelijevanje
-  teksta, boja). Po pouci iz v1.40.0 to je ono što treba potvrditi igranjem.
+- **Potvrđeno igranjem**: **Vatra odigrao Sandwich i potvrdio da je dobro.** Pri izradi
+  vizualna provjera NIJE bila moguća - screenshot u ovom okruženju konzistentno pada u
+  timeout - pa je render bio provjeren isključivo mjerenjem (geometrija, prelijevanje
+  teksta, boja). To je bio najveći otvoreni rizik ove varijante: po pouci iz v1.40.0
+  rizik je najveći kad se crta NEŠTO NOVO, a ovdje je novo bilo cijelo mjesto crtanja.
+  Mjerenje je time potvrđeno kao dostatna zamjena za oko **u ovom slučaju** - kad je
+  ono što se provjerava geometrijsko (širina pojasa, veličina fonta, poravnanje), dakle
+  mjerljivo. Ne generalizirati na render kojem je pitanje "izgleda li dobro", ne
+  "stoji li na mjestu".
 
 ## Stanje popisa kandidata (nakon v1.42.0)
 
@@ -1632,9 +1638,9 @@ wish-lista iscrpljena u v1.34.x, sada je **isporučen do jedne stavke**:
 | --------------------------------------------------------------------------------- | ------------- |
 | Disjoint Groups, German Whispers, Renban, Zipper, Arrow, Nonconsecutive, Sandwich | Little Killer |
 
-**Render kanal izvan ploče je time otvoren i dokazan** (v1.42.0), pa razlog zbog kojeg
-je ta skupina ostavljena za kraj više ne vrijedi. Little Killer nasljeđuje gotov
-`.board-frame` s pojasom; posao koji mu preostaje je drugačiji:
+**Render kanal izvan ploče je time otvoren i dokazan** (v1.42.0, potvrđen igranjem), pa
+razlog zbog kojeg je ta skupina ostavljena za kraj više ne vrijedi. Little Killer
+nasljeđuje gotov `.board-frame` s pojasom; posao koji mu preostaje je drugačiji:
 
 - oznaka mu stoji uz **dijagonalu**, ne uz redak - dakle u pojasu, ali s pripadnom
   strelicom smjera, i na uglovima gdje se pojasevi sastaju (Sandwich taj kut ne koristi),
