@@ -542,6 +542,17 @@ iz prve, ali uz render koji se dao pogledati). Pouka za iduću oznaku: kad se re
 svede na postojeći sloj i ništa se ne crta preko granica ćelije, nedostatak vizualne
 provjere je podnošljiv rizik. Za sve što prelazi granicu ćelije - nije.
 
+> **Ispravljeno u v1.36.0.** Ta granica je bila postavljena na krivom mjestu. German
+> Whispers crta segmente PREKO granica ćelija, shipan je bez vizualne provjere (browser
+> pane nije radio) i prošao je iz prve. Prava razlika nije _što_ se crta nego **je li
+> kôd koji to crta nov ili naslijeđen**: Thermo je jedini render koji je trebao tri
+> runde popravaka (kut, spoj u središtu, krpe) i jedini je tu mašineriju PISAO.
+> Palindrome, Clone i Whisper su je naslijedili i sva tri su prošla iz prve.
+> Nova formulacija: **nedostatak vizualne provjere je podnošljiv kad se render svodi na
+> već dokazan kôd, bez obzira prelazi li granicu ćelije. Za novu render mašineriju -
+> nije.** Ono što u naslijeđenom slučaju ipak treba provjeriti okom je dio koji NIJE
+> naslijeđen (kod Whispera boja `--whisper`, jedina stvar koju mjerenje ne hvata).
+
 ### Provjere
 
 - **Regresija**: 26 ploča (13 kombinacija × 2 težine, zasijan RNG) **bajt-identično**
@@ -946,18 +957,13 @@ po tonu koji bi se s njima natjecao. Svjetlina je namjerno ista (luma ~66 prema 
   +killer 9/10, whisper sam 8/10, +x 8/10, +disjoint 8/10, +thermo 6/10; Normal 10/10.
 - **`KEEP_MIN` = 4**: izmjereno 4-8 linija po ploči u svim kombinacijama, nijedna
   ispod dna (isti razlog kao `THERMO_KEEP_MIN` - usamljena linija se čita kao greška).
-- **Render NIJE vizualno provjeren** - browser pane je i u ovoj sesiji bio polovičan
-  (screenshot timeouta, JS izvršavanje blokirano). Potvrđeno je samo da se Whisper Hard
-  partija generira i iscrtava **bez ijedne greške u konzoli**, kroz stvarne klikove u
-  meniju. To je slabija provjera nego kod Clonea, i to **svjesno preko granice koju
-  Clone sekcija postavlja** ("za sve što prelazi granicu ćelije - nije podnošljiv
-  rizik"): whisper linija crta segmente preko granica ćelija.
-  Razlog zašto je svejedno shipano: mašinerija je **naslijeđena bez izmjene** -
-  `.line-seg`/`.line-joint`/`.line-clip` su isti kôd koji Thermo i Palindrome već
-  koriste, a jedina nova stvar je CSS varijabla boje i jedan unos u `lines` polju.
-  Palindrome je istu mašineriju naslijedio i prošao iz prve. **Prvo što treba
-  pogledati ako nešto ne valja je boja** (`--whisper`), jer je ona jedini dio koji
-  nije naslijeđen ni izmjeren.
+- **Render**: pri izradi NIJE bio vizualno provjeren - browser pane je i u ovoj sesiji
+  bio polovičan (screenshot timeouta, JS izvršavanje blokirano), pa je jedina provjera
+  bila da se Whisper Hard partija generira i iscrtava **bez ijedne greške u konzoli**,
+  kroz stvarne klikove u meniju. Shipano je svjesno preko granice koju postavlja Clone
+  sekcija ("za sve što prelazi granicu ćelije - nije podnošljiv rizik"), uz obrazloženje
+  da je mašinerija naslijeđena bez izmjene i da je jedino novo boja.
+  **Vatra je odigrao partiju i potvrdio da je dobro** - render i boja rade.
 
 ### Nađen bug u mjernim harnessima (i ispravljene tvrdnje iz v1.35.0)
 
