@@ -1193,6 +1193,13 @@ zasićenosti i uskom rasponu svjetline (luma 65-72, jer linija stoji ispod zname
 Rezerva je već zapisana u sekciji o legendi: **oznaka na kraju linije** (jeftina,
 presedan je `.thermo-bulb`, za Palindrome čak semantična).
 
+> **Zaključak je preživio, obrazloženje nije (v1.39.1).** Ovo je krivo dijagnosticiralo
+> problem kao "peta boja je previše" i mjerilo ga hue razmakom. Vatra je odigrao
+> Palindrome + Zipper i prijavio da se jedva razlikuju - a mjerenje deltaE pokazalo je
+> da su **thermo+renban (11.4) i thermo+whisper (12.8) bili GORI** od prijavljenog
+> para (14.2). Problem nije bio u zadnjoj boji nego u tome što se biralo hue razmakom.
+> Sve četiri su preračunate odjednom u Lab prostoru; vidi sekciju niže.
+
 ### Provjere
 
 - **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) identične do na novo
@@ -1214,6 +1221,70 @@ presedan je `.thermo-bulb`, za Palindrome čak semantična).
 ispisivale `{"thermos":4}` i izgledale kao da Zipper nije nastao. Nije bio bug u kodu
 (`zippercheck` je istovremeno pokazivao 4-9 linija), ali je isti obrazac koji je u
 v1.36.0 doveo do lažnih hint brojki. Sada čita sve što je polje u `clues`.
+
+## Boje linijskih varijanti preračunate (v1.39.1)
+
+Vatra je nakon Zippera javio dvije stvari: Palindrome i Zipper se jedva razlikuju, a
+uzorak u legendi je za Zipper bio točkica umjesto crtice. Oba su popravljena, i oba su
+imala uzrok drukčiji od očekivanog.
+
+### Legenda: sudar imena CSS klase
+
+Prva hipoteza je bila `flex-shrink` (uzorak se skuplja kad ponestane mjesta). **Kriva** -
+uzorak je već imao `flex-shrink: 0`. Mjerenje u browseru pokazalo je `flex-basis:
+calc(20% - 8px)`, što nije bilo nigdje u pravilu za legendu.
+
+Uzrok: klasa `.swatch` **već postoji** - to su gumbi palete boja
+(`flex: 0 0 calc(20% - 8px)`). Legendin uzorak ju je slučajno preuzeo, pa mu je širina
+ispadala 20% roditelja umjesto 18px. Račun se poklopio na decimalu: entry "German
+Whispers" je 108.98px → 20% − 8px = 13.797px, točno izmjereno.
+
+**Zašto baš Zipper:** entry je širok koliko i ime varijante, a "Zipper" je najkraće ime -
+20% od ~58px minus 8px ispadne ~4px, što s punim radijusom postane krug. Duža imena su
+davala kraću crticu, koja se čitala kao namjerna.
+
+Popravak je preimenovanje u `.legend-swatch` (+ izričit `flex: none`). Pouka: **provjeri
+je li ime klase slobodno prije nego ga uzmeš** - CSS nema module, a `swatch` je
+očito ime za dvije različite stvari.
+
+### Boje: hue razmak nije mjera razlučivosti
+
+Do sada su boje birane jedna po jedna, svaka "u najveći preostali razmak u hue krugu".
+Mjerenje percepcijske razlike (CIE Lab deltaE) na zatečenom skupu:
+
+| par                  | deltaE |
+| -------------------- | ------ |
+| thermo + renban      | 11.4   |
+| thermo + whisper     | 12.8   |
+| palindrome + zipper  | 14.2   |
+| palindrome + whisper | 15.1   |
+
+**Prijavljeni par nije bio najgori - dva su bila gora, samo ih nitko nije odigrao.**
+Problem dakle nije bio "peta boja je granica" (kako je zapisano u v1.39.0) nego sam
+postupak: hue razmak ne mjeri razlučivost, jer oko nije jednako osjetljivo po hue
+krugu, a kod tamnih niskozasićenih tonova pogotovo.
+
+Sada su sve četiri birane ODJEDNOM u Lab prostoru: ista L\* (30), ista kroma (18), hue
+jednoliko na 5 × 72°. Po konstrukciji daje jednaku percepcijsku svjetlinu i jednake
+razmake. **Najgori par: 11.4 → 20.9**, provjereno čitanjem stvarno primijenjenih
+vrijednosti sa žive stranice (ne iz izvora).
+
+Svaka varijanta zadržava karakter koji je i prije imala - tuba plava, palindrom zelen,
+whisper topao, renban ljubičast, zipper oker - pa ploča ne izgleda kao druga igra.
+Luma ostaje 64-72, isti pojas kao prije.
+
+**Za šestu liniju ovo se ne ponavlja**: 6 × 60° spustilo bi najgori par natrag ispod 20.
+Tada ide rezerva (oznaka na kraju linije). Tvrdnja iz v1.39.0 da je "peta granica"
+ostaje točna po zaključku, ali je obrazloženje bilo krivo - granica nije u broju boja
+nego u tome koliko ih stane uz deltaE >= 20.
+
+### Pouka o mjerenju
+
+Ovo je treći put u nizu da je hipoteza pala na mjerenju (prije: uzrok repa kod
+Renbana, hint brojke kod Whispersa). Zajedničko im je da je **prva hipoteza bila
+uvjerljiva i kriva**, a mjerenje jeftino. Kod boja je posebno važno jer se "izgleda
+dobro" ne da provjeriti čitanjem koda - deltaE je jedini način da se tvrdnja o
+razlučivosti obrani brojkom.
 
 ## Poznato / tehnički dug
 

@@ -111,11 +111,13 @@ v1.35.0 (`STRENGTH` se mjeri na kombinacijama).
 **Skupina je iscrpljena u v1.39.0** - sve tri su isporučene (Whispers, Renban, Zipper),
 uz Thermo i Palindrome to je pet linijskih varijanti.
 
-**Boja je time potrošena kao mehanizam.** Legenda (v1.37.0) je spustila prag pa je
-peta boja još stala, ali razmak u hue krugu je na njoj pao na 64 stupnja (prethodno
-najuži par imao je 102). Šesta linijska varijanta - ako je ikad bude - **ne smije birati
-boju** nego posegnuti za rezervom: oznaka na kraju linije, jeftina i s presedanom
-(`.thermo-bulb`). Vidi odbačene opcije u [todo.md](todo.md).
+**Boja je time potrošena kao mehanizam.** Pet boja stane uz percepcijsku razliku
+(deltaE) od 20.9 u najgorem paru, i to tek nakon što su u v1.39.1 sve preračunate
+odjednom u Lab prostoru - biranje "jedna po jedna, u najveći hue razmak" davalo je
+parove na 11-14, što je premalo za tanke tamne linije. Šesta linijska varijanta - ako
+je ikad bude - **ne smije birati boju** (6 × 60° vraća najgori par ispod 20) nego
+posegnuti za rezervom: oznaka na kraju linije, jeftina i s presedanom (`.thermo-bulb`).
+Vidi [todo.md](todo.md).
 
 **Skuplje - novi render kanal:**
 

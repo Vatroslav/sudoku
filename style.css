@@ -26,32 +26,34 @@
      pa je Hyper ćelija izgledala kao da je već označena. */
   --window-tint: rgba(150, 120, 245, 0.3);
   --parity: #7a7a8c;
-  --thermo: #3f3f4d;
-  /* Palindrome dijeli oblik s tubom (linija po ćelijama) pa razliku mora nositi boja:
-     isti ton svjetline, drugi ton boje - da se u kombinaciji Thermo+Palindrome na
-     prvi pogled vidi koja je linija koja. */
-  --palindrome: #3c4d42;
-  /* German Whispers je treća linijska varijanta, pa boja mora raditi u SVA TRI para
-     (najviše dvije su aktivne odjednom): uz tubu, uz palindrom, i sama. Tuba je
-     hladno plava a palindrom hladno zelena - whisper je zato jedina TOPLA, što ga
-     razlikuje od obiju bez oslanjanja na ton koji bi se s njima natjecao. Ista
-     svjetlina kao ostale dvije (luma ~66 prema 65 i 71) da nijedna ne dominira. */
-  --whisper: #4d3f3c;
-  /* Renban je četvrta linijska varijanta. Tri postojeće leže na hue 240 (tuba),
-     138 (palindrom) i 10 (whisper) - razmaci 102/128/130 - pa četvrta ide u najveći
-     preostali, oko 290. Zasićenost je malo viša (18% prema 10-13%) jer na četiri boje
-     u ovako uskom rasponu svjetline sam hue više ne nosi razliku; svjetlina ostaje u
-     istom pojasu (luma 68 prema 65-71) da nijedna linija ne dominira pločom.
-     Od v1.37.0 legenda ispod ploče kaže koja je koja, pa boja mora razlikovati samo
-     PAR na ploči, ne svih pet iz sjećanja. */
-  --renban: #503b54;
-  /* Zipper je PETA linijska. Postojeće leže na hue 240/138/10/290, pa najveći
-     preostali razmak (10->138) daje ~74 - maslinasto-oker. Zasićenost je opet malo
-     viša (25%) jer je razmak do palindromove zelene (138) najuži dosad: 64 stupnja,
-     prema 102 koliko je imala najbliža prethodna susjeda.
-     PETA JE GRANICA OVOG MEHANIZMA - vidi todo.md. Šesta linijska varijanta ne bi
-     smjela birati boju nego posegnuti za rezervom (oznaka na kraju linije). */
-  --zipper: #464e2d;
+  /* --- Boje linijskih varijanti ---
+     Pet varijanti crta ISTU geometriju pa ih razlikuje samo boja. Do v1.39.0 birane
+     su jedna po jedna, "u najveći preostali razmak u hue krugu" - i to je popustilo:
+     Vatra je prijavio da se Palindrome i Zipper jedva razlikuju.
+
+     Mjerenje je pokazalo da problem nije bio u zadnjoj dodanoj nego u cijelom
+     pristupu. Percepcijska razlika (CIE Lab deltaE) najgorih parova bila je:
+       thermo+renban 11.4, thermo+whisper 12.8, palindrome+zipper 14.2
+     Dakle DVA para su bila gora od prijavljenog - samo ih nitko nije odigrao. Hue
+     razmak nije mjera razlučivosti: oko nije jednako osjetljivo po hue krugu, a kod
+     tamnih niskozasićenih tonova pogotovo.
+
+     Sada su sve četiri birane ODJEDNOM u Lab prostoru: ista L* (30) i ista kroma
+     (18), hue jednoliko raspoređen na 5 × 72°. To po konstrukciji daje jednaku
+     percepcijsku svjetlinu i jednake razmake. Najgori par je time 11.4 -> 20.9.
+
+     Svaka varijanta zadržava karakter koji je i prije imala (tuba plava, palindrom
+     zelen, whisper topao, renban ljubičast, zipper oker) pa ploča ne izgleda kao
+     druga igra - boje su samo razmaknute i izjednačene. Luma ostaje 64-72, isti
+     pojas kao prije, dakle nijedna linija ne dominira i znamenka iznad ostaje čitljiva.
+
+     Za ŠESTU liniju ovo se ne ponavlja: 6 × 60° spustilo bi najgori par natrag ispod
+     20. Tada ide rezerva - oznaka na kraju linije (vidi todo.md). */
+  --thermo: #1c4c5d;
+  --palindrome: #294e3e;
+  --whisper: #623c3e;
+  --renban: #4d425d;
+  --zipper: #4f462b;
   /* Clone: boja veže par regija, pa ih mora biti onoliko koliko ima parova (4) i
      moraju se razlikovati na prvi pogled - zato tonovi, a ne nijanse istog tona.
      Translucentne su da odabir i peer-highlight ostanu vidljivi ispod, i namjerno
@@ -230,8 +232,15 @@ main {
 }
 /* Uzorak nosi boju iz iste varijable koju crta i linija na ploči - ako se boja
    ikad promijeni, legenda je prati bez dodatne izmjene. Zaobljen je jednako kao
-   .line-seg, da se čita kao komad linije a ne kao kvadratić uz tekst. */
-.line-legend .swatch {
+   .line-seg, da se čita kao komad linije a ne kao kvadratić uz tekst.
+
+   Klasa je `legend-swatch`, a NE `swatch`: to ime već nose gumbi palete boja
+   (`flex: 0 0 calc(20% - 8px)`, vidi niže). Legendin uzorak ga je naslijedio pa mu
+   je širina ispadala 20% entryja umjesto 18px - a kako je entry širok koliko i ime
+   varijante, najkraće ime (Zipper) dobivalo je ~4px, dakle točkicu umjesto crtice.
+   `flex: none` je uz to izričit: uzorak je mjera, ne rastezljiv element. */
+.line-legend .legend-swatch {
+  flex: none;
   width: 18px;
   height: 5px;
   border-radius: 999px;

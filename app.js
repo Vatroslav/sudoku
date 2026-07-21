@@ -1177,7 +1177,9 @@
       const entry = document.createElement("span");
       entry.className = "entry";
       const swatch = document.createElement("span");
-      swatch.className = "swatch";
+      // NE "swatch" - to ime nose gumbi palete boja i nose sa sobom flex-basis
+      // (vidi komentar uz .line-legend .legend-swatch u CSS-u).
+      swatch.className = "legend-swatch";
       swatch.style.setProperty("--sw", `var(${l.cssVar})`);
       entry.appendChild(swatch);
       entry.appendChild(document.createTextNode(VARIANT_LABELS[l.variant]));
