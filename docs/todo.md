@@ -1278,6 +1278,24 @@ Tada ide rezerva (oznaka na kraju linije). Tvrdnja iz v1.39.0 da je "peta granic
 ostaje točna po zaključku, ali je obrazloženje bilo krivo - granica nije u broju boja
 nego u tome koliko ih stane uz deltaE >= 20.
 
+### Potvrđeno igranjem, i time kalibriran prag
+
+Vatra je odigrao **Zipper + Palindrome** - točno par koji je prijavio kao nerazlučiv -
+i potvrdio da je sada dobro. Time su zatvorena oba problema iz v1.39.1 i potvrđen
+render Zippera (peta linijska varijanta, koja pri izradi nije bila vizualno provjerena).
+
+Vrijednije od same potvrde je što je **prag sada empirijski kalibriran na istom paru**,
+istom čovjeku i istom zaslonu:
+
+| deltaE u tom paru | presuda                  |
+| ----------------- | ------------------------ |
+| 14.2              | "jedva vidljiva razlika" |
+| 20.9              | "dobro je"               |
+
+To je jedina točka koju imamo, ali je stvarna - dosad se o razlučivosti odlučivalo
+procjenom. **Za buduće boje: 14 je premalo, ~21 je dovoljno.** Ciljati barem 20 u
+najgorem paru, i to mjeriti u Lab prostoru, ne po hue razmaku.
+
 ### Pouka o mjerenju
 
 Ovo je treći put u nizu da je hipoteza pala na mjerenju (prije: uzrok repa kod
