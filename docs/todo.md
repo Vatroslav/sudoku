@@ -1131,10 +1131,13 @@ sama za sebe; ovako mora razlikovati samo par na ploči, pa je izbor bio mehani�
 - **Legenda**: test iz v1.37.0 proširen na Renban i prolazi - `--renban` definiran,
   `.line-seg.renban` ga koristi, ime postoji, LINE_KINDS ga pokriva. To je točno ono
   zbog čega je test pisan: doda se linija, zaboravi legenda.
-- **Render NIJE vizualno provjeren** - browser pane opet nije otvarao meni. Kao kod
-  Whispersa: mašinerija je naslijeđena bez izmjene, jedino novo je boja. Po ispravljenoj
-  pouci iz Clone sekcije to je podnošljiv rizik, ali **boja je jedini dio koji ni jedan
-  test ne hvata** - ako nešto ne valja, prvo pogledati `--renban` uz `--thermo`.
+- **Render**: pri izradi nije bio vizualno provjeren (browser pane opet nije otvarao
+  meni), pa je shipan po ispravljenoj pouci iz Clone sekcije - mašinerija naslijeđena,
+  jedino novo boja. **Vatra odigrao Thermo + Renban i potvrdio da dobro izgleda**, a to
+  je bio i najteži par za novu boju (ljubičasta uz plavu tubu). Četvrta linijska
+  varijanta time prolazi iz prve, kao i tri prije nje.
+- **Legenda je prošla prvi stvarni test** (v1.37.0): Thermo + Renban je prva odigrana
+  partija s dvije linije otkako postoji.
 
 ## Poznato / tehnički dug
 
