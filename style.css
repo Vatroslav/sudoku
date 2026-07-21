@@ -37,6 +37,14 @@
      razlikuje od obiju bez oslanjanja na ton koji bi se s njima natjecao. Ista
      svjetlina kao ostale dvije (luma ~66 prema 65 i 71) da nijedna ne dominira. */
   --whisper: #4d3f3c;
+  /* Renban je četvrta linijska varijanta. Tri postojeće leže na hue 240 (tuba),
+     138 (palindrom) i 10 (whisper) - razmaci 102/128/130 - pa četvrta ide u najveći
+     preostali, oko 290. Zasićenost je malo viša (18% prema 10-13%) jer na četiri boje
+     u ovako uskom rasponu svjetline sam hue više ne nosi razliku; svjetlina ostaje u
+     istom pojasu (luma 68 prema 65-71) da nijedna linija ne dominira pločom.
+     Od v1.37.0 legenda ispod ploče kaže koja je koja, pa boja mora razlikovati samo
+     PAR na ploči, ne svih pet iz sjećanja. */
+  --renban: #503b54;
   /* Clone: boja veže par regija, pa ih mora biti onoliko koliko ima parova (4) i
      moraju se razlikovati na prvi pogled - zato tonovi, a ne nijanse istog tona.
      Translucentne su da odabir i peer-highlight ostanu vidljivi ispod, i namjerno
@@ -511,6 +519,11 @@ main {
 .cell .line-joint.whisper,
 .cell .line-clip.whisper > span {
   background: var(--whisper);
+}
+.cell .line-seg.renban,
+.cell .line-joint.renban,
+.cell .line-clip.renban > span {
+  background: var(--renban);
 }
 .cell .line-seg {
   position: absolute;

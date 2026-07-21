@@ -90,8 +90,11 @@ ne po privlačnosti.
   render, ali je promašila jednu stvar: logika NIJE Thermo nego Kropki - dopušteni skup
   je unija dva repa pa `whisperRange` ne postoji. Mjerenje je potvrdilo pravilo iz
   v1.35.0 i proširilo ga s regijskih na oznakovne varijante. Detalji u [todo.md](todo.md).
-- **Renban** - linija nosi uzastopan skup znamenki u bilo kojem redoslijedu. Derive:
-  šetnja pa provjera je li skup uzastopan (ili gradnja rastućeg pa premetanje puta).
+- ~~**Renban**~~ - **isporučen u v1.38.0**, treći s ove liste. Derive nije ispao ni
+  jedna od dvije ovdje predviđene izvedbe: umjesto "šetnja pa provjera" ili "gradnja
+  rastućeg pa premetanje", invarianta se drži u SVAKOM koraku (dodaje se samo susjed
+  na min-1 ili max+1), pa nemoguća linija ne može ni nastati. Logikom je ispao najbliži
+  Killeru, ne ostalim linijama - veže cijeli skup odjednom. Detalji u [todo.md](todo.md).
 - **Zipper line** - parovi simetrični oko sredine daju isti zbroj. Derive raste iz
   sredine u parovima, točno kao `derivePalindromes`.
 

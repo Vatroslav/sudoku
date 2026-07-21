@@ -19,6 +19,7 @@
     "thermo",
     "palindrome",
     "whisper",
+    "renban",
     "clone",
     "killer",
   ];
@@ -35,6 +36,7 @@
     thermo: "Thermo",
     palindrome: "Palindrome",
     whisper: "German Whispers",
+    renban: "Renban",
     clone: "Clone",
     killer: "Killer",
   };
@@ -50,6 +52,7 @@
     { kind: "thermo", variant: "thermo", key: "thermos", cssVar: "--thermo" },
     { kind: "pal", variant: "palindrome", key: "palindromes", cssVar: "--palindrome" },
     { kind: "whisper", variant: "whisper", key: "whispers", cssVar: "--whisper" },
+    { kind: "renban", variant: "renban", key: "renbans", cssVar: "--renban" },
   ];
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -256,6 +259,7 @@
   }
   const validPalindromes = validThermos; // isti oblik puta, samo bez smjera
   const validWhispers = validThermos; // isto - razlikuje se odnos, ne geometrija
+  const validRenbans = validThermos; // isto
   // Clone: par regija istog oblika ([[a...],[b...]]) - odnos je po indeksu, pa render
   // treba samo ćelije. Oblik se ne provjerava; bitno je da su parovi cjeloviti i da
   // se ćelije ne ponavljaju (jedna ćelija = najviše jedan klon).
@@ -460,6 +464,7 @@
         clones: (clues && clues.clones) || null,
         cages: (clues && clues.cages) || null,
         whispers: (clues && clues.whispers) || null,
+        renbans: (clues && clues.renbans) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -650,6 +655,12 @@
         if (!validWhispers(clues.whispers)) return false;
       } else {
         clues.whispers = null;
+      }
+      // Renban: isti oblik.
+      if (state.variants.includes("renban")) {
+        if (!validRenbans(clues.renbans)) return false;
+      } else {
+        clues.renbans = null;
       }
       return true;
     } catch (e) {

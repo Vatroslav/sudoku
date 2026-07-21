@@ -133,6 +133,9 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 - [x] German Whispers (susjedi na liniji razlikuju se za barem 5, v1.36.0). Druga s
       liste kandidata. Geometriju posuđuje od Thermo, logiku od Kropkija - vidi
       sekciju niže.
+- [x] Renban (uzastopan skup na liniji, bilo kojim redoslijedom, v1.38.0). Treća s
+      liste kandidata, četvrta linijska. Treći tip odnosa: veže cijeli skup odjednom
+      (kao Killer), ne poziciju ni susjedni par - vidi sekciju niže.
 - [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
       svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
@@ -1050,6 +1053,88 @@ svakom renderu.
   pravilo koje tu varijablu koristi, svaka ima ime, i render/legenda dokazano čitaju
   isti popis. Zadnja provjera je zaštita za IDUĆU liniju: doda se Renban, zaboravi se
   legenda - test pukne.
+
+## Renban (v1.38.0)
+
+Linija čije vrijednosti čine UZASTOPAN skup, u bilo kojem redoslijedu ({4,6,5} je
+valjano). Treća s liste kandidata i četvrta linijska varijanta - prva koja je
+isporučena nakon što je legenda (v1.37.0) skinula pritisak s boje.
+
+Izmjereno (Hard): **prosjek 8ms, max 44ms** sam; kombinacije 10-456ms prosjek.
+Normal 2ms. Linija po ploči 4-8, duljina 3-5.
+
+### Treći tip odnosa u repou
+
+Dosadašnje linijske varijante vežu ili POZICIJU u putu (Thermo) ili SUSJEDNI PAR
+(Whispers, kao Kropki). Renban veže **cijeli skup ćelija odjednom** - i time je zapravo
+najbliži Killeru: kavez zadaje zbroj, Renban zadaje raspon. Otuda i ista struktura:
+`renbanRange` uz zasebnu provjeru ponavljanja, propagacija na CIJELU liniju u `place`
+(ne samo na susjede, kao kod Whispersa).
+
+Uzastopan skup duljine L koji sadrži najmanju m i najveću M mora stati u prozor od L,
+pa svaka vrijednost leži u `[M-L+1, m+L-1]`. Na praznoj liniji nema što stegnuti - za
+razliku od Whispersa (5 otpada odmah) i Therma (pozicija sama reže). Snaga dolazi tek s
+prvim upisom, ali onda naglo: jedan broj na liniji duljine 3 ostavlja ostalima samo 5
+mogućnosti.
+
+**Derive ima invariantu koju prethodne dvije nisu imale:** skup mora biti uzastopan u
+SVAKOM koraku, ne tek na kraju - smije se dodati samo susjed čija je vrijednost trenutni
+min-1 ili max+1. Cijena je da neke valjane linije promaknu (put koji bi preko "rupe"
+došao do uzastopnog skupa odbacuje se čim rupa nastane); ne popravlja se jer bi tražilo
+pretragu s vraćanjem umjesto šetnje, a i ovako ih ima 4-8 po ploči. Zauzvrat `mine` Set
+nije potreban - min-1 i max+1 po definiciji nisu u skupu, pa se put ne može vratiti na
+sebe (Whispers je to trebao, odnos mu je simetričan).
+
+Redoslijed izvođenja: **Renban ide prvi od linijskih** (odmah iza klona). Nastavak mora
+biti točno jedna od dvije vrijednosti, dok Whispers prima sve na razlici >= 5 (1-4
+vrijednosti, prosjek 2.2). Isto pravilo kao v1.33.0.
+
+### `STRENGTH: 8`, i jedan rep koji se nije dao reproducirati
+
+Pravilo iz v1.35.0/v1.36.0 opet je odlučilo: sa 10 su `renban+thermo` i `renban+killer`
+imali repove od 30s odnosno 29s, sa 8 su u sekundi. Solo raspon gubi točno jedan zadani
+broj (20-28 prema 19-28).
+
+**Zabilježeno jer nije objašnjeno:** jedno mjerenje `renban+thermo` sa `STRENGTH: 8`
+uhvatilo je pokušaj od **374 sekunde**. Ponovljeno mjerenje na 110 ploča dalo je medijan
+17ms, max 6.2s i 1/80 iznad 5s - outlier se nije reproducirao. Rep je dakle stvaran ali
+rijedak, i u normalnom rasponu drži se uz zatečeni `clone+thermo` (14s). Nosi ga Cancel
+
+- worker. Ako se ikad pokaže čestim, prvo pogledati taj par.
+
+Pouka o metodologiji: `N=20` je premalo za tvrdnju o repu. Prosjek i max iz tako malog
+uzorka su se ovdje razlikovali 60× između dva pokretanja iste kombinacije. Za repove
+treba medijan/p90 na uzorku od barem 50, uz ispis svake ploče - inače se outlier čita
+kao sistematska sporost (i obrnuto).
+
+### Boja: prva odabrana nakon legende
+
+Tri postojeće linije leže na hue 240 (tuba), 138 (palindrom) i 10 (whisper) - razmaci
+102/128/130 - pa četvrta ide u najveći preostali, oko 290 (`--renban: #503b54`).
+Zasićenost je malo viša (18% prema 10-13%) jer na četiri boje u ovako uskom rasponu
+svjetline sam hue više ne nosi razliku.
+
+**Legenda je ovdje prvi put isplatila.** Bez nje bi četvrta boja morala biti pamtljiva
+sama za sebe; ovako mora razlikovati samo par na ploči, pa je izbor bio mehanički
+(najveći razmak u hue krugu) umjesto kompromisa.
+
+### Provjere
+
+- **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) identične do na novo
+  prazno `renbans: null` polje. Ponovljeno nakon fiksiranja `STRENGTH` - i dalje
+  identično (kombinacije bez Renbana ne diraju njegov `deriveRenbans`, pa RNG niz stoji).
+- **Generator**: na svakoj ploči provjereno da vrijednosti linije čine uzastopan skup u
+  rješenju (max-min === L-1), da nema ponovljene znamenke, da je svaki korak potez
+  kralja i da se linije ne preklapaju.
+- **Hint**: **nula krivih prijedloga**. Riješeno samim hintovima (Hard): +killer 10/10,
+  +whisper 8/10, +thermo i +clone 7/10, +x 6/10, renban sam 5/10; Normal 10/10.
+- **Legenda**: test iz v1.37.0 proširen na Renban i prolazi - `--renban` definiran,
+  `.line-seg.renban` ga koristi, ime postoji, LINE_KINDS ga pokriva. To je točno ono
+  zbog čega je test pisan: doda se linija, zaboravi legenda.
+- **Render NIJE vizualno provjeren** - browser pane opet nije otvarao meni. Kao kod
+  Whispersa: mašinerija je naslijeđena bez izmjene, jedino novo je boja. Po ispravljenoj
+  pouci iz Clone sekcije to je podnošljiv rizik, ali **boja je jedini dio koji ni jedan
+  test ne hvata** - ako nešto ne valja, prvo pogledati `--renban` uz `--thermo`.
 
 ## Poznato / tehnički dug
 

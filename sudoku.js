@@ -131,6 +131,32 @@ const Sudoku = (() => {
   // varijanta vuče najveći dio snage (isti odnos kao "pozicija sama" kod Thermo).
   const WHISPER_BAN = 5;
 
+  // Renban: vrijednosti na liniji čine UZASTOPAN skup, u bilo kojem redoslijedu
+  // ({4,6,5} je valjano). Mora se poklapati sa solver.js renbanRange.
+  //
+  // Odnos je treći tip u repou: ne veže poziciju (Thermo), ni susjedni par (Whispers,
+  // Kropki), nego CIJELI skup ćelija odjednom - kao Killer, samo što kavez zadaje
+  // zbroj a ovdje je zadan RASPON. Odatle i ista struktura granice.
+  //
+  // Uzastopan skup duljine L koji sadrži najmanju m i najveću M mora stati u prozor
+  // od L: svaka vrijednost leži u [M-L+1, m+L-1]. Na praznoj liniji nema što stegnuti
+  // (raspon je 1-9) - za razliku od Whispersa (5 otpada odmah) i Therma (pozicija).
+  // Snaga dolazi tek s prvim upisom, ali onda naglo: jedan broj na liniji duljine 3
+  // ostavlja samo 5 mogućnosti ostalima.
+  function renbanRange(board, cells) {
+    let m = 10,
+      M = 0;
+    for (const j of cells) {
+      const b = board[j];
+      if (!b) continue;
+      if (b < m) m = b;
+      if (b > M) M = b;
+    }
+    if (M === 0) return [1, 9]; // nijedan član nije popunjen
+    const L = cells.length;
+    return [Math.max(1, M - L + 1), Math.min(9, m + L - 1)];
+  }
+
   // Killer: raspon [lo,hi] dopušten ćelija u kavezu zadanog zbroja. Isti oblik kao
   // thermoRange (granice, ne provjera para) pa solver može rezati kandidate odmah.
   //
@@ -180,6 +206,14 @@ const Sudoku = (() => {
   // preklapaju pa je po ćeliji najviše jedna. Pozicija se ovdje ne koristi za raspon
   // nego samo da se nađu susjedi na liniji (path[pos±1]).
   const prepWhispers = prepThermos;
+  // Renban: odnos gleda CIJELU liniju odjednom (kao kavez), pa je izvedeni oblik
+  // { cells } - pozicija ne igra ulogu jer je redoslijed na liniji slobodan.
+  function prepRenbans(renbans) {
+    if (!renbans || !renbans.length) return null;
+    const at = new Array(81).fill(null);
+    for (const path of renbans) for (const i of path) at[i] = { cells: path };
+    return at;
+  }
 
   // Palindrome i Clone svode se na ISTI odnos - "ove dvije ćelije nose istu
   // vrijednost" - pa dijele izvedeni oblik: 81-polje indeksa partnera (-1 = nema ga).
@@ -232,6 +266,7 @@ const Sudoku = (() => {
     const clones = (c && c.clones) || null;
     const cages = (c && c.cages) || null;
     const whispers = (c && c.whispers) || null;
+    const renbans = (c && c.renbans) || null;
     return {
       regions,
       parity: (c && c.parity) || null,
@@ -241,10 +276,12 @@ const Sudoku = (() => {
       clones,
       cages,
       whispers,
+      renbans,
       // jig se drži uz regions: isValid ne smije po ćeliji tražiti tko je u kojoj regiji.
       jig: regions ? { map: regions, cells: regionsToCells(regions) } : null,
       thm: prepThermos(thermos),
       whi: prepWhispers(whispers),
+      rnb: prepRenbans(renbans),
       // Jedno polje partnera za obje varijante jednakosti - vidi prepMates.
       mate: prepMates(palindromes, clones),
       cag: prepCages(cages),
@@ -270,6 +307,7 @@ const Sudoku = (() => {
     "thermo",
     "palindrome",
     "whisper",
+    "renban",
     "clone",
     "killer",
   ];
@@ -403,7 +441,7 @@ const Sudoku = (() => {
   //   mate - 81-polje indeksa partnera koji mora nositi ISTU vrijednost (vidi
   //     prepMates); pune ga Palindrome linije i Clone regije.
   function isValid(board, idx, val, variants, clues = EMPTY_CLUES) {
-    const { jig, parity, edges, thm, mate, cag, whi } = clues;
+    const { jig, parity, edges, thm, mate, cag, whi, rnb } = clues;
     const row = Math.floor(idx / 9),
       col = idx % 9;
     const boxRow = Math.floor(row / 3) * 3,
@@ -476,6 +514,15 @@ const Sudoku = (() => {
         const b = board[path[q]];
         if (b && !whisperOk(val, b)) return false;
       }
+    }
+    // Renban: znamenke na liniji su različite i moraju stati u prozor od L uzastopnih.
+    // Ponavljanje se provjerava izravno (linija nije jedinica pa ju peers ne pokrivaju),
+    // raspon kroz renbanRange - isti par provjera kao kod kaveza.
+    if (rnb && rnb[idx]) {
+      const { cells } = rnb[idx];
+      for (const j of cells) if (j !== idx && board[j] === val) return false;
+      const [lo, hi] = renbanRange(board, cells);
+      if (val < lo || val > hi) return false;
     }
     // Palindrome/Clone: partner mora nositi ISTU vrijednost. Provjerava se samo kad
     // je popunjen - drugi smjer stigne kad na njega dođe red (kao kod brid-oznaka).
@@ -815,6 +862,61 @@ const Sudoku = (() => {
     return whispers;
   }
 
+  // Renban: linija čije vrijednosti čine uzastopan skup, u bilo kojem redoslijedu.
+  //
+  // Derive je opet šetnja, ali s invariantom koju prethodne dvije nisu imale: skup
+  // mora biti uzastopan U SVAKOM KORAKU, ne tek na kraju. Zato se smije dodati samo
+  // susjed čija je vrijednost trenutni min-1 ili max+1 - tada je proširen skup nužno
+  // opet uzastopan i nemoguća linija ne može nastati.
+  //
+  // Cijena te invariante je da neke valjane linije promaknu: put koji bi preko "rupe"
+  // (npr. {4,6} pa kasnije 5) došao do uzastopnog skupa odbacuje se čim rupa nastane.
+  // Ne popravlja se jer bi tražilo pretragu s vraćanjem umjesto šetnje, a mjereno ih i
+  // ovako ima dovoljno (4-8 po ploči, isto kao tube i whisperi).
+  //
+  // Ponavljanje je nemoguće po konstrukciji (min-1 i max+1 nisu u skupu), pa `mine`
+  // nije potreban - za razliku od Whispersa, gdje je odnos simetričan pa se put zna
+  // vratiti na sebe.
+  const RENBAN_LEN = { min: 3, max: 5 };
+  const MAX_RENBANS = 12;
+  const RENBAN_DENSITY = { min: 0.3, max: 0.5 };
+  // Isti argument kao THERMO_KEEP_MIN/PALINDROME_KEEP_MIN/WHISPER_KEEP_MIN.
+  const RENBAN_KEEP_MIN = 4;
+  function deriveRenbans(solution, boost = 0, blocked = null) {
+    const want = Math.round(MAX_RENBANS * pickDensity(scaled(RENBAN_DENSITY, boost)));
+    const used = blocked ? blocked.slice() : new Array(81).fill(false);
+    const renbans = [];
+    for (const start of shuffle([...Array(81).keys()])) {
+      if (renbans.length >= want) break;
+      if (used[start]) continue;
+      const maxLen =
+        RENBAN_LEN.min + Math.floor(Math.random() * (RENBAN_LEN.max - RENBAN_LEN.min + 1));
+      const path = [start];
+      let lo = solution[start],
+        hi = solution[start];
+      let cur = start;
+      while (path.length < maxLen) {
+        const next = shuffle(
+          lineNeighbors[cur].filter((n) => {
+            if (used[n]) return false;
+            const v = solution[n];
+            return v === lo - 1 || v === hi + 1;
+          })
+        );
+        if (!next.length) break;
+        cur = next[0];
+        const v = solution[cur];
+        if (v < lo) lo = v;
+        if (v > hi) hi = v;
+        path.push(cur);
+      }
+      if (path.length < RENBAN_LEN.min) continue;
+      for (const i of path) used[i] = true;
+      renbans.push(path);
+    }
+    return renbans;
+  }
+
   // Clone: dvije regije istog oblika nose iste znamenke u odgovarajućim ćelijama.
   // Wire oblik je par putova jednake duljine ([[a0,a1,...],[b0,b1,...]]) - odnos je
   // "po indeksu", pa se čita bez ikakve geometrije (vidi prepMates).
@@ -1003,6 +1105,17 @@ const Sudoku = (() => {
     // Uzeto 10, a ne 8: solo raspon je bolji (19-28 prema 20-28), a najgori rep ostaje
     // 2.5s (whisper+thermo) - u rangu zatečenog clone+thermo.
     whisper: 10,
+    // Renban dijeli snagu s hyperom/disjointom. Mjereno po pravilu iz v1.35.0/v1.36.0
+    // (na kombinacijama): sa 10 su renban+thermo i renban+killer imali repove od 30s
+    // odnosno 29s, sa 8 su u sekundi. Solo raspon gubi točno jedan zadani broj
+    // (20-28 prema 19-28) - jeftina zamjena.
+    //
+    // OPREZ, izmjereno i zabilježeno: renban+thermo ima rijedak ali dubok rep. Na 110
+    // ploča medijan je 17ms i najgore 6.2s (1/80 iznad 5s), ali jedno ranije mjerenje
+    // uhvatilo je pokušaj od ~374s koji se poslije nije ponovio. Rep je zato stvaran,
+    // samo rijedak; nosi ga Cancel + worker (v1.17.0). Ako se ikad pokaže čestim, prvo
+    // pogledati taj par.
+    renban: 8,
     xv: 10,
     palindrome: 10,
     clone: 10,
@@ -1037,7 +1150,7 @@ const Sudoku = (() => {
   // jigsaw, antiknight, antiking) vraćaju null - one mijenjaju PRAVILA, pa su na ploči
   // i bez ijedne oznake i nema se što brojati.
   function markCount(v, clues) {
-    const { parity, edges, thermos, palindromes, clones, cages, whispers } = clues;
+    const { parity, edges, thermos, palindromes, clones, cages, whispers, renbans } = clues;
     const edgesIn = (lo, hi) => {
       if (!edges) return 0;
       let n = 0;
@@ -1053,6 +1166,7 @@ const Sudoku = (() => {
     if (v === "thermo") return thermos ? thermos.length : 0;
     if (v === "palindrome") return palindromes ? palindromes.length : 0;
     if (v === "whisper") return whispers ? whispers.length : 0;
+    if (v === "renban") return renbans ? renbans.length : 0;
     if (v === "clone") return clones ? clones.length : 0;
     // Killer je jedini kojem jedinica NIJE oznaka nego POKRIVENA ĆELIJA: kavez od 2 i
     // kavez od 5 ne nose isto, a ono što se čita kao Killer je pokrivenost ploče
@@ -1089,6 +1203,7 @@ const Sudoku = (() => {
     thermo: THERMO_KEEP_MIN,
     palindrome: PALINDROME_KEEP_MIN,
     whisper: WHISPER_KEEP_MIN,
+    renban: RENBAN_KEEP_MIN,
     clone: 1, // par regija je "nešto i njegova kopija" - jedan je ISPRAVNA slika
     killer: CAGE_KEEP_CELLS.min, // jedini mjeren u ĆELIJAMA - vidi markCount
   };
@@ -1111,7 +1226,7 @@ const Sudoku = (() => {
   // Zove se JEDNOM na gotovoj ploči (ne u generacijskoj petlji), zato si smije
   // priuštiti poziv solvera po oznaci.
   function pruneMarks(puzzle, solution, variants, clues, maxTier) {
-    const { parity, edges, thermos, palindromes, clones, cages, whispers } = clues;
+    const { parity, edges, thermos, palindromes, clones, cages, whispers, renbans } = clues;
     const cands = [];
     if (edges)
       for (let i = 0; i < 81; i++) {
@@ -1136,6 +1251,9 @@ const Sudoku = (() => {
     // izravniji - odnos veže susjedne parove, pa skraćivanje raskida par koji je
     // možda jedini nosio informaciju.
     if (whispers) for (const w of whispers) cands.push(["w", w]);
+    // Renban: kao ostale linije, jedinica je CIJELA linija - skraćivanje mijenja L, a
+    // o L ovisi cijeli raspon (vidi renbanRange), dakle druga slagalica.
+    if (renbans) for (const r of renbans) cands.push(["r", r]);
     if (!cands.length) return;
     // Živi broj oznaka po varijanti - pada kako prune miče. Ispod KEEP_MIN se ne ide,
     // pa odabrana varijanta ostane na ploči i kad joj kombinacija oduzme sav posao.
@@ -1166,6 +1284,15 @@ const Sudoku = (() => {
         else thermos.splice(k, 0, ref); // bez nje ploča stane -> treba ju
         // thermos je wire polje; izvedeni thm bi inače ostao na staroj listi tuba.
         clues.thm = prepThermos(thermos);
+        continue;
+      }
+      if (kind === "r") {
+        if (!mayDrop("renban")) continue;
+        const k = renbans.indexOf(ref);
+        renbans.splice(k, 1);
+        if (stoji()) left.renban--;
+        else renbans.splice(k, 0, ref); // bez nje ploča stane -> treba ju
+        clues.rnb = prepRenbans(renbans); // wire lista se promijenila, osvježi izvedeno
         continue;
       }
       if (kind === "w") {
@@ -1252,6 +1379,7 @@ const Sudoku = (() => {
         clones: clues.clones,
         cages: clues.cages,
         whispers: clues.whispers,
+        renbans: clues.renbans,
       },
     };
   }
@@ -1304,6 +1432,7 @@ const Sudoku = (() => {
     const useClone = variants.includes("clone");
     const useKiller = variants.includes("killer");
     const useWhisper = variants.includes("whisper");
+    const useRenban = variants.includes("renban");
     // Oznake koje zauzimaju ĆELIJU (a ne brid) izvode se u nizu i svaka zaobilazi
     // ćelije prethodnih: dvije linije kroz istu ćeliju render crta preko sebe, a klon
     // boji cijelu ćeliju pa bi linija ispod njega nestala.
@@ -1322,13 +1451,20 @@ const Sudoku = (() => {
       // njih kvalificira), a whisper razliku od barem 5 - vrijednost 4 ima točno
       // jednog mogućeg partnera (9), a 5 nijednog. Isto pravilo kao kod klona
       // (v1.33.0): prva ide oznaka s najmanje slobode, ne zadnja dodana.
-      const whispers = useWhisper ? deriveWhispers(solution, boost, taken([])) : null;
-      const thermos = useThermo ? deriveThermos(solution, boost, taken(whispers || [])) : null;
+      //
+      // Renban je od njih dvoje još vezaniji pa ide prvi: nastavak mora biti TOČNO
+      // min-1 ili max+1 trenutnog skupa (uvijek 2 vrijednosti), dok whisper prima sve
+      // na razlici >= 5 (1-4 vrijednosti, prosjek 2.2).
+      const renbans = useRenban ? deriveRenbans(solution, boost, taken([])) : null;
+      const whispers = useWhisper ? deriveWhispers(solution, boost, taken(renbans || [])) : null;
+      const lineSoFar = () => [...(renbans || []), ...(whispers || [])];
+      const thermos = useThermo ? deriveThermos(solution, boost, taken(lineSoFar())) : null;
       const palindromes = usePal
-        ? derivePalindromes(solution, boost, taken([...(whispers || []), ...(thermos || [])]))
+        ? derivePalindromes(solution, boost, taken([...lineSoFar(), ...(thermos || [])]))
         : null;
       return {
         clones,
+        renbans,
         whispers,
         thermos,
         palindromes,
@@ -1340,7 +1476,7 @@ const Sudoku = (() => {
           ? deriveCages(
               solution,
               boost,
-              taken([...(whispers || []), ...(thermos || []), ...(palindromes || [])])
+              taken([...lineSoFar(), ...(thermos || []), ...(palindromes || [])])
             )
           : null,
       };

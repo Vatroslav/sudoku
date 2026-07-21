@@ -199,6 +199,14 @@ const Solver = (() => {
   // izvedeni indeks. Odnos je drugi - vidi whisperOk.
   const validWhispers = validThermos;
   const prepWhispers = prepThermos;
+  // Renban: ista geometrija (put po potezu kralja, bez preklopa) pa i ista validacija.
+  // Izvedeni oblik je { cells } jer odnos gleda cijelu liniju odjednom, ne poziciju.
+  const validRenbans = validThermos;
+  function prepRenbans(renbans) {
+    const at = new Array(81).fill(null);
+    for (const path of renbans) for (const i of path) at[i] = { cells: path };
+    return at;
+  }
   // Clone: parovi regija istog oblika ([[a...],[b...]], odnos je po indeksu). Oblik
   // regije se ne provjerava - solver iz njega čita samo parove, a render skup ćelija.
   function validClones(clones) {
@@ -294,6 +302,23 @@ const Solver = (() => {
   const whisperOk = (a, b) => Math.abs(a - b) >= 5;
   const WHISPER_BAN = 5; // |5-x| >= 5 nema rješenja u 1-9, pa 5 ne stoji na liniji
 
+  // Renban: uzastopan skup duljine L koji sadrži m i M mora stati u prozor od L, pa
+  // svaka vrijednost leži u [M-L+1, m+L-1]. Mora se poklapati sa sudoku.js
+  // renbanRange (generator i solver dijele definiciju, kao thermoRange i cageRange).
+  function renbanRange(grid, cells) {
+    let m = 10,
+      M = 0;
+    for (const j of cells) {
+      const b = grid[j];
+      if (!b) continue;
+      if (b < m) m = b;
+      if (b > M) M = b;
+    }
+    if (M === 0) return [1, 9];
+    const L = cells.length;
+    return [Math.max(1, M - L + 1), Math.min(9, m + L - 1)];
+  }
+
   function edgeOk(a, b, t) {
     const hi = Math.max(a, b),
       lo = Math.min(a, b);
@@ -372,6 +397,10 @@ const Solver = (() => {
   // nigdje na liniji, pa svaka whisper ćelija odmah gubi kandidata bez ijednog
   // popunjenog susjeda. Ostatak ide kroz susjede (computeCandidates i place).
   let curWhispers = null;
+  // Renban: per-puzzle indeks ćelija -> { cells } ili null. Ponaša se kao kavez (odnos
+  // veže cijelu liniju), pa je i propagacija ista: upis potroši vrijednost i stegne
+  // raspon SVIH praznih članova linije, ne samo susjednih.
+  let curRenbans = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -431,6 +460,14 @@ const Solver = (() => {
           if (b) for (const v of [...s]) if (!whisperOk(v, b)) s.delete(v);
         }
       }
+      // Renban: znamenke na liniji su različite (linija nije jedinica pa ju peers ne
+      // pokrivaju), a raspon steže prozor od L uzastopnih - vidi renbanRange.
+      if (curRenbans && curRenbans[idx]) {
+        const { cells } = curRenbans[idx];
+        for (const j of cells) if (j !== idx && grid[j]) s.delete(grid[j]);
+        const [lo, hi] = renbanRange(grid, cells);
+        for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
+      }
       // Palindrome/Clone: popunjen partner fiksira vrijednost. (Par praznih se presijeca
       // niže - tek kad su OBA skupa izračunata.)
       if (curMate && curMate[idx] >= 0 && grid[curMate[idx]] !== 0) {
@@ -483,6 +520,18 @@ const Solver = (() => {
         if (q < 0 || q >= path.length) continue;
         const j = path[q];
         if (cand[j]) for (const u of [...cand[j]]) if (!whisperOk(val, u)) cand[j].delete(u);
+      }
+    }
+    // Renban: kao kavez, upis stegne CIJELU liniju - potroši vrijednost i pomakne
+    // prozor od L uzastopnih. Jedan broj na liniji duljine 3 ostavlja ostalima samo
+    // 5 mogućnosti, pa je ta udaljena posljedica ono odakle Renban vuče snagu.
+    if (curRenbans && curRenbans[idx]) {
+      const { cells } = curRenbans[idx];
+      const [lo, hi] = renbanRange(grid, cells);
+      for (const j of cells) {
+        if (!cand[j]) continue;
+        cand[j].delete(val);
+        for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
       }
     }
     // Killer: upis stegne SVE prazne ćelije svog kaveza, ne samo susjedne - potroši i
@@ -815,10 +864,12 @@ const Solver = (() => {
   //   clones - Clone parovi regija (polje parova putova); nevaljano se ignorira.
   //   cages  - Killer kavezi (polje { cells, sum }); nevaljano se ignorira.
   //   whispers - German Whispers linije (polje putova); nevaljano se ignorira.
+  //   renbans - Renban linije (polje putova); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
-    const { regions, parity, edges, thermos, palindromes, clones, cages, whispers } = clues || {};
+    const { regions, parity, edges, thermos, palindromes, clones, cages, whispers, renbans } =
+      clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
@@ -831,6 +882,7 @@ const Solver = (() => {
       okPal || okClone ? prepMates(okPal ? palindromes : null, okClone ? clones : null) : null;
     curCages = validCages(cages) && cages.length ? prepCages(cages) : null;
     curWhispers = validWhispers(whispers) && whispers.length ? prepWhispers(whispers) : null;
+    curRenbans = validRenbans(renbans) && renbans.length ? prepRenbans(renbans) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);
