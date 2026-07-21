@@ -45,6 +45,14 @@ Constraint = {
 | **Derivacijske** (oznaka izvedena iz rješenja) | Kropki, XV, Even/odd, Parity                              | `deriveClues(solution)` + render + `prune`                                                              |
 | **Geometrija-first + relacijske** (najteže)    | Thermo, Palindrome, Clone, Killer                         | `setup()` generira geometriju, `isValid` djelomična provjera, generacija mora dati jedinstveno rješenje |
 
+> **Treći red je demantiran u praksi.** Sva četiri (Thermo v1.30.0, Palindrome v1.32.0,
+> Clone v1.33.0, Killer v1.34.0) ispala su derivacijska i generator nije diran ni jednom.
+> Tablica je pisana prije derive pipelinea: pretpostavlja `setup()` koji složi geometriju
+> PRIJE rješenja, a derive radi obrnuto - rješenje prvo, oznaka se izvede iz njega pa
+> nemoguća geometrija ne može ni nastati. **Prije nego se prihvati procjena "ovo traži
+> `setup()`", provjeriti može li se oznaka IZVESTI iz gotovog rješenja.** Detalji po
+> varijanti u [todo.md](todo.md).
+
 ## Postupne faze
 
 - **Faza 0 - refaktor jezgre, nula novih varijanti.** Izvuci row/col/box iz `solver.js` (`peers`, `allUnits`) i `sudoku.js` (`isValid`) u constraint registry. Aktivni set = klasik. **Cilj: klasični Sudoku radi identično** (ista generacija, hint, gradiranje). Ovo je najveći dio posla i temelj za sve ostalo - ne prelaziti dalje dok klasik ne prolazi identično kao prije.
@@ -56,4 +64,48 @@ Constraint = {
 ## Dvije zamke (izvan uobičajene domene - solver dizajn)
 
 - **Težina i varijanta su dvije odvojene osi.** Trenutni grader mjeri klasične tehnike (single/locked/pairs). Varijanta mijenja težinu implicitno. Za MVP **ne** pokušavaj gradirati varijantne tehnike - ostavi težinu na broju clue-ova/klasičnim tehnikama, a varijanta je zaseban izbor. (Killer je iznimka - tamo je težina drugačije definirana, zato je zadnji.)
-- **Generacija Thermo/Killer je istraživački problem**, ne "još jedan modul". Naći geometriju koja daje jedinstveno rješenje bitno je teže od regijskih varijanti. Zato su na kraju - ne miješati ih u ranu fazu.
+- **Generacija Thermo/Killer je istraživački problem**, ne "još jedan modul". Naći geometriju koja daje jedinstveno rješenje bitno je teže od regijskih varijanti. Zato su na kraju - ne miješati ih u ranu fazu. _(Nije se obistinilo - vidi napomenu uz tablicu.)_
+
+## Kandidati nakon iscrpljene wish-liste
+
+Popis s vrha ovog doca je **isporučen do zadnje varijante** (v1.34.x). Iduća varijanta
+zato više ne dolazi s liste nego je nova odluka. Popis ispod je kandidatura, ne plan -
+poredan po trošku u zatečenoj arhitekturi (derive pipeline + `.line-*` render + `KEEP_MIN`),
+ne po privlačnosti.
+
+**Skoro besplatno - regijske, samo units:**
+
+- **Disjoint Groups** - ista pozicija unutar svakog bloka čini deveti unit (9 dodatnih
+  units). Mehanički identično Hyperu, nula novog rendera osim eventualne blage tinte.
+  Najjeftinije što se može dodati, ali i najmanje vidljivo - igraču ploča izgleda kao
+  klasik, pa pada u istu zamku koju rješava v1.34.1 ("varijanta se mora vidjeti").
+
+**Jeftino - derive + postojeći `.line-*` render:**
+
+- **German Whispers** - susjedne ćelije na liniji razlikuju se za barem 5. Derive je
+  šetnja kao `deriveThermos`, samo drugi uvjet koraka; najbliže copy-pasteu jezgre.
+- **Renban** - linija nosi uzastopan skup znamenki u bilo kojem redoslijedu. Derive:
+  šetnja pa provjera je li skup uzastopan (ili gradnja rastućeg pa premetanje puta).
+- **Zipper line** - parovi simetrični oko sredine daju isti zbroj. Derive raste iz
+  sredine u parovima, točno kao `derivePalindromes`.
+
+Sve tri dijele `.line-seg` / `.line-joint` / `.line-clip` mašineriju (dvaput dokazanu,
+Thermo pa Palindrome), izvode se iz gotovog rješenja pa generator ostaje netaknut, i
+trebaju samo novu boju + `KEEP_MIN` + `STRENGTH`. Vrijedi i pravilo redoslijeda izvođenja
+iz v1.33.0: prva ide oznaka s najmanje slobode.
+
+**Skuplje - novi render kanal:**
+
+- **Sandwich** - zbroj znamenki između 1 i 9 u retku/stupcu. Trivijalno se izvede, ali
+  oznaka stoji **izvan ploče** - prvi put da nešto treba mjesto van grida (layout,
+  mobitel, skaliranje). To je pravi novi posao, ne derive.
+- **Arrow** - krug + rep čiji zbroj daje broj u krugu. Derive je teži (rep mora stati u
+  vrijednost kruga), render kombinira liniju i krug.
+- **Little Killer** - dijagonalni zbroj izvan ploče; isti render problem kao Sandwich.
+
+**Nije derivacijsko - traži diranje generatora:**
+
+- **Nonconsecutive** - ortogonalni susjedi ne smiju biti uzastopni. Globalno pravilo, ne
+  oznaka izvedena iz rješenja, pa rješenje mora biti pronađeno UZ taj uvjet. Prva iskrena
+  kandidatura za praznu "geometrija-first" kategoriju - za razliku od četiri koje su tamo
+  bile krivo svrstane.
