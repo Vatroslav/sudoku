@@ -202,6 +202,12 @@ const Solver = (() => {
   // Renban: ista geometrija (put po potezu kralja, bez preklopa) pa i ista validacija.
   // Izvedeni oblik je { cells } jer odnos gleda cijelu liniju odjednom, ne poziciju.
   const validRenbans = validThermos;
+  // Zipper: ista geometrija; izvedeni oblik je { path, pos } jer pozicija JEST odnos
+  // (partner je zrcalni indeks, sredina referenca). Duljina mora biti NEPARNA - bez
+  // sredine pravilo ne postoji, a spremljena partija dolazi neprovjerena.
+  const validZippers = (z) =>
+    validThermos(z) && z.every((p) => p.length % 2 === 1 && p.length >= 3);
+  const prepZippers = prepThermos;
   function prepRenbans(renbans) {
     const at = new Array(81).fill(null);
     for (const path of renbans) for (const i of path) at[i] = { cells: path };
@@ -305,6 +311,26 @@ const Solver = (() => {
   // Renban: uzastopan skup duljine L koji sadrži m i M mora stati u prozor od L, pa
   // svaka vrijednost leži u [M-L+1, m+L-1]. Mora se poklapati sa sudoku.js
   // renbanRange (generator i solver dijele definiciju, kao thermoRange i cageRange).
+  // Zipper: raspon dopušten na poziciji pos. Mora se poklapati sa sudoku.js
+  // zipperRange (generator i solver dijele definiciju odnosa).
+  const ZIPPER_MID_MIN = 3;
+  function zipperRange(grid, path, pos) {
+    const len = path.length;
+    const mid = (len - 1) / 2;
+    const C = grid[path[mid]];
+    if (pos === mid) {
+      for (let p = 0; p < mid; p++) {
+        const a = grid[path[p]],
+          b = grid[path[len - 1 - p]];
+        if (a && b) return [a + b, a + b];
+      }
+      return [ZIPPER_MID_MIN, 9];
+    }
+    const partner = grid[path[len - 1 - pos]];
+    if (C) return partner ? [C - partner, C - partner] : [1, C - 1];
+    return partner ? [1, 9 - partner] : [1, 8];
+  }
+
   function renbanRange(grid, cells) {
     let m = 10,
       M = 0;
@@ -401,6 +427,10 @@ const Solver = (() => {
   // veže cijelu liniju), pa je i propagacija ista: upis potroši vrijednost i stegne
   // raspon SVIH praznih članova linije, ne samo susjednih.
   let curRenbans = null;
+  // Zipper: per-puzzle indeks ćelija -> { path, pos } ili null. Najjača propagacija u
+  // repou ide odavde: kad su sredina i jedan član para poznati, partner je FIKSIRAN
+  // (C - a), a ne samo sužen.
+  let curZippers = null;
   // Susjedni bridovi ćelije s prikazanom oznakom: [susjed, tip]. h[i]=i↔i+1, v[i]=i↔i+9.
   function markedEdges(idx) {
     const out = [];
@@ -459,6 +489,14 @@ const Solver = (() => {
           const b = grid[path[q]];
           if (b) for (const v of [...s]) if (!whisperOk(v, b)) s.delete(v);
         }
+      }
+      // Zipper: raspon nosi cijeli odnos (partner + sredina, ili potpuni parovi ako
+      // smo sredina) - vidi zipperRange. Kad su sredina i partner poznati, raspon je
+      // jedna vrijednost i ćelija ispadne naked single bez ijedne klasične tehnike.
+      if (curZippers && curZippers[idx]) {
+        const { path, pos } = curZippers[idx];
+        const [lo, hi] = zipperRange(grid, path, pos);
+        for (const v of [...s]) if (v < lo || v > hi) s.delete(v);
       }
       // Renban: znamenke na liniji su različite (linija nije jedinica pa ju peers ne
       // pokrivaju), a raspon steže prozor od L uzastopnih - vidi renbanRange.
@@ -520,6 +558,18 @@ const Solver = (() => {
         if (q < 0 || q >= path.length) continue;
         const j = path[q];
         if (cand[j]) for (const u of [...cand[j]]) if (!whisperOk(val, u)) cand[j].delete(u);
+      }
+    }
+    // Zipper: upis stegne CIJELU liniju, ne samo partnera - upisana sredina odmah
+    // ograniči svaki član (svi < C), a upisan član para fiksira svog partnera čim je
+    // sredina poznata. Zato prolaz ide po cijelom putu, kao kod tube.
+    if (curZippers && curZippers[idx]) {
+      const { path } = curZippers[idx];
+      for (let q = 0; q < path.length; q++) {
+        const j = path[q];
+        if (!cand[j]) continue;
+        const [lo, hi] = zipperRange(grid, path, q);
+        for (const u of [...cand[j]]) if (u < lo || u > hi) cand[j].delete(u);
       }
     }
     // Renban: kao kavez, upis stegne CIJELU liniju - potroši vrijednost i pomakne
@@ -865,11 +915,22 @@ const Solver = (() => {
   //   cages  - Killer kavezi (polje { cells, sum }); nevaljano se ignorira.
   //   whispers - German Whispers linije (polje putova); nevaljano se ignorira.
   //   renbans - Renban linije (polje putova); nevaljano se ignorira.
+  //   zippers - Zipper linije (polje putova neparne duljine); nevaljano se ignorira.
   // Nevaljano se svugdje ignorira umjesto da baci - spremljena partija iz starije
   // verzije ne smije srušiti solver.
   function useVariant(variants, clues) {
-    const { regions, parity, edges, thermos, palindromes, clones, cages, whispers, renbans } =
-      clues || {};
+    const {
+      regions,
+      parity,
+      edges,
+      thermos,
+      palindromes,
+      clones,
+      cages,
+      whispers,
+      renbans,
+      zippers,
+    } = clues || {};
     const ctx = ctxFor(variants, regions);
     allUnits = ctx.allUnits;
     peers = ctx.peers;
@@ -883,6 +944,7 @@ const Solver = (() => {
     curCages = validCages(cages) && cages.length ? prepCages(cages) : null;
     curWhispers = validWhispers(whispers) && whispers.length ? prepWhispers(whispers) : null;
     curRenbans = validRenbans(renbans) && renbans.length ? prepRenbans(renbans) : null;
+    curZippers = validZippers(zippers) && zippers.length ? prepZippers(zippers) : null;
     const active = variantKey(variants);
     const jig =
       active !== "classic" && active.split("+").includes("jigsaw") && validRegions(regions);

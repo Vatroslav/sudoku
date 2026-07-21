@@ -20,6 +20,7 @@
     "palindrome",
     "whisper",
     "renban",
+    "zipper",
     "clone",
     "killer",
   ];
@@ -37,6 +38,7 @@
     palindrome: "Palindrome",
     whisper: "German Whispers",
     renban: "Renban",
+    zipper: "Zipper",
     clone: "Clone",
     killer: "Killer",
   };
@@ -53,6 +55,7 @@
     { kind: "pal", variant: "palindrome", key: "palindromes", cssVar: "--palindrome" },
     { kind: "whisper", variant: "whisper", key: "whispers", cssVar: "--whisper" },
     { kind: "renban", variant: "renban", key: "renbans", cssVar: "--renban" },
+    { kind: "zipper", variant: "zipper", key: "zippers", cssVar: "--zipper" },
   ];
   const normVariants = (v) => {
     if (typeof v === "string") v = v === "classic" ? [] : [v];
@@ -260,6 +263,9 @@
   const validPalindromes = validThermos; // isti oblik puta, samo bez smjera
   const validWhispers = validThermos; // isto - razlikuje se odnos, ne geometrija
   const validRenbans = validThermos; // isto
+  // Zipper traži i NEPARNU duljinu - bez sredine pravilo ne postoji.
+  const validZippers = (z) =>
+    validThermos(z) && z.every((p) => p.length % 2 === 1 && p.length >= 3);
   // Clone: par regija istog oblika ([[a...],[b...]]) - odnos je po indeksu, pa render
   // treba samo ćelije. Oblik se ne provjerava; bitno je da su parovi cjeloviti i da
   // se ćelije ne ponavljaju (jedna ćelija = najviše jedan klon).
@@ -465,6 +471,7 @@
         cages: (clues && clues.cages) || null,
         whispers: (clues && clues.whispers) || null,
         renbans: (clues && clues.renbans) || null,
+        zippers: (clues && clues.zippers) || null,
       },
       techniques: techniques || [],
       gameId: newGameId(),
@@ -661,6 +668,12 @@
         if (!validRenbans(clues.renbans)) return false;
       } else {
         clues.renbans = null;
+      }
+      // Zipper: isti oblik uz neparnu duljinu.
+      if (state.variants.includes("zipper")) {
+        if (!validZippers(clues.zippers)) return false;
+      } else {
+        clues.zippers = null;
       }
       return true;
     } catch (e) {

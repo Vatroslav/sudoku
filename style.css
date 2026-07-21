@@ -45,6 +45,13 @@
      Od v1.37.0 legenda ispod ploče kaže koja je koja, pa boja mora razlikovati samo
      PAR na ploči, ne svih pet iz sjećanja. */
   --renban: #503b54;
+  /* Zipper je PETA linijska. Postojeće leže na hue 240/138/10/290, pa najveći
+     preostali razmak (10->138) daje ~74 - maslinasto-oker. Zasićenost je opet malo
+     viša (25%) jer je razmak do palindromove zelene (138) najuži dosad: 64 stupnja,
+     prema 102 koliko je imala najbliža prethodna susjeda.
+     PETA JE GRANICA OVOG MEHANIZMA - vidi todo.md. Šesta linijska varijanta ne bi
+     smjela birati boju nego posegnuti za rezervom (oznaka na kraju linije). */
+  --zipper: #464e2d;
   /* Clone: boja veže par regija, pa ih mora biti onoliko koliko ima parova (4) i
      moraju se razlikovati na prvi pogled - zato tonovi, a ne nijanse istog tona.
      Translucentne su da odabir i peer-highlight ostanu vidljivi ispod, i namjerno
@@ -524,6 +531,11 @@ main {
 .cell .line-joint.renban,
 .cell .line-clip.renban > span {
   background: var(--renban);
+}
+.cell .line-seg.zipper,
+.cell .line-joint.zipper,
+.cell .line-clip.zipper > span {
+  background: var(--zipper);
 }
 .cell .line-seg {
   position: absolute;

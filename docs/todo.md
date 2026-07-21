@@ -136,6 +136,9 @@ Derivacijske (oznaka izvedena iz rješenja - `deriveClues` + render + `prune`):
 - [x] Renban (uzastopan skup na liniji, bilo kojim redoslijedom, v1.38.0). Treća s
       liste kandidata, četvrta linijska. Treći tip odnosa: veže cijeli skup odjednom
       (kao Killer), ne poziciju ni susjedni par - vidi sekciju niže.
+- [x] Zipper (parovi simetrični oko sredine zbrajaju se u vrijednost sredine, v1.39.0).
+      Četvrta s liste kandidata, peta i zasad zadnja linijska - njome je iscrpljena
+      cijela "jeftina" skupina. Prvi odnos koji FIKSIRA vrijednost umjesto da ju sužava.
 - [x] Clone (dvije regije dijele isti raspored, v1.33.0). Treća koju je doc krivo
       svrstao u geometrija-first - vidi zasebnu sekciju niže.
 
@@ -1138,6 +1141,79 @@ sama za sebe; ovako mora razlikovati samo par na ploči, pa je izbor bio mehani�
   varijanta time prolazi iz prve, kao i tri prije nje.
 - **Legenda je prošla prvi stvarni test** (v1.37.0): Thermo + Renban je prva odigrana
   partija s dvije linije otkako postoji.
+
+## Zipper (v1.39.0)
+
+Linija sa SREDIŠNJOM ćelijom, gdje se svaki par simetričan oko nje zbraja točno u
+njezinu vrijednost: `[a,b,C,d,e]` traži `a+e === C` i `b+d === C`. Četvrta s liste
+kandidata i peta linijska varijanta. Njome je iscrpljena cijela "jeftino - derive +
+postojeći `.line-*` render" skupina.
+
+Izmjereno (Hard, 60 ploča po kombinaciji): **medijan 8ms, p90 38ms, max 870ms** sam;
+najgori par (zipper+thermo) medijan 25ms / p90 471ms / max 1.8s, **0/60 iznad 5s**.
+Normal 2ms. Linija po ploči 4-9, duljina 3-5.
+
+### Odabrana je standardna izvedba, ne ona iz popisa kandidata
+
+Popis je Zipper opisao kao "parovi simetrični oko sredine daju isti zbroj" - dakle
+zbroj bi bio bilo koja konstanta. Isporučeno je **standardno pravilo: zbroj = vrijednost
+sredine**. Jače je (sredina je odmah gornja granica svakog člana) i to je ono što igrači
+prepoznaju pod tim imenom.
+
+Cijena te odluke je uvjet koji nijedna dosadašnja linija nije imala: **sredina mora biti
+barem 3** da par uopće postoji (1+2), a raspodjela je vrlo neravnomjerna - sredina 3 ima
+dva moguća para, sredina 9 njih osam. Zato `deriveZippers` bira sjeme SAMO među visokim
+vrijednostima (`ZIPPER_SEED_MIN = 6`); bez toga većina pokušaja ne dogura ni do duljine 3. Izmjereno na gotovim pločama: prosječna sredina je 7.7.
+
+Rast je iz sredine u parovima, isto kao `derivePalindromes` - uvjet para je jedina
+razlika (`a+b === C` umjesto `a === b`). Otuda i samo neparne duljine.
+
+### Prvi odnos koji FIKSIRA, a ne samo sužava
+
+Dosadašnje varijante kandidatu uvijek ostave raspon: tuba granice iz pozicije, kavez iz
+zbroja, Renban prozor od L, Whispers dva repa. Zipper je prvi kod kojeg su dvije
+poznate ćelije dovoljne da treća bude **jedna jedina vrijednost** - kad su sredina i
+jedan član para upisani, partner je `C - a`. Ćelija tako ispadne naked single bez ijedne
+klasične tehnike.
+
+To se vidi i u `STRENGTH`: **10 je prošlo iz prve**, jedina linija kojoj nije trebalo
+spuštanje. Renban je na istoj vrijednosti imao repove od 30s pa je morao na 8. Ploče s
+jakim odnosom ostaju rješive i s malo zadanih, pa `dig` ne kopa u prazno.
+
+### Peta boja je granica ovog mehanizma
+
+Postojeće linije leže na hue 240/138/10/290, pa je najveći preostali razmak (10→138)
+dao ~74, maslinasto-oker (`--zipper: #464e2d`). Zasićenost je opet malo viša (25%) jer
+je razmak do palindromove zelene **64 stupnja - najuži dosad** (prethodno najbliži par
+imao je 102).
+
+**Šesta linijska varijanta ne bi smjela birati boju.** Hue krug je na pet linija
+podijeljen na razmake koji se približavaju granici razlučivosti pri ovako niskoj
+zasićenosti i uskom rasponu svjetline (luma 65-72, jer linija stoji ispod znamenke).
+Rezerva je već zapisana u sekciji o legendi: **oznaka na kraju linije** (jeftina,
+presedan je `.thermo-bulb`, za Palindrome čak semantična).
+
+### Provjere
+
+- **Regresija**: 34 ploče (17 kombinacija × 2 težine, zasijan RNG) identične do na novo
+  prazno `zippers: null` polje.
+- **Generator**: na svakoj ploči provjereno da je duljina neparna, da se svaki par
+  simetričan oko sredine zbraja u vrijednost sredine U RJEŠENJU, da je korak potez
+  kralja i da se linije ne preklapaju.
+- **Hint**: **nula krivih prijedloga**. Riješeno samim hintovima (Hard): +clone 10/10,
+  +x 9/10, +thermo 8/10, zipper sam i +renban 7/10, +killer 6/10; Normal 10/10.
+- **Legenda**: test proširen na Zipper i prolazi.
+- **Render NIJE vizualno provjeren** (browser pane opet polovičan). Mašinerija je
+  naslijeđena, jedino novo je boja - a boja je ovdje **rizičnija nego ijednom dosad**
+  jer je razmak do palindromove zelene najuži. Prvo što treba pogledati je par
+  Palindrome + Zipper.
+
+### Usput popravljen mjerni harness
+
+`tail.js` je nabrajao ključeve oznaka rukom i `zippers` nije bio na popisu, pa su ploče
+ispisivale `{"thermos":4}` i izgledale kao da Zipper nije nastao. Nije bio bug u kodu
+(`zippercheck` je istovremeno pokazivao 4-9 linija), ali je isti obrazac koji je u
+v1.36.0 doveo do lažnih hint brojki. Sada čita sve što je polje u `clues`.
 
 ## Poznato / tehnički dug
 
