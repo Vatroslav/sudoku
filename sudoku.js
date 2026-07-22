@@ -670,10 +670,16 @@ const Sudoku = (() => {
   // ćelije). Otpada točno jedan pretinac po strani (onaj u kutu iz kojeg smjer te
   // strane odmah izlazi s ploče), pa je 8 opcija po strani = 32 nad svih 30 dijagonala.
   const LITTLE_OPTIONS = [];
+  // Kutni pretinci (po jedan sa svake strane) daju dijagonalu od JEDNE ćelije. Za
+  // običnu ploču su isključeni - to je zadan broj napisan izvan ploče, ne oznaka. U
+  // blank modu su upravo zato dragocjeni: jedina su četiri mjesta odakle igrač uopće
+  // može krenuti, a ploča ostaje bez ijedne znamenke UNUTAR mreže (vidi blankLittles).
+  const LITTLE_CORNERS = [];
   for (const [side, def] of Object.entries(LITTLE_SIDES))
     for (let k = 0; k < 9; k++) {
       const cells = littleCells(side, k, def.dir);
       if (cells.length >= 2) LITTLE_OPTIONS.push({ side, k, dir: def.dir, cells });
+      else if (cells.length === 1) LITTLE_CORNERS.push({ side, k, dir: def.dir, cells });
     }
   const littleSlot = (g) => g.side + ":" + g.k;
   const littleKey = (cells) =>
@@ -689,7 +695,10 @@ const Sudoku = (() => {
     const at = new Array(81).fill(null);
     for (const g of littles) {
       const cells = littleCells(g.side, g.k, g.dir);
-      if (cells.length < 2) continue;
+      // Duljina 1 (kutni pretinac) je valjana - vidi LITTLE_CORNERS. Za isValid je to
+      // dijagonala kojoj je jedina ćelija ujedno i cijeli zbroj, pa je vrijednost te
+      // ćelije time fiksirana bez ijednog posebnog slučaja.
+      if (!cells.length) continue;
       for (const i of cells) (at[i] || (at[i] = [])).push({ cells, sum: g.sum });
     }
     return at;
@@ -889,7 +898,17 @@ const Sudoku = (() => {
 
   // Broji rješenja (staje na 'limit'). MRV: bira praznu ćeliju s najmanje
   // kandidata -> drastično brže od first-empty backtrackinga.
-  function countSolutions(board, limit, variants, clues) {
+  // `budget` (opcionalno) je { n, cap, hit } - brojač čvorova koji prekida pretragu kad
+  // premaši `cap` i diže `hit`. Uveden za blank mod, gdje dokaz jedinstvenosti na
+  // praznoj ploči zna biti dugačak (mjereno do 10.5s): jeftinije je odustati od takvog
+  // potpisa i uzeti drugi nego ga dokazati. Prekid vraća `limit`, dakle pozivatelj ga
+  // vidi kao "ima još rješenja" i odbacuje ploču - sigurna strana. Ostale staze
+  // (dig/variantNeeded) ga ne prosljeđuju i rade točno kao prije.
+  function countSolutions(board, limit, variants, clues, budget) {
+    if (budget && ++budget.n > budget.cap) {
+      budget.hit = true;
+      return limit;
+    }
     let bestIdx = -1,
       bestCands = null;
     for (let idx = 0; idx < 81; idx++) {
@@ -907,7 +926,7 @@ const Sudoku = (() => {
     let count = 0;
     for (const v of bestCands) {
       board[bestIdx] = v;
-      count += countSolutions(board, limit, variants, clues);
+      count += countSolutions(board, limit, variants, clues, budget);
       board[bestIdx] = 0;
       if (count >= limit) return count;
     }
@@ -1078,6 +1097,20 @@ const Sudoku = (() => {
       });
     }
     return littles;
+  }
+
+  // Blank mod: SVE dijagonalne oznake, uključivo četiri kutne. Ploča ostaje prazna, pa
+  // informacija mora doći isključivo iz pojasa - nema izbora ni gustoće, uzima se sve
+  // što geometrija nudi (36 pretinaca = 32 dijagonale + 4 kuta). Glavna i antidijagonala
+  // su time označene dvaput (dostupne su iz dva pretinca); to je ista tvrdnja napisana
+  // dvaput, što obična ploča izbjegava, ali ovdje ne šteti i pojas ostaje pun.
+  function blankLittles(solution) {
+    return [...LITTLE_OPTIONS, ...LITTLE_CORNERS].map((opt) => ({
+      side: opt.side,
+      k: opt.k,
+      dir: opt.dir,
+      sum: opt.cells.reduce((a, i) => a + solution[i], 0),
+    }));
   }
 
   // Pretinci koje Sandwich zauzima na ploči: lijevo[k] za redak k, gore[k] za stupac k.
@@ -2068,6 +2101,44 @@ const Sudoku = (() => {
   // kad je thermo aktivan inače `null`, te `palindromes` (polje putova ćelija) kad
   // je palindrome aktivan inače `null`, te `cages` (polje { cells, sum }) kad je
   // killer aktivan inače `null`.
+  // Blank mod: ploča BEZ ijedne zadane znamenke, sve informacije u pojasu.
+  //
+  // Ovo je jedina ploča u repou koja NIJE rješiva bez pogađanja i to je svjesna odluka
+  // (Vatra, v1.45.0). Mjereno je zašto drukčije ne ide: prazna ploča s punim skupom
+  // dijagonala ne da nijedan logički potez ni uz enumeraciju oblika zbroja, ni uz
+  // 45-pravilo s domenom, ni uz forcing dubine 1 - stane na 4/81, tj. na četiri kutne
+  // znamenke i ništa dalje. Detalji u todo.md.
+  //
+  // Zato ovdje nema ni `dig`, ni gradinga, ni `pruneMarks`: jedina garancija je
+  // JEDINSTVENOST rješenja, koju sudi countSolutions. Isti standard drže tiskane
+  // Little Killer ploče bez znamenki.
+  //
+  // Pokušaja je malo jer je jedinstvenost gotovo besplatna: mjereno 20/20 slučajnih
+  // rješenja daje jedinstven potpis (dva nezavisna countera, vidi todo.md). Budžet
+  // postoji samo da generiranje ne visi ako se naleti na patološki potpis.
+  const BLANK_ATTEMPTS = 8;
+  // Čvorova po pokušaju prije odustajanja. 60k je mjereno: medijan potpisa se presudi
+  // oko 2k, a rep koji je trajao 10.5s bio je preko 700k.
+  const BLANK_NODE_CAP = 60000;
+  function generateBlank(variants, attempts) {
+    const tries = Math.min(BLANK_ATTEMPTS, attempts);
+    for (let a = 0; a < tries; a++) {
+      const geom = newRegionClues(false);
+      const solution = generateSolution(variants, geom);
+      if (!solution) continue;
+      const clues = prepClues({ regions: geom.regions, littles: blankLittles(solution) });
+      const puzzle = new Array(81).fill(0);
+      // Budžet reže rep: većina potpisa se presudi u par stotina ms, ali poneki traži
+      // deset sekundi da se dokaže. Takav se preskače - jedinstvenost je gotovo uvijek
+      // dostupna (20/20), pa je sljedeće rješenje jeftinije od ovog dokaza.
+      const budget = { n: 0, cap: BLANK_NODE_CAP, hit: false };
+      if (countSolutions(puzzle.slice(), 2, variants, clues, budget) !== 1) continue;
+      // prune=false: oznaka se ne smije maknuti nijedna - ploča bez njih nema ništa.
+      return finish(puzzle, solution, "hard", variants, clues, Solver.T_ADVANCED, false);
+    }
+    return null;
+  }
+
   function generate(difficulty, variants) {
     variants = normVariants(variants);
     const reqTier = REQ_TIER[difficulty] || Solver.T_SINGLE;
@@ -2082,6 +2153,15 @@ const Sudoku = (() => {
     // (stoji izvan ploče), pa se ni s kim ne natječe za prostor i ne treba `blocked`.
     const useSandwich = variants.includes("sandwich");
     const useLittle = variants.includes("littlekiller");
+    // BLANK MOD: Hard + isključivo Little Killer -> ploča bez ijedne znamenke, sve
+    // informacije u pojasu. Ide vlastitim putem jer ruši garanciju koju svaka druga
+    // ploča u repou drži: da je rješiva BEZ pogađanja. Vidi generateBlank.
+    if (difficulty === "hard" && variants.length === 1 && useLittle) {
+      const blank = generateBlank(variants, attempts);
+      if (blank) return blank;
+      // Nije uspjelo u budžetu - propadni na običnu Hard ploču (bolje ploča sa
+      // znamenkama nego nijedna).
+    }
     // Oznake IZVAN ploče dijele pretince u pojasu, pa se izvode zajedno i redom.
     // SANDWICH IDE PRVI jer ima manje slobode: bira između 18 pretinaca (gore/lijevo) i
     // treba ih barem 6, dok Little Killer bira između 48 opcija i ima cijeli donji pojas

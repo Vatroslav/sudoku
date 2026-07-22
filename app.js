@@ -310,7 +310,8 @@
       if (!g || !Number.isInteger(g.sum)) return false;
       const cells = littleCells(g.side, g.k, g.dir);
       // Ponavljanje je dopušteno pa je raspon [duljina, 9×duljina], ne kavezni MIN/MAX.
-      if (cells.length < 2 || g.sum < cells.length || g.sum > 9 * cells.length) return false;
+      // Duljina 1 je valjana: kutni pretinac nosi vrijednost same ćelije (blank mod).
+      if (cells.length < 1 || g.sum < cells.length || g.sum > 9 * cells.length) return false;
       // Jedan pretinac = jedna oznaka; dvije bi se u pojasu preklopile.
       const slot = g.side + ":" + g.k;
       if (slots.has(slot)) return false;
@@ -1146,7 +1147,14 @@
     }
     if (!res.reason) {
       clearHint();
-      showHint("No clean logical move from here.");
+      // Ploča bez ijedne zadane znamenke (blank mod, samo Little Killer) NEMA logički
+      // put - to je njeno svojstvo, ne igračev promašaj. Uobičajena poruka bi ovdje
+      // zvučala kao prijekor i slala igrača da traži potez kojeg nema.
+      showHint(
+        state.puzzle.every((v) => !v)
+          ? "This board has no logical path - it is solved by trying a digit and backtracking."
+          : "No clean logical move from here."
+      );
       return;
     }
 
@@ -1331,9 +1339,11 @@
     // i veza broj->ploča vrijedi u oba smjera. Usporedba je po SKUPU ćelija, ne po
     // pretincu: glavnu dijagonalu nose dva pretinca (lijevo[0] i desno[8]) i oba se
     // odnose na isto, pa bi isticanje samo jednog izgledalo kao greška.
+    // Prag je JEDNA ćelija, ne dvije: kutni pretinac nosi dijagonalu duljine 1 (blank
+    // mod), pa se uz prag od dvije takva oznaka nikad ne bi istaknula.
     const selNow = selectedCells();
     const selKey =
-      selNow.length > 1
+      selNow.length > 0
         ? selNow
             .slice()
             .sort((a, b) => a - b)

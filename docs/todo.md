@@ -1871,6 +1871,73 @@ dijagonala, 0 pretinaca s dvije oznake.
   v1.42.0). Po pouci iz v1.40.0 to je ono što treba potvrditi - ovdje je novo i sam
   pojas s treće strane i strelica u pretincu.
 
+## Blank mod: ploča bez ijedne znamenke (v1.45.0)
+
+Hard + **isključivo** Little Killer daje ploču bez ijedne zadane znamenke - sve
+informacije stoje u pojasu (36 oznaka: 32 dijagonale + 4 kutne). Vatrin zahtjev, uz
+upozorenje da je to najračunskiji mogući mod.
+
+### Zašto nema logičkog puta, i zašto se svejedno isporučuje
+
+Ovo je **jedina ploča u repou koja NIJE rješiva bez pogađanja**. Prije nego je to
+prihvaćeno, izmjereno je da drukčije ne ide. Na praznoj ploči s punim skupom dijagonala
+redom je probano:
+
+| pokušaj                                                | doseg |
+| ------------------------------------------------------ | ----- |
+| postojeći solver (kandidatske tehnike)                 | 0/81  |
+| + enumeracija oblika zbroja po dijagonali              | 0/81  |
+| + 45-pravilo, linearna algebra (rank 49 od 81)         | 4/81  |
+| + 45-pravilo s domenskom enumeracijom i peer-provjerom | 4/81  |
+| + min/max granice preko linearnih kombinacija          | 4/81  |
+| + forcing dubine 1 (najjača tehnika koju čovjek radi)  | 4/81  |
+
+Forcing eliminira 10 kandidata od ~590 i stane. Ta 4 polja su **četiri kutne ćelije** i
+ništa dalje. Za usporedbu, DFS s punom propagacijom riješi istu ploču u ~1000 grananja.
+
+Provjereno je i na **tiskanoj ploči** (sudoku-puzzles.net, Little Killer Hard, 32
+clue-a, 0 znamenki - Vatra je donio sliku): isti rezultat, 4/81. Dakle ni komercijalni
+generator ne jamči logički put, nego samo **jedinstvenost**. Blank mod drži taj isti,
+niži standard - svjesno i samo ovdje.
+
+### Kutna dijagonala je zadana znamenka napisana izvan ploče
+
+Ključ koji je omogućio mod. Dijagonala duljine 1 (kutni pretinac) fiksira vrijednost te
+ćelije, i `littleRange` je rješava bez ijedne nove tehnike - solver ju upiše kao Naked
+Single. Obična ploča ju i dalje ne koristi (`LITTLE_OPTIONS` ju ne nudi, samo
+`LITTLE_CORNERS`), jer je tamo to zadan broj prerušen u oznaku. Ovdje je suprotno:
+jedina četiri mjesta odakle igrač uopće može krenuti, a mreža ostaje prazna.
+
+Zbog toga je `cells.length < 2` popušteno na `< 1` u validaciji na sva tri mjesta
+(sudoku.js, solver.js, app.js) - inače bi cijeli skup oznaka pao kao nevaljan.
+
+### Jedinstvenost je gotovo besplatna, i postojeći countSolutions ju stiže
+
+**20/20** slučajnih rješenja daje jedinstven potpis, potvrđeno dvama nezavisnim
+counterima (jedan s jakom propagacijom, jedan samo s rasponom - slažu se, i oba nađu
+baš ono rješenje iz kojeg je potpis izveden). Zato `generateBlank` ima budžet od samo 8
+pokušaja: on postoji da generiranje ne visi, ne da lovi sretan potpis.
+
+Namjeravao sam za to napisati novu propagaciju u jezgru, pa izmjerio prije pisanja -
+**postojeći `countSolutions` je 3-6× BRŽI** od moje "pametne" verzije (medijan 167ms,
+max 720ms za cijelo generiranje). Moja je imala 100-900× manje čvorova, ali toliko
+skuplji čvor da se ne isplati. Ušteda: ~300 linija koje nisu napisane.
+
+### Hint
+
+Nakon četiri kutne znamenke hint javlja da ploča nema logički put i da se rješava
+probom - a ne uobičajeno "No clean logical move from here", koje bi ovdje zvučalo kao
+prijekor i slalo igrača da traži potez kojeg nema. Blank mod se prepoznaje po
+`state.puzzle.every((v) => !v)`.
+
+### Otvoreno
+
+- **Nije odigrano.** Vatra je izrijekom rekao da mu se Little Killer ne sviđa jer ne
+  voli računati, pa je malo vjerojatno da će ovaj mod itko proći do kraja. Ako se ikad
+  igra: pitanje je hoće li "riješi pogađanjem" biti zabavno ili frustrirajuće.
+- Težina nije mjerljiva graderom (nema tiera). Ako zatreba os težine, mjera bi mogao
+  biti broj DFS grananja - manje grananja znači plića ploča.
+
 ## Popis kandidata je iscrpljen (nakon v1.43.0)
 
 Popis iz [dorada-varijante.md](dorada-varijante.md), otvoren nakon što je originalna

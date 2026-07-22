@@ -335,7 +335,9 @@ const Solver = (() => {
       if (!g || !Number.isInteger(g.sum)) return false;
       const cells = littleCells(g.side, g.k, g.dir);
       // Ponavljanje je dopušteno, pa je gornja granica 9 po ćeliji, a donja 1.
-      if (cells.length < 2 || g.sum < cells.length || g.sum > 9 * cells.length) return false;
+      // Duljina 1 je dopuštena: kutni pretinac nosi vrijednost same ćelije. Obična
+      // ploča ga ne koristi (generator ga ne bira), blank mod na njemu stoji.
+      if (cells.length < 1 || g.sum < cells.length || g.sum > 9 * cells.length) return false;
     }
     return true;
   }
@@ -345,7 +347,7 @@ const Solver = (() => {
     const at = new Array(81).fill(null);
     for (const g of littles) {
       const cells = littleCells(g.side, g.k, g.dir);
-      if (cells.length < 2) continue;
+      if (!cells.length) continue;
       for (const i of cells) (at[i] || (at[i] = [])).push({ cells, sum: g.sum });
     }
     return at;
