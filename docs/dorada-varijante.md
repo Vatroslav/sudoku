@@ -142,9 +142,11 @@ Vidi [todo.md](todo.md).
   iscrpljen**. Procjena da je logikom lakši od Sandwicha se obistinila (`cageRange`
   oblik bez enumeracije), ali je promašila dvije stvari. Prvo, "kut pojasa" mu ne treba:
   zbroj ne ovisi o smjeru čitanja pa strelica bira s koje je strane oznaka, i model
-  pretinaca (gore/lijevo/dolje, bez kutova) pokriva svih 30 dijagonala. Drugo, iz istog
-  razloga su **tri strane dovoljne, ne četiri** - nijedna dijagonala nema oba kraja na
-  istoj strani. Nepredviđeno je ispalo da mu je odnos **najslabija tvrdnja u repou**
+  pretinaca (bez kutova) pokriva svih 30 dijagonala. Drugo, iz istog razloga su tri
+  strane geometrijski dovoljne - ali se u v1.44.0 pokazalo da je ta ušteda bila
+  pogrešna štednja: uz tri strane svaka strana nosi DVA smjera, pa igrač mora pročitati
+  sitnu strelicu da zna kamo dijagonala ide. Četvrta strana vraća pravilo "jedan smjer
+  po strani" i ispada besplatna. Nepredviđeno je ispalo da mu je odnos **najslabija tvrdnja u repou**
   (zbroj do 9 ćelija bez zabrane ponavljanja), pa je jedini kojem je STRENGTH morao pasti
   dva koraka, i to zbog repa od 748s na kombinaciji s Thermom. Detalji u [todo.md](todo.md).
 

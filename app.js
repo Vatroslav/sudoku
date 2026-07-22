@@ -282,7 +282,12 @@
   // Little Killer: { side, k, dir, sum }. Geometrija se izvodi iz side/k/dir (isti
   // izvod kao u sudoku.js/solver.js), pa render nikad ne crta dijagonalu koju jezgra
   // ne bi priznala.
-  const LITTLE_ENTRY = { top: (k) => [0, k], left: (k) => [k, 0], bottom: (k) => [8, k] };
+  const LITTLE_ENTRY = {
+    top: (k) => [0, k],
+    left: (k) => [k, 0],
+    right: (k) => [k, 8],
+    bottom: (k) => [8, k],
+  };
   function littleCells(side, k, dir) {
     const entry = LITTLE_ENTRY[side];
     if (!entry || !Number.isInteger(k) || k < 0 || k > 8) return [];
@@ -393,6 +398,7 @@
   const boardWrapEl = document.getElementById("board-wrap");
   const outTopEl = document.getElementById("out-top");
   const outLeftEl = document.getElementById("out-left");
+  const outRightEl = document.getElementById("out-right");
   const outBottomEl = document.getElementById("out-bottom");
   const notesStateEl = document.getElementById("notes-state");
   const winOverlay = document.getElementById("win-overlay");
@@ -1278,7 +1284,7 @@
   const ARROWS = { "1,1": "↘", "1,-1": "↙", "-1,1": "↗", "-1,-1": "↖" };
 
   function renderOutside(sandwich, littles) {
-    if (!outTopEl || !outLeftEl || !outBottomEl || !boardWrapEl) return;
+    if (!outTopEl || !outLeftEl || !outRightEl || !outBottomEl || !boardWrapEl) return;
     const diag = !!(littles && littles.length);
     const on = !!sandwich || diag;
     boardWrapEl.classList.toggle("has-outside", on);
@@ -1286,6 +1292,7 @@
     boardWrapEl.classList.toggle("has-diag", diag);
     outTopEl.textContent = "";
     outLeftEl.textContent = "";
+    outRightEl.textContent = "";
     outBottomEl.textContent = "";
     if (!on) return;
     // Čita li se cijeli sendvič već iz ZADANIH brojeva? Tada oznaka igraču ne govori
@@ -1320,6 +1327,18 @@
     if (diag) for (const g of littles) bySlot.set(g.side + ":" + g.k, g);
     // Svaki pojas ima svojih devet pretinaca i kad su prazni - grid tako uvijek ima
     // devet traka, pa poravnanje ne ovisi o tome koliko je oznaka prikazano.
+    // Koja je dijagonala trenutno odabrana - da njezin pretinac dobije istaknuto stanje
+    // i veza broj->ploča vrijedi u oba smjera. Usporedba je po SKUPU ćelija, ne po
+    // pretincu: glavnu dijagonalu nose dva pretinca (lijevo[0] i desno[8]) i oba se
+    // odnose na isto, pa bi isticanje samo jednog izgledalo kao greška.
+    const selNow = selectedCells();
+    const selKey =
+      selNow.length > 1
+        ? selNow
+            .slice()
+            .sort((a, b) => a - b)
+            .join(",")
+        : "";
     const fill = (host, side, sums, cellsAt) => {
       for (let k = 0; k < 9; k++) {
         const cell = document.createElement("span");
@@ -1331,10 +1350,30 @@
           const arr = document.createElement("span");
           arr.className = "out-arrow";
           arr.textContent = ARROWS[g.dir.join(",")] || "";
-          // Strelica ide sa strane bliže ploči: u lijevom pojasu desno od broja, u
-          // gornjem i donjem svejedno, pa isti redoslijed drži jedno pravilo.
+          // Strelica ide sa strane bliže ploči, pa oko ide s broja na dijagonalu: u
+          // lijevom i gornjem pojasu desno od broja, u desnom lijevo od njega. Donji
+          // pojas gleda gore pa mu je svejedno - drži isti redoslijed kao gornji.
           cell.appendChild(num);
-          cell.appendChild(arr);
+          if (side === "right") cell.insertBefore(arr, num);
+          else cell.appendChild(arr);
+          // Dodir na oznaku odabire ćelije koje ona zbraja. Dijagonala je jedina oznaka
+          // koja ne dira ćelije koje opisuje - ostale (kavez, tuba, linija) su nacrtane
+          // PREKO njih pa im je opseg očit. Ovdje ga pokazuje odabir.
+          const cells = littleCells(g.side, g.k, g.dir);
+          cell.classList.add("out-diag");
+          if (
+            selKey &&
+            selKey ===
+              cells
+                .slice()
+                .sort((a, b) => a - b)
+                .join(",")
+          )
+            cell.classList.add("on");
+          cell.addEventListener("click", () => {
+            if (!state) return;
+            setSelection(cells, cells[0]);
+          });
         } else if (sums && sums[k] >= 0 && !readable(cellsAt(k))) {
           // -1 = linija bez Sandwich oznake. Prazan pretinac, ne izostavljen.
           cell.textContent = sums[k];
@@ -1344,6 +1383,7 @@
     };
     fill(outTopEl, "top", sandwich && sandwich.cols, colAt);
     fill(outLeftEl, "left", sandwich && sandwich.rows, rowAt);
+    fill(outRightEl, "right", null, null);
     fill(outBottomEl, "bottom", null, null);
   }
 

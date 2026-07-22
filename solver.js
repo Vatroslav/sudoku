@@ -308,7 +308,12 @@ const Solver = (() => {
   // Little Killer: polje { side, k, dir, sum } - pretinac u pojasu, smjer u ploču i
   // zbroj dijagonale. Geometrija se IZVODI iz side/k/dir (mora se poklapati sa
   // sudoku.js littleCells), pa nevaljan oblik ne može proći kao valjana dijagonala.
-  const LITTLE_ENTRY = { top: (k) => [0, k], left: (k) => [k, 0], bottom: (k) => [8, k] };
+  const LITTLE_ENTRY = {
+    top: (k) => [0, k],
+    left: (k) => [k, 0],
+    right: (k) => [k, 8],
+    bottom: (k) => [8, k],
+  };
   function littleCells(side, k, dir) {
     const entry = LITTLE_ENTRY[side];
     if (!entry || !Number.isInteger(k) || k < 0 || k > 8) return [];

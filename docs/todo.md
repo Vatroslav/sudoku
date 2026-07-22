@@ -1692,6 +1692,55 @@ Moja greška je bila da sam pokrivenost računao po KRAJU dijagonale umjesto po
 dijagonali. Iz toga je ispalo "7 dijagonala u donjem desnom kutu je nedostupno", što
 vrijedi samo ako se drži da smjer strelice mora biti fiksan. Ne mora.
 
+### Ipak četiri strane (v1.44.0) - fiksan smjer nije bio suvišan, nego čitljiv
+
+Rečenica gore završava s "ne mora" i to je geometrijski točno, ali je promašilo zašto
+bi netko htio fiksan smjer. Vatra je odigrao Sandwich + Little Killer i javio da
+**nije čitljivo na koje se ćelije clue odnosi**. Uzrok: uz tri strane svaka strana nosi
+DVA smjera (gore ↘ ili ↙, lijevo ↘ ili ↗), pa je smjer podatak koji se čita isključivo
+iz strelice - a strelica je najmanji znak na ekranu i stoji uz Sandwichev broj koji
+strelicu uopće nema.
+
+Sada: **četiri strane, svaka s točno jednim smjerom** (gore ↙, lijevo ↘, desno ↖,
+dolje ↗). Smjer je funkcija strane, nauči se jednom, strelica postaje potvrda. Isti
+dogovor koji koriste tiskani Little Killeri.
+
+Pokrivenost ne pati: **32 opcije nad svih 30 dijagonala** (8 po strani; glavnu i
+antidijagonalu nose po dva pretinca). Prije je bilo 48 opcija nad istih 30, dakle
+izgubljen je samo izbor pretinca za istu dijagonalu - a to je i bio izvor problema.
+
+**Neplanirana dobit: razdvajanje od Sandwicha ispalo je samo od sebe.** Sandwich puni
+pretince prvi (gore/lijevo), Little Killer onda bira slobodne - a sada su mu desna i
+donja strana potpuno slobodne. Mjereno na 20 Hard ploča po kombinaciji:
+
+| kombinacija           | gore | lijevo | desno | dolje |
+| --------------------- | ---- | ------ | ----- | ----- |
+| littlekiller sam      | 50   | 37     | 47    | 36    |
+| littlekiller+sandwich | 7    | 9      | 74    | 73    |
+
+Uz Sandwich **90% oznaka odlazi na desnu i donju stranu**, gdje Sandwicha nema. Time je
+miješanje dviju oznaka u istom pojasu palo na ~10% bez ijednog dodatnog pravila u
+generatoru. Zato Little Killer nije dobio vlastitu boju: razlikuju ga strelica i strana,
+a paleta je kalibrirana mjerenjem (deltaE prag 20) pa se u nju ne dodaje ton bez istog
+računa. Boja ostaje u rezervi ako se pokaže da 10% smeta.
+
+**Pojas više nije uniforman - mjeri se po osi.** Vidi mjerenje uz `has-diag` u
+style.css: lijevi i desni nose broj i strelicu jedno do drugog pa im treba 9.5cqmin,
+a gornji i donji dobivaju širinu od stupca ploče pa im iz pojasa treba samo visina
+retka (7cqmin, koliko i Sandwichu). S tim je **četvrta strana besplatna**: ćelija je na
+svim mjerenim ekranima jednaka v1.43 ili veća (320×568: 22.5 → 23.9).
+
+Uniformnih 8cqmin je izgledalo najbolje po ćeliji dok se nije pogledala zaliha u
+pretincu - pada na **nulu**, broj i strelica se dodiruju. Isto upozorenje već stoji u
+mjerenju iz v1.43 niže ("na 8cqmin zaliha padne s 5.7px na 1.2px"); previdio sam ga i
+prvo commitao 8cqmin, pa ga vratio nakon mjerenja.
+
+**Dodir na oznaku odabire njezinu dijagonalu.** Dijagonala je jedina oznaka koja ne
+dira ćelije koje opisuje - kavez, tuba i linija su nacrtani PREKO njih pa im je opseg
+očit. `setSelection` je već primao grupu ćelija (shift-drag), pa je bilo dovoljno
+spojiti pretinac na `littleCells`. Odabrani pretinac se oboji accentom, i to po SKUPU
+ćelija a ne po pretincu - glavnu dijagonalu nose dva pretinca i oba se odnose na isto.
+
 ### Pojas po osi: donji je često besplatan
 
 Do sad je okvir bio kvadrat s jednakim pojasom lijevo i gore. To je bilo dovoljno za
@@ -1703,20 +1752,26 @@ U landscapeu je obrnuto i tada je besplatan lijevi. Formula sama pogodi oba slu�
 
 Izmjereno (ćelija ploče):
 
-| ekran   | classic | Sandwich | Little Killer |
-| ------- | ------- | -------- | ------------- |
-| 390×844 | 39.0px  | 36.2px   | 35.2px        |
-| 375×812 | 37.4px  | 34.7px   | 33.7px        |
-| 812×375 | 30.5px  | 28.6px   | 25.9px        |
-| 320×568 | 26.9px  | 24.7px   | 20.9px        |
+| ekran   | classic | Sandwich | Little Killer (v1.43) | Little Killer (v1.44) |
+| ------- | ------- | -------- | --------------------- | --------------------- |
+| 390×844 | 39.0px  | 36.2px   | 35.2px                | -                     |
+| 375×812 | 37.4px  | 34.7px   | 33.7px                | 33.8px                |
+| 812×375 | 30.5px  | 28.6px   | 25.9px                | 27.5px                |
+| 320×568 | 26.9px  | 24.7px   | 20.9px                | 22.3px                |
 
 Little Killer košta malo više od Sandwicha jer mu pretinac mora primiti i strelicu uz
 broj (9.5cqmin prema 7cqmin). Pokušaj da se pojas stisne je odbačen mjerenjem: na
 8cqmin ploča dobije jedan piksel po ćeliji, a zaliha u pretincu padne s 5.7px na 1.2px.
 
+**v1.44.0 je pojas prestao biti uniforman** i ploča je time porasla unatoč četvrtoj
+strani: 9.5cqmin ostaje samo lijevo i desno (tamo broj i strelica stoje jedno do
+drugog), a gore i dolje pada na 7cqmin jer im širinu daje stupac ploče, ne pojas.
+Gornja tvrdnja o 8cqmin i dalje vrijedi i tamo je zamka - uniformnih 8 spusti zalihu na
+nulu. Detalji uz `has-diag` u style.css.
+
 **320×568 je jedini ekran gdje se donji pojas plaća** - tamo je wrap skoro kvadrat
-(254×250) pa viška visine nema. Ostaje 20.9px po ćeliji; to je telefon iz 2016., na
-375+ je 33.7px i više.
+(254×250) pa viška visine nema. Ostaje 22.3px po ćeliji; to je telefon iz 2016., na
+375+ je 33.8px i više.
 
 ### Container query jedinice mjere CONTENT box
 
@@ -1803,13 +1858,16 @@ nije "sljedeća s popisa" nego nova odluka, kao što je bio Disjoint Groups u v1
 - **Daily Variant Mix** (v1.23.0 ideja, neplanirano) - jedina zapisana ideja koja nije
   varijanta.
 - **Tehnički dug oko Thermo repova**, sada s novim mjerenjem: vidi niže.
-- **Potvrda igranjem za Little Killer** - render je provjeren mjerenjem, ne okom.
+- ~~**Potvrda igranjem za Little Killer**~~ - odigrano, i **našlo je grešku koju
+  mjerenje nije moglo**: smjer dijagonale nije bio čitljiv. Popravljeno u v1.44.0
+  (četiri strane, jedan smjer po strani). Sam v1.44.0 render još nije odigran.
 
 **Za slučaj da se ipak doda još jedna varijanta**, ovo je zatečeno stanje mehanizama:
 
 - Boja je potrošena (šest linijskih, prag deltaE 20 - v1.39.1/v1.40.0); nova linija bi
   morala posegnuti za oznakom na kraju, ne za bojom.
-- Pojas izvan ploče ima slobodnu **desnu stranu** i sve kutove.
+- Pojas izvan ploče ima slobodne **sve kutove** (desnu stranu je uzeo Little Killer u
+  v1.44.0).
 - `.board-slot` računa ploču po osi, pa novi pojas ne traži nikakav novi izračun.
 
 ## Poznato / tehnički dug

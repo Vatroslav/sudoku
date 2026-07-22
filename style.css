@@ -286,23 +286,45 @@ main {
    piksela viška, pa DONJI POJAS NE KOŠTA NIŠTA: ulazi u tu prazninu. U landscapeu je
    obrnuto i tada besplatan postaje lijevi. Formula sama pogodi oba slučaja.
 
-   Desni pojas namjerno ne postoji: nijedna dijagonala nema oba kraja na istoj strani,
-   pa je s tri strane svaka dostupna (provjereno na svih 30) - vidi todo.md. */
+   Sve četiri strane postoje otkad Little Killer ima po jedan smjer po strani (vidi
+   LITTLE_SIDES u sudoku.js). Desni pojas se plaća iz iste širine kao lijevi, pa je
+   pretinac s dijagonalom SUŽEN u odnosu na v1.43 - vidi has-diag. */
 .board-frame {
   display: grid;
-  grid-template-columns: var(--g-left, 0px) auto;
+  grid-template-columns: var(--g-left, 0px) auto var(--g-right, 0px);
   grid-template-rows: var(--g-top, 0px) auto var(--g-bottom, 0px);
 }
 /* Sandwich piše samo broj (najviše 35), pa mu 7cqmin stigne uz zalihu. Little Killer
-   uz broj nosi i strelicu, pa mu treba šire - mjereno na živoj stranici, vidi todo.md. */
+   uz broj nosi i strelicu, pa mu treba šire - mjereno na živoj stranici, vidi todo.md.
+
+   Otkad su pojasa četiri, mjera NIJE ista na obje osi - pojas treba biti širok koliko
+   traži SVOJA os. Lijevi i desni nose broj i strelicu jedno do drugog, pa im širina
+   dolazi iz pojasa i treba 9.5. Gornji i donji dobivaju širinu od stupca ploče (~34px
+   na 375px ekranu), pa im iz pojasa treba samo VISINA jednog retka - i 7 je dosta,
+   koliko i Sandwichu.
+
+   Mjereno (ćelija ploče / zaliha u pretincu lijevo-desno). Ćelija je (ploča − 2×3px
+   okvir − 8×1px gap) / 9, dakle ista mjera kao tablica u todo.md - ne ploča/9:
+
+   | ekran   | v1.43 (3×9.5) | 4×9.5      | 4×8        | 9.5/7 (ovo) |
+   | ------- | ------------- | ---------- | ---------- | ----------- |
+   | 812×375 | 25.8          | 25.8 / 3.7 | 26.9 / 0.0 | 27.5 / 3.7  |
+   | 375×812 | 33.8          | 33.8 / 4.2 | 34.3 / 0.0 | 33.8 / 4.2  |
+   | 320×568 | 20.9          | 20.9 / 3.0 | 21.7 / 0.0 | 22.3 / 3.0  |
+
+   Uniformnih 8 izgleda najbolje po ćeliji dok se ne pogleda zaliha: pada na NULU, tj.
+   broj i strelica se dodiruju. To je ista zamka na koju je upozorilo mjerenje iz v1.43
+   ("na 8cqmin zaliha padne s 5.7px na 1.2px") - samo je sada pojas uz to i uži.
+   Četvrta strana je s 9.5/7 besplatna: ćelija je svugdje jednaka v1.43 ili veća. */
 .board-wrap.has-outside {
   --g-left: 7cqmin;
   --g-top: 7cqmin;
 }
 .board-wrap.has-diag {
   --g-left: 9.5cqmin;
-  --g-top: 9.5cqmin;
-  --g-bottom: 9.5cqmin;
+  --g-top: 7cqmin;
+  --g-right: 9.5cqmin;
+  --g-bottom: 7cqmin;
 }
 /* Pretinac ploče: nosi VELIČINU i služi kao size-container za sve u ploči.
 
@@ -345,6 +367,12 @@ main {
   grid-template-rows: repeat(9, 1fr);
   padding: 3px 0;
 }
+.out-right {
+  grid-column: 3;
+  grid-row: 2;
+  grid-template-rows: repeat(9, 1fr);
+  padding: 3px 0;
+}
 .out-bottom {
   grid-column: 2;
   grid-row: 3;
@@ -370,6 +398,21 @@ main {
   font-size: 0.85em;
   font-weight: 400;
   opacity: 0.75;
+}
+/* Dijagonalna oznaka je klikabilna: dodir odabere ćelije koje zbraja. Nema vlastitu
+   boju - Sandwich i Little Killer razlikuju strelica i strana (desni i donji pojas nosi
+   samo Little Killer), a paleta je kalibrirana mjerenjem pa se u nju ne dodaje ton bez
+   istog računa (vidi boje linijskih varijanti). Odabrano stanje je jedino obojano, i to
+   accentom koji igra već koristi za "ovo je trenutno aktivno". */
+.out-diag {
+  cursor: pointer;
+  border-radius: 4px;
+}
+.out-diag.on {
+  color: var(--accent);
+}
+.out-diag.on .out-arrow {
+  opacity: 1;
 }
 .board {
   display: grid;

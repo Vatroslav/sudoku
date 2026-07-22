@@ -630,32 +630,25 @@ const Sudoku = (() => {
   // [1,9] po praznoj ćeliji - isti oblik kao arrowRange.
   //
   // Zbroj ne ovisi o smjeru čitanja, pa su ↘ i ↖ ISTA dijagonala; strelica bira samo s
-  // koje je strane oznaka. Zato je tri strane dovoljno: nijedna dijagonala nema oba
-  // kraja na istoj strani, pa izbacivanje desne ne čini nijednu nedostupnom (provjereno
-  // na svih 30). Desna je izabrana jer lijevu i gornju već koristi Sandwich, a donji
-  // pojas ne košta ploču - u portretu ulazi u praznu visinu ispod nje.
+  // koje je strane oznaka. To ostavlja slobodu koju je v1.43 potrošio na uštedu pojasa:
+  // tri strane, svaka s DVA smjera. Ispalo je nečitljivo - igrač je morao pročitati
+  // sitnu strelicu da uopće zna kamo dijagonala ide, a u gornjem pojasu je stajala uz
+  // Sandwichev broj koji strelicu nema.
+  //
+  // Sada: ČETIRI strane, svaka s TOČNO JEDNIM smjerom (gore ↙, lijevo ↘, desno ↖,
+  // dolje ↗). Smjer je funkcija strane, pa se pravilo nauči jednom i strelica postaje
+  // potvrda umjesto zagonetke. Isti dogovor koji koriste tiskani Little Killeri.
+  //
+  // Pokrivenost ne pati: lijevo daje "\" dijagonale koje počinju na lijevom rubu (8),
+  // desno one koje završavaju na desnom (8, od toga glavna dijeljena s lijevo[0]), gore
+  // i dolje isto to za "/" - ukupno 32 opcije nad svih 30 dijagonala. Prije je bilo 48
+  // opcija nad istih 30, dakle jedino što se izgubilo je izbor pretinca za istu
+  // dijagonalu, a to je i bio izvor nečitljivosti.
   const LITTLE_SIDES = {
-    top: {
-      entry: (k) => [0, k],
-      dirs: [
-        [1, 1],
-        [1, -1],
-      ],
-    },
-    left: {
-      entry: (k) => [k, 0],
-      dirs: [
-        [1, 1],
-        [-1, 1],
-      ],
-    },
-    bottom: {
-      entry: (k) => [8, k],
-      dirs: [
-        [-1, 1],
-        [-1, -1],
-      ],
-    },
+    top: { entry: (k) => [0, k], dir: [1, -1] },
+    left: { entry: (k) => [k, 0], dir: [1, 1] },
+    right: { entry: (k) => [k, 8], dir: [-1, -1] },
+    bottom: { entry: (k) => [8, k], dir: [-1, 1] },
   };
   // Ćelije dijagonale iz pretinca `side`[k] u smjeru `dir`. Jedini izvor te geometrije -
   // dijele ga derive, isValid i render, pa se ne mogu razići.
@@ -674,14 +667,14 @@ const Sudoku = (() => {
   }
   // Sve upotrebljive (pretinac, smjer) opcije. Duljina 1 otpada - takva "dijagonala"
   // je zadan broj napisan izvan ploče, ne oznaka (isti argument kao kavez od jedne
-  // ćelije). Mjereno: 48 opcija koje pokrivaju svih 30 dijagonala, 16 po strani.
+  // ćelije). Otpada točno jedan pretinac po strani (onaj u kutu iz kojeg smjer te
+  // strane odmah izlazi s ploče), pa je 8 opcija po strani = 32 nad svih 30 dijagonala.
   const LITTLE_OPTIONS = [];
   for (const [side, def] of Object.entries(LITTLE_SIDES))
-    for (let k = 0; k < 9; k++)
-      for (const dir of def.dirs) {
-        const cells = littleCells(side, k, dir);
-        if (cells.length >= 2) LITTLE_OPTIONS.push({ side, k, dir, cells });
-      }
+    for (let k = 0; k < 9; k++) {
+      const cells = littleCells(side, k, def.dir);
+      if (cells.length >= 2) LITTLE_OPTIONS.push({ side, k, dir: def.dir, cells });
+    }
   const littleSlot = (g) => g.side + ":" + g.k;
   const littleKey = (cells) =>
     cells
