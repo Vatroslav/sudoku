@@ -386,7 +386,7 @@
 
   let history = []; // za undo
   // Stanje povlačenja (pencil brush ili grupna selekcija)
-  let drag = { active: false, mode: "add", painted: null, anchor: -1 };
+  let drag = { active: false, mode: "add", painted: null, selection: null, anchor: -1 };
 
   // --- DOM ---
   const boardEl = document.getElementById("board");
@@ -772,6 +772,13 @@
   // state.selected = sidro (jedna ćelija; tipkovnica/pomoć/highlight).
   // state.multi = grupa (2+ ćelija); prazno kad je odabir jednostruk.
   function setSelection(list, anchor) {
+    updateSelection(list, anchor);
+    render();
+  }
+
+  // Isto kao setSelection, ali bez rendera - za pozivatelje koji u istom
+  // potezu mijenjaju još nešto pa renderaju jednom na kraju.
+  function updateSelection(list, anchor) {
     const uniq = [...new Set(list)].filter((i) => i >= 0 && i < 81);
     state.multi = uniq.length > 1 ? uniq : [];
     state.selected = uniq.length
@@ -779,7 +786,6 @@
         ? anchor
         : uniq[uniq.length - 1]
       : null;
-    render();
   }
 
   function selectCell(idx) {
@@ -1041,9 +1047,13 @@
     drag.active = true;
     drag.mode = state.notes[idx].includes(state.activeNote) ? "remove" : "add";
     drag.painted = new Set();
-    state.selected = idx;
-    state.multi = [];
+    // Kist usput i selektira ćelije preko kojih prelazi - isto kao povlačenje
+    // bez notes moda. Selekcija ide preko svih ćelija, i onih koje kist preskače.
+    drag.anchor = idx;
+    drag.selection = new Set([idx]);
+    updateSelection([idx], idx);
     applyBrush(idx);
+    render();
   }
 
   function onBoardPointerMove(e) {
@@ -1061,7 +1071,14 @@
         setSelection([...drag.painted], drag.anchor);
       }
     } else {
-      applyBrush(idx);
+      let changed = false;
+      if (!drag.selection.has(idx)) {
+        drag.selection.add(idx);
+        updateSelection([...drag.selection], drag.anchor);
+        changed = true;
+      }
+      if (applyBrush(idx)) changed = true;
+      if (changed) render();
     }
   }
 
@@ -1069,12 +1086,14 @@
     if (!drag.active) return;
     drag.active = false;
     drag.painted = null;
+    drag.selection = null;
     save();
     render();
   }
 
+  // Vraća je li ćelija stvarno obojana (pozivatelj renderira).
   function applyBrush(idx) {
-    if (!drag.active || drag.painted.has(idx) || !isPaintable(idx)) return;
+    if (!drag.active || drag.painted.has(idx) || !isPaintable(idx)) return false;
     drag.painted.add(idx);
     const notes = state.notes[idx];
     const pos = notes.indexOf(state.activeNote);
@@ -1083,7 +1102,7 @@
     } else if (pos !== -1) {
       notes.splice(pos, 1);
     }
-    render();
+    return true;
   }
 
   // --- Pomoć: objasni sljedeći potez ---
