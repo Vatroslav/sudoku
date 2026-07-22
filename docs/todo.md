@@ -1725,15 +1725,42 @@ a paleta je kalibrirana mjerenjem (deltaE prag 20) pa se u nju ne dodaje ton bez
 računa. Boja ostaje u rezervi ako se pokaže da 10% smeta.
 
 **Pojas više nije uniforman - mjeri se po osi.** Vidi mjerenje uz `has-diag` u
-style.css: lijevi i desni nose broj i strelicu jedno do drugog pa im treba 9.5cqmin,
-a gornji i donji dobivaju širinu od stupca ploče pa im iz pojasa treba samo visina
-retka (7cqmin, koliko i Sandwichu). S tim je **četvrta strana besplatna**: ćelija je na
-svim mjerenim ekranima jednaka v1.43 ili veća (320×568: 22.5 → 23.9).
+style.css: lijevi i desni nose broj i strelicu jedno do drugog pa im treba 8cqmin, a
+gornji i donji dobivaju širinu od stupca ploče pa im iz pojasa treba samo visina retka
+(7cqmin, koliko i Sandwichu).
 
-Uniformnih 8cqmin je izgledalo najbolje po ćeliji dok se nije pogledala zaliha u
-pretincu - pada na **nulu**, broj i strelica se dodiruju. Isto upozorenje već stoji u
-mjerenju iz v1.43 niže ("na 8cqmin zaliha padne s 5.7px na 1.2px"); previdio sam ga i
-prvo commitao 8cqmin, pa ga vratio nakon mjerenja.
+### v1.44.1 - "besplatna četvrta strana" je bila bug, ne mjerenje
+
+v1.44.0 je tvrdio da četvrta strana ne košta ništa. Vatra je odigrao i javio da **s
+desne strane ne vidi nijedan broj, samo strelice**. Uzrok nije bio font nego
+`.board-slot`: formula je oduzimala samo `--g-left`, a `--g-right` nikad nije dodan.
+Ploča je zato uzimala svu širinu do desnog ruba, desni pojas je ispadao izvan ekrana i
+od pretinca se vidjela samo strelica (prva je u nizu, broj je desno od nje).
+
+**Zato je i ispalo da je četvrta strana besplatna - ploča se doslovno nije smanjivala
+jer pojas nije ulazio u račun.** Cijela tablica mjerenja u v1.44.0 commitu bila je
+posljedica toga i zamijenjena je.
+
+Stvarna cijena, mjereno na 412×915 nakon popravka:
+
+| konfiguracija         | ćelija | zaliha |
+| --------------------- | ------ | ------ |
+| v1.43 (3 pojasa, 9.5) | 37.5   | -      |
+| 4×9.5                 | 33.4   | 4.7    |
+| 8/7, font 4.4         | 34.7   | 0.0    |
+| 8/7, font 3.8 (ovo)   | 34.7   | 3.3    |
+| 7/7, font 3.4         | 35.5   | 2.3    |
+
+**Vatrin prijedlog da se smanji font dijagonalne oznake je bio točan** - vraća zalihu
+bez ijednog izgubljenog piksela ploče, jer dopušta uži pojas. Dalje se ne ide: 3.4cqmin
+je 14px na tom ekranu, a oznaka nosi podatak.
+
+**Pouka o mjerenju**: ovo je drugi put u istoj sesiji da mjerenje nije mjerilo ono što
+sam mislio (prvi je bio `style.setProperty` na CSS varijablu, koji tiho ne prolazi).
+Oba puta je signal bio isti - rezultat koji je _prelijepo_ ispao. "Četvrta strana je
+besplatna" je trebalo zvučati sumnjivo samo po sebi. Mjerila su se veličina ploče i
+zaliha u pretincu, ali nikad **staje li pojas u viewport** - a to je bilo jedino što je
+puklo. Provjera koja to hvata: `el.getBoundingClientRect().right <= innerWidth`.
 
 **Dodir na oznaku odabire njezinu dijagonalu.** Dijagonala je jedina oznaka koja ne
 dira ćelije koje opisuje - kavez, tuba i linija su nacrtani PREKO njih pa im je opseg
@@ -1752,26 +1779,29 @@ U landscapeu je obrnuto i tada je besplatan lijevi. Formula sama pogodi oba slu�
 
 Izmjereno (ćelija ploče):
 
-| ekran   | classic | Sandwich | Little Killer (v1.43) | Little Killer (v1.44) |
-| ------- | ------- | -------- | --------------------- | --------------------- |
-| 390×844 | 39.0px  | 36.2px   | 35.2px                | -                     |
-| 375×812 | 37.4px  | 34.7px   | 33.7px                | 33.8px                |
-| 812×375 | 30.5px  | 28.6px   | 25.9px                | 27.5px                |
-| 320×568 | 26.9px  | 24.7px   | 20.9px                | 22.3px                |
+| ekran   | classic | Sandwich | Little Killer (v1.43) | Little Killer (v1.44.1) |
+| ------- | ------- | -------- | --------------------- | ----------------------- |
+| 390×844 | 39.0px  | 36.2px   | 35.2px                | -                       |
+| 412×915 | -       | -        | 37.5px                | 34.7px                  |
+| 375×812 | 37.4px  | 34.7px   | 33.7px                | -                       |
+| 812×375 | 30.5px  | 28.6px   | 25.9px                | 27.6px                  |
+| 320×568 | 26.9px  | 24.7px   | 20.9px                | 22.3px                  |
 
 Little Killer košta malo više od Sandwicha jer mu pretinac mora primiti i strelicu uz
 broj (9.5cqmin prema 7cqmin). Pokušaj da se pojas stisne je odbačen mjerenjem: na
 8cqmin ploča dobije jedan piksel po ćeliji, a zaliha u pretincu padne s 5.7px na 1.2px.
 
-**v1.44.0 je pojas prestao biti uniforman** i ploča je time porasla unatoč četvrtoj
-strani: 9.5cqmin ostaje samo lijevo i desno (tamo broj i strelica stoje jedno do
-drugog), a gore i dolje pada na 7cqmin jer im širinu daje stupac ploče, ne pojas.
-Gornja tvrdnja o 8cqmin i dalje vrijedi i tamo je zamka - uniformnih 8 spusti zalihu na
-nulu. Detalji uz `has-diag` u style.css.
+**v1.44.1 je pojas prestao biti uniforman**: 8cqmin lijevo i desno (tamo broj i
+strelica stoje jedno do drugog), 7cqmin gore i dolje jer im širinu daje stupac ploče.
+Gornja tvrdnja o 8cqmin ostaje točna za font 4.4cqmin - zato je dijagonalnoj oznaci
+font spušten na 3.8cqmin, čime zaliha skače s 0.0 na 3.3px bez ijednog piksela ploče.
+
+**Četvrta strana se plaća samo na velikim ekranima** (412×915: 37.5 → 34.7px). Na
+manjima ploču ograničava VISINA, pa niži gornji/donji pojas više nego pokrije trošak i
+ploča naraste (320×568: 20.9 → 22.3px, landscape 25.9 → 27.6px).
 
 **320×568 je jedini ekran gdje se donji pojas plaća** - tamo je wrap skoro kvadrat
-(254×250) pa viška visine nema. Ostaje 22.3px po ćeliji; to je telefon iz 2016., na
-375+ je 33.8px i više.
+(254×250) pa viška visine nema. Ostaje 22.3px po ćeliji; to je telefon iz 2016.
 
 ### Container query jedinice mjere CONTENT box
 

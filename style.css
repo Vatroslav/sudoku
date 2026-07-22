@@ -299,31 +299,42 @@ main {
 
    Otkad su pojasa četiri, mjera NIJE ista na obje osi - pojas treba biti širok koliko
    traži SVOJA os. Lijevi i desni nose broj i strelicu jedno do drugog, pa im širina
-   dolazi iz pojasa i treba 9.5. Gornji i donji dobivaju širinu od stupca ploče (~34px
-   na 375px ekranu), pa im iz pojasa treba samo VISINA jednog retka - i 7 je dosta,
-   koliko i Sandwichu.
+   dolazi iz pojasa. Gornji i donji dobivaju širinu od stupca ploče (~35px na 412px
+   ekranu), pa im iz pojasa treba samo VISINA jednog retka - i 7 je dosta, koliko i
+   Sandwichu.
 
-   Mjereno (ćelija ploče / zaliha u pretincu lijevo-desno). Ćelija je (ploča − 2×3px
-   okvir − 8×1px gap) / 9, dakle ista mjera kao tablica u todo.md - ne ploča/9:
+   ČETVRTA STRANA NIJE BESPLATNA i ranija tvrdnja da jest bila je posljedica bugа, ne
+   mjerenja: `.board-slot` je oduzimao samo --g-left, pa desni pojas nije ulazio u
+   račun. Ploča se zato "nije smanjivala" - jednostavno je prelazila preko desnog ruba
+   ekrana i odsijecala oznake (Vatra je vidio strelice bez brojeva). Formula sada
+   oduzima oba pojasa, i tek su ova mjerenja stvarna.
 
-   | ekran   | v1.43 (3×9.5) | 4×9.5      | 4×8        | 9.5/7 (ovo) |
-   | ------- | ------------- | ---------- | ---------- | ----------- |
-   | 812×375 | 25.8          | 25.8 / 3.7 | 26.9 / 0.0 | 27.5 / 3.7  |
-   | 375×812 | 33.8          | 33.8 / 4.2 | 34.3 / 0.0 | 33.8 / 4.2  |
-   | 320×568 | 20.9          | 20.9 / 3.0 | 21.7 / 0.0 | 22.3 / 3.0  |
+   Mjereno na 412×915 (ćelija ploče / zaliha u pretincu lijevo-desno). Ćelija je
+   (ploča − 2×3px okvir − 8×1px gap) / 9, ista mjera kao tablica u todo.md:
 
-   Uniformnih 8 izgleda najbolje po ćeliji dok se ne pogleda zaliha: pada na NULU, tj.
-   broj i strelica se dodiruju. To je ista zamka na koju je upozorilo mjerenje iz v1.43
-   ("na 8cqmin zaliha padne s 5.7px na 1.2px") - samo je sada pojas uz to i uži.
-   Četvrta strana je s 9.5/7 besplatna: ćelija je svugdje jednaka v1.43 ili veća. */
+   | konfiguracija         | ćelija | zaliha |
+   | --------------------- | ------ | ------ |
+   | v1.43 (3 pojasa, 9.5) | 37.5   | -      |
+   | 4×9.5                 | 33.4   | 4.7    |
+   | 8/7, font 4.4         | 34.7   | 0.0    |
+   | 8/7, font 3.8 (ovo)   | 34.7   | 3.3    |
+   | 7/7, font 3.4         | 35.5   | 2.3    |
+
+   Četvrta strana košta oko 2.8px po ćeliji i to je stvarna cijena čitljivog smjera.
+   Manji font za dijagonalnu oznaku (Vatrin prijedlog) vraća zalihu bez ijednog piksela
+   ploče - vidi .out-diag niže. Dalje se ne ide: 3.4cqmin je 14px na ovom ekranu, a
+   oznaka nosi podatak pa bi se rješavanje jedne nečitljivosti platilo drugom.
+
+   Na 320×568 sve varijante daju istu ćeliju (22.4) jer tamo ploču ograničava visina,
+   pa je izbor odlučen na 412px - Vatrinom ekranu. */
 .board-wrap.has-outside {
   --g-left: 7cqmin;
   --g-top: 7cqmin;
 }
 .board-wrap.has-diag {
-  --g-left: 9.5cqmin;
+  --g-left: 8cqmin;
   --g-top: 7cqmin;
-  --g-right: 9.5cqmin;
+  --g-right: 8cqmin;
   --g-bottom: 7cqmin;
 }
 /* Pretinac ploče: nosi VELIČINU i služi kao size-container za sve u ploči.
@@ -342,7 +353,7 @@ main {
   /* Najveći kvadrat koji stane nakon pojaseva - po osi, vidi .board-frame. Bez
      pojaseva se svede na min(100cqw, 100cqh), dakle točno na staro ponašanje. */
   width: min(
-    calc(100cqw - var(--g-left, 0px)),
+    calc(100cqw - var(--g-left, 0px) - var(--g-right, 0px)),
     calc(100cqh - var(--g-top, 0px) - var(--g-bottom, 0px))
   );
   aspect-ratio: 1 / 1;
@@ -407,6 +418,12 @@ main {
 .out-diag {
   cursor: pointer;
   border-radius: 4px;
+  /* Manji od Sandwichevih 4.4cqmin jer u pretinac uz broj mora stati i strelica. Time
+     pojas smije biti uži (8 umjesto 9.5cqmin) i ploča dobije natrag 1.3px po ćeliji uz
+     zdravu zalihu - mjerenje uz has-diag. Donja granica je ista kao Sandwichu: ispod
+     9px oznaka nije čitljiva ni jednoj varijanti. Sporedni učinak je koristan - razlika
+     u veličini dodatno razlikuje dvije oznake koje dijele gornji i lijevi pojas. */
+  font-size: clamp(9px, 3.8cqmin, 18px);
 }
 .out-diag.on {
   color: var(--accent);
