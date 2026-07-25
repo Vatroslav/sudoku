@@ -4,7 +4,12 @@
 # Source ovog repoa je u rootu (app.js, solver.js, sudoku.js, sw.js, style.css,
 # index.html, manifest.webmanifest) - tooling (.mjs/.json/.prettierrc/docs) ne broji.
 
-CMD=$(python -c "import sys,json; print(json.load(sys.stdin)['tool_input'].get('command',''))" 2>/dev/null)
+# PYTHONIOENCODING je OBAVEZAN: na Windowsu python default stdout kodira u konzolni
+# codepage, pa `print` s hrvatskim slovom baci UnicodeEncodeError. Uz `2>/dev/null`
+# to prolazi tiho, varijabla ostane prazna, i guard onda blokira commit s porukom
+# "namjera nije deklarirana" iako je prefiks uredno tu. Vidjeno na commit poruci koja
+# je sadrzavala "iduci" s dijakritikom.
+CMD=$(PYTHONIOENCODING=utf-8 python -c "import sys,json; print(json.load(sys.stdin)['tool_input'].get('command',''))" 2>/dev/null)
 
 # Samo git commit komande
 echo "$CMD" | grep -qE 'git commit' || exit 0
@@ -26,7 +31,7 @@ deny() {
 }
 
 # Commit poruka iz -m / --message (robusno preko shlex)
-MSG=$(printf '%s' "$CMD" | python -c "
+MSG=$(printf '%s' "$CMD" | PYTHONIOENCODING=utf-8 python -c "
 import sys, shlex
 try:
     toks = shlex.split(sys.stdin.read())
