@@ -656,6 +656,13 @@ const Solver = (() => {
   // Little Killer: per-puzzle indeks ćelija -> polje { cells, sum } ili null. Kao kavez
   // (raspon po preostalom zbroju), samo bez zabrane ponavljanja - vidi littleRange.
   let curLittles = null;
+  // Zbroj jedinice (45-pravilo): ćelija -> vrsta jedinice iz koje je rez došao. Puni ga
+  // unitSumPass, čita hNakedSingle da hint može reći ODAKLE mu je skup sužen - inače bi
+  // ispao Naked Single bez vidljivog razloga. Vrijedi do idućeg computeCandidates.
+  const lastUnitSum = new Map();
+  const UNIT_SUM = 45;
+  // Iznad pet praznih ćelija enumeracija poskupi, a rez ionako preuzmu klasične tehnike.
+  const UNIT_SUM_MAX_OPEN = 5;
   // Nonconsecutive: obična zastavica, jedina varijanta bez ikakvog per-puzzle podatka
   // (pravilo vrijedi za cijelu ploču). Propagacija je Kropki naopako: bijela točka
   // kaže "ovaj par JEST uzastopan", ovdje NIJEDAN ortogonalni par nije - pa se
@@ -811,7 +818,139 @@ const Solver = (() => {
         if (after === before) break;
       }
     }
+    // Zbroj jedinice ide ZADNJI, nakon što su svi ostali skupovi izračunati - čita
+    // tuđe kandidate (granica oznake koja jedinicu presijeca), pa mu trebaju gotovi.
+    // U petlji iz istog razloga kao Sandwich: stegnuta kutija da novu informaciju
+    // retku koji kroz nju prolazi i obrnuto.
+    lastUnitSum.clear();
+    if (curCages || curLittles) for (let r = 0; r < 3; r++) if (!unitSumPass(grid, cand)) break;
     return cand;
+  }
+
+  // Jedinica ima zbroj 45, pa 45 minus zbrojevi oznaka koje leže CIJELE unutar nje daje
+  // zbroj preostalih ćelija. Oznaka koja jedinicu presijeca ne da točan zbroj, ali da
+  // granicu na svoj dio (ostatak joj je vani, a raspon vanjskog dijela znamo iz
+  // kandidata). Za Killer je to klasično 45-pravilo (innies/outies) koje `cageRange`
+  // ne pokriva - on gleda samo vlastiti kavez, ne što ostatku kutije preostaje.
+  //
+  // Nađeno kroz blank Little Killer, gdje je dalo tri ćelije koje solver inače nema
+  // (4/81 -> 7/81) - vidi docs/todo.md. Vrijednost je ipak na Killeru: tamo opali na
+  // svakoj ploči.
+  function unitSumPass(grid, cand) {
+    const gs = [];
+    const seen = new Set();
+    const addGroup = (cells, sum) => {
+      const key = cells
+        .slice()
+        .sort((a, b) => a - b)
+        .join(",");
+      if (seen.has(key)) return;
+      seen.add(key);
+      gs.push({ cells, sum });
+    };
+    if (curCages)
+      for (let i = 0; i < 81; i++) if (curCages[i]) addGroup(curCages[i].cells, curCages[i].sum);
+    if (curLittles)
+      for (let i = 0; i < 81; i++)
+        if (curLittles[i]) for (const g of curLittles[i]) addGroup(g.cells, g.sum);
+    if (!gs.length) return false;
+    let changed = false;
+    for (let ui = 0; ui < allUnits.length; ui++) {
+      const unit = allUnits[ui];
+      const inUnit = new Set(unit);
+      // Oznake koje leže cijele unutar jedinice, najveće prvo pa greedy disjunktno -
+      // dva kaveza koja se preklapaju ne smiju se zbrojiti dvaput.
+      const inside = gs.filter((g) => g.cells.every((c) => inUnit.has(c)));
+      if (!inside.length) continue;
+      inside.sort((a, b) => b.cells.length - a.cells.length);
+      const covered = new Set();
+      let known = 0;
+      for (const g of inside) {
+        if (g.cells.some((c) => covered.has(c))) continue;
+        g.cells.forEach((c) => covered.add(c));
+        known += g.sum;
+      }
+      let target = UNIT_SUM - known;
+      const open = [];
+      for (const c of unit) {
+        if (covered.has(c)) continue;
+        if (grid[c]) target -= grid[c];
+        else open.push(c);
+      }
+      // Praznih mora biti, i malo ih mora biti - enumeracija je faktorijelna, a iznad
+      // pet ćelija ionako ne reže ništa što klasične tehnike ne pokupe.
+      if (!open.length || open.length > UNIT_SUM_MAX_OPEN) continue;
+      const bounds = [];
+      for (const g of gs) {
+        const inPart = g.cells.filter((c) => inUnit.has(c));
+        if (!inPart.length || inPart.length === g.cells.length) continue;
+        let lo = 0;
+        let hi = 0;
+        let bad = false;
+        for (const c of g.cells) {
+          if (inUnit.has(c)) continue;
+          if (grid[c]) {
+            lo += grid[c];
+            hi += grid[c];
+          } else if (cand[c] && cand[c].size) {
+            lo += Math.min(...cand[c]);
+            hi += Math.max(...cand[c]);
+          } else {
+            bad = true;
+            break;
+          }
+        }
+        if (bad) continue;
+        let base = 0;
+        const pos = [];
+        for (const c of inPart) {
+          if (grid[c]) base += grid[c];
+          else {
+            const j = open.indexOf(c);
+            if (j < 0) {
+              bad = true;
+              break;
+            }
+            pos.push(j);
+          }
+        }
+        if (bad || !pos.length) continue;
+        bounds.push({ pos, lo: g.sum - hi - base, hi: g.sum - lo - base });
+      }
+      const witness = open.map(() => new Set());
+      const vals = new Array(open.length).fill(0);
+      const walk = (k, mask, sum) => {
+        if (sum > target) return;
+        if (k === open.length) {
+          if (sum !== target) return;
+          for (const b of bounds) {
+            let s = 0;
+            for (const p of b.pos) s += vals[p];
+            if (s < b.lo || s > b.hi) return;
+          }
+          for (let j = 0; j < open.length; j++) witness[j].add(vals[j]);
+          return;
+        }
+        for (const v of cand[open[k]]) {
+          if (mask & (1 << v)) continue;
+          vals[k] = v;
+          walk(k + 1, mask | (1 << v), sum + v);
+        }
+        vals[k] = 0;
+      };
+      walk(0, 0, 0);
+      for (let j = 0; j < open.length; j++) {
+        // Prazan witness znači kontradikciju; ne diraj skup - explainNext ju prijavljuje
+        // preko praznog kandidatskog skupa, a ovdje bi ga tek zamaskirali.
+        if (!witness[j].size) continue;
+        if (witness[j].size < cand[open[j]].size) {
+          cand[open[j]] = witness[j];
+          lastUnitSum.set(open[j], ui < 9 ? "row" : ui < 18 ? "column" : "box");
+          changed = true;
+        }
+      }
+    }
+    return changed;
   }
 
   function place(grid, cand, idx, val) {
@@ -1302,14 +1441,19 @@ const Solver = (() => {
   function hNakedSingle(cand) {
     for (let idx = 0; idx < 81; idx++) {
       if (cand[idx] && cand[idx].size === 1) {
+        // Ćeliju koju je sužio zbroj jedinice imenuj drukčije: igrač na njoj ne vidi
+        // ništa posebno, pa bi "only one possible number" bio točan ali bezvrijedan.
+        const via = lastUnitSum.get(idx);
         return {
-          technique: "Naked Single",
+          technique: via ? "Rule of 45" : "Naked Single",
           tier: T_SINGLE,
           type: "placement",
           value: [...cand[idx]][0],
           target: idx,
           focus: [idx],
-          note: "this cell has only one possible number",
+          note: via
+            ? `the marked sums inside this ${via} fix the total of the cells left over`
+            : "this cell has only one possible number",
         };
       }
     }

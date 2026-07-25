@@ -1986,14 +1986,22 @@ prijekor i slalo igrača da traži potez kojeg nema. Blank mod se prepoznaje po
 - Težina nije mjerljiva graderom (nema tiera). Ako zatreba os težine, mjera bi mogao
   biti broj DFS grananja - manje grananja znači plića ploča.
 
-## Zbroj jedinice u solveru: izmjereno, NIJE shipano (v1.45.1)
+## Zbroj jedinice u solveru (v1.46.0)
 
 Pravilo nađeno kroz blank mod (vidi gore): jedinica ima zbroj 45, pa **45 minus zbrojevi
 oznaka koje leže cijele unutar nje** daje zbroj preostalih ćelija - a oznaka koja
-jedinicu presijeca daje granicu na svoj dio. Implementirano je kao pass u
-`computeCandidates` (uz `cageRange`/`thermoRange`, bez vlastitog tiera) na **kopiji**
-solvera; repo nije diran i ništa nije shipano. Vatrina odluka je bila: izmjeri, ne
-shipaj.
+jedinicu presijeca daje granicu na svoj dio. Za Killer je to klasično **45-pravilo
+(innies/outies)** koje `cageRange` ne pokriva: on gleda samo vlastiti kavez, ne što
+ostatku kutije preostaje.
+
+`unitSumPass` u `solver.js`, ide ZADNJI u `computeCandidates` (čita tuđe kandidate za
+granicu presječene oznake, pa mu trebaju gotovi) i u petlji do 3 runde, iz istog razloga
+kao Sandwich. Bez vlastitog tiera - kao `cageRange`/`thermoRange`, klasične dovrše.
+
+**Isporučeno u dva koraka, i to namjerno**: prvo mjereno na kopiji solvera bez diranja
+repoa (v1.45.1, brojke ispod), pa tek onda shipano kad su brojke pokazale da nema loše
+strane. Mjerenje je bilo Vatrina odluka i ispalo je ispravno - bez njega bi se ship-alo
+naslijepo na "djeluje korisno".
 
 ### Opali li uopće (30 Hard ploča po kombinaciji)
 
@@ -2029,6 +2037,10 @@ Tri nalaza, i sva tri su suprotna od očekivanog:
    drži nezavisno o snazi solvera.
 3. **Generiranje je brže**, ponegdje bitno - jači solver rjeđe baca pokušaje.
 
+Potvrđeno na pravoj implementaciji prije committa (30 ploča, drugi seedovi): killer
+22.1 → 20.3 zadanih, killer+clone 20.5 → **18.3** uz 42.0 → 19.8ms (max 446 → 103),
+killer+thermo 21.6 → 20.3. Pokrivenost kaveza stoji u sva tri slučaja.
+
 ### Ispravnost
 
 96 ploča kroz osam kombinacija (uključivo jigsaw i hyper) × 25 nasumičnih djelomičnih
@@ -2037,19 +2049,39 @@ Ovo je bila obavezna provjera, ne formalnost: rezultat mjerenja je ispao bez ije
 loše strane, a današnja pouka (v1.44.1) je da je "prelijepo ispalo" signal da se nešto
 ne mjeri.
 
-### Što bi koštalo ako se ikad ship-a
+### Hint je dobio IME - jedina stavka koja je tražila novi kod
 
-- **Bajt-identična regresija puca za Killer ploče.** To je i poanta (ploče se mijenjaju),
-  ali znači da se stara referenca baca i radi nova.
-- **Hint nema što reći.** Pravilo živi u `computeCandidates` pa nema ime, i igraču bi
-  ispalo kao Naked Single bez objašnjenja odakle. Isti dogovor već vrijedi za
-  `cageRange`/`thermoRange` ("zasebne tehnike nema, klasične dovrše"), ali je ovdje skok
-  veći - čovjek taj korak ne vidi na prvi pogled. Ako se ship-a, ovo je jedina stvarno
-  otvorena stavka.
-- **Dobitak nije tamo gdje je prvo zapisan.** U blank modu ide 4/81 → 7/81 i ploča
-  ostaje nerješiva, dakle za igrača nula. Cijela vrijednost je na **Killeru**, gdje je
-  45-pravilo (innies/outies) klasična tehnika koju igra nema, a `cageRange` je namjerno
-  grub.
+Ovo je pri mjerenju bilo označeno kao jedina stvarno otvorena stavka, i s pravom: pravilo
+živi u `computeCandidates` pa nema tier ni ime, i ćelija koju je ono sužilo ispala bi kao
+**Naked Single bez ijednog vidljivog razloga**. Isti dogovor već vrijedi za
+`cageRange`/`thermoRange`, ali je ondje skok manji - igrač vidi svoj kavez ili tubu, dok
+ovdje treba zbrojiti oznake cijele kutije.
+
+Zato `unitSumPass` bilježi koje je ćelije sužio (`lastUnitSum`, ćelija -> vrsta jedinice),
+a `hNakedSingle` ih imenuje **"Rule of 45"** uz napomenu koja kaže odakle rez dolazi.
+Tier ostaje `T_SINGLE` pa grading nije dirnut - mijenja se samo tekst hinta.
+
+Nije kozmetika: izmjereno je da hint poseže za tim korakom **137-171 puta na 10 ploča**
+po kombinaciji. Bez imena bi to bilo isto toliko neobjašnjivih Naked Singlea.
+
+### Provjere prije shipanja
+
+- **Regresija: 26 ploča bez kaveza i dijagonala je BAJT-IDENTIČNA** (13 kombinacija × 2,
+  uključivo classic, jigsaw, thermo, sandwich, nonconsecutive). Pravilo se ne aktivira
+  bez sum-oznake, pa kolateralne štete nema. Killer ploče se mijenjaju - to je poanta.
+- **Ispravnost: 2400 stanja** (96 ploča kroz osam kombinacija, uključivo jigsaw i hyper,
+  × 25 nasumičnih djelomičnih popuna), **nijedna točna vrijednost izbačena**. Provjera je
+  bila obavezna baš zato što je mjerenje ispalo bez ijedne loše strane, a pouka iz
+  v1.44.1 je da je "prelijepo ispalo" signal da se nešto ne mjeri.
+- **Hint: 10/10 ploča riješeno samim hintovima, nula krivih prijedloga** na sve tri
+  Killer kombinacije.
+
+### Dobitak nije tamo gdje je prvo zapisan
+
+U blank modu ide 4/81 → 7/81 i ploča ostaje nerješiva, dakle za igrača nula. Cijela
+vrijednost je na **Killeru**. Pouka za iduće: pravilo je nađeno na ploči koja od njega
+nema koristi, a isplatilo se drugdje - vrijedilo je pitati gdje još isti oblik vrijedi
+umjesto popraviti ono na čemu je nađeno.
 
 ## Popis kandidata je iscrpljen (nakon v1.43.0)
 
@@ -2129,10 +2161,10 @@ Dvije stvari koje je staro stanje doca imalo krivo:
    6 na 50 ploča nema ničega (max 0.4s). Spuštanje snage ga je stvarno maknulo, ne samo
    sakrilo.
 
-**Nije popravljano** - Vatrina odluka je bila dijagnoza pa stop. Rep i dalje nosi Cancel
-
-- worker, pogađa 3/50 ploča u najgoroj kombinaciji, i spora Hard generacija je od
-  v1.14.0 prihvaćena kao podnošljiva.
+**ODLUČENO: ne popravlja se** (v1.46.0). Nakon dijagnoze je Vatra odlučio da nema razloga
+dirati: rep nosi Cancel i worker, pogađa 3/50 ploča u najgoroj kombinaciji, spora Hard
+generacija je od v1.14.0 prihvaćena kao podnošljiva, a popravak bi dirao `dig` - najosjetljiviji
+dio generatora. Zatvoreno kao svjesno prihvaćen dug, ne kao zaboravljena stavka.
 
 **Ako se ikad popravlja**, sljedeći korak je uzak i jeftin jer seedovi postoje: uzeti
 sporu `clone+thermo` ploču, usporediti njen `target` i `floorFor` s brzima, i provjeriti
