@@ -22,7 +22,9 @@ const HEADER = [
   "moves",
   "hints",
   "waited_ms",
-  "resumed"
+  "resumed",
+  "filled",
+  "givens",
 ];
 
 function doPost(e) {
@@ -36,7 +38,7 @@ function doPost(e) {
       d.session || "", // anon per-browser id
       d.version || "", // verzija igre (package.json)
       d.env || "", // 'dev' (localhost) | 'prod' (isporucena kopija)
-      d.event || "", // app_opened | game_started | game_solved | game_cancelled
+      d.event || "", // app_opened | game_started | game_solved | game_cancelled | game_left
       p.gameId || "", // veze start <-> solve
       p.difficulty || "", // 'normal' | 'hard'
       (p.variants || []).join("+"), // '' = classic, npr. 'x+hyper'
@@ -46,7 +48,9 @@ function doPost(e) {
       num(p.moves), // game_solved: broj unesenih brojeva
       num(p.hints), // game_solved: koliko je puta trazena pomoc
       num(p.waitedMs), // game_cancelled: koliko je cekao prije nego je odustao
-      bool(p.resumed) // app_opened: je li zatecena spremljena partija
+      bool(p.resumed), // app_opened: je li zatecena spremljena partija
+      num(p.filled), // game_left: koliko je celija bilo popunjeno na odlasku
+      num(p.givens), // game_left: koliko ih je bilo zadano (bez toga filled ne znaci nista)
     ]);
     return json({ ok: true });
   } catch (err) {

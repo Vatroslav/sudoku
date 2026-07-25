@@ -504,6 +504,36 @@
     activeSince = null;
   }
 
+  // Koliko je ćelija bilo popunjeno kad je igrač otišao - jedini trag GDJE unutar
+  // partije ljudi odustaju. Bez toga start bez solvea kaže samo "nije riješio", a ne
+  // je li stao odmah ili pred kraj.
+  //
+  // Šalje se na SVAKI odlazak kartice, ne samo na `pagehide`: na mobitelu pagehide
+  // zna izostati kad se app ubije iz pozadine, a to je baš slučaj koji mjerimo.
+  // Throttle je zato po NAPRETKU, ne po broju - prvi odlazak šalje uvijek, svaki
+  // idući tek kad je popunjeno barem LEFT_STEP novih ćelija. Prebacivanje kartice
+  // bez poteza ne šalje ništa, pa šuma nema; Sheet uzima najveći `filled` po gameId
+  // i to je dokle je igrač stvarno dogurao. Jedan event po partiji ovdje NE bi
+  // radio: prvi tab-switch je obično na početku partije, pa bi ispalo da svi
+  // odustaju odmah.
+  const LEFT_STEP = 5;
+  let leftSentAt = -1;
+  function trackLeft() {
+    // Riješena partija ima svoj event, a auto-start koji još čeka prvi potez nije ni
+    // poslao game_started - game_left bez para bio bi sirotan red u Sheetu.
+    if (!state || state.solved || state.startPending) return;
+    const filled = state.values.filter((v) => v).length;
+    if (leftSentAt >= 0 && filled - leftSentAt < LEFT_STEP) return;
+    leftSentAt = filled;
+    track("game_left", {
+      ...solveFacts(),
+      filled,
+      // Bez broja zadanih `filled` ne znači ništa - Hard s varijantama ide od 6 do 28
+      // zadanih, pa je isti `filled` na dvije ploče različit napredak.
+      givens: state.puzzle.filter((v) => v).length,
+    });
+  }
+
   // --- Nova igra ---
   // Generiranje ide u Web Worker: glavna nit ostaje slobodna (spinner živi, a
   // gumb Cancel je klikabilan). Prekid = worker.terminate(). Fallback na sinkrono
@@ -557,6 +587,8 @@
       startPending: wasAuto,
     };
     history = [];
+    // Nova partija kreće s praznim brojačem odlazaka (vidi trackLeft).
+    leftSentAt = -1;
     clearHint();
     save();
     render();
@@ -1944,13 +1976,22 @@
     window.addEventListener("pointerup", onBoardPointerUp);
     window.addEventListener("pointercancel", onBoardPointerUp);
     // Spremi kad app ode u pozadinu; sat igranog vremena staje s njim.
+    // trackLeft ide NAKON clockStop-a, da event nosi svjež playMs.
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         clockStop();
         save();
+        trackLeft();
       } else {
         clockStart();
       }
+    });
+    // pagehide hvata zatvaranje/navigaciju tamo gdje visibilitychange ne stigne.
+    // Oba puta prolaze kroz isti throttle, pa dupla dojava ne nastaje.
+    window.addEventListener("pagehide", () => {
+      clockStop();
+      save();
+      trackLeft();
     });
   }
 

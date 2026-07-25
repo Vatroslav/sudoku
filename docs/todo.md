@@ -57,9 +57,17 @@ varijanta i refaktor jezgre.
       `game_cancelled` (odustajanje od spore HARD generacije - `waitedMs`), te
       `playMs` / `moves` / `hints` u `game_solved`. `playMs` je igrano vrijeme (sat
       teče samo dok je kartica vidljiva).
-- [ ] Po želji kasnije: `game_left` na `pagehide` - koliko je ćelija bilo popunjeno
-      kad je čovjek otišao (jedini način da se vidi GDJE unutar partije ljudi
-      odustaju). Ide throttlano, jednom po partiji, inače je previše šuma.
+- [x] **`game_left`** (v1.47.0) - koliko je ćelija bilo popunjeno kad je čovjek otišao,
+      jedini trag GDJE unutar partije ljudi odustaju. Payload nosi `filled` i `givens`
+      (bez broja zadanih `filled` ne znači ništa - Hard s varijantama ide od 6 do 28). - **Odstupanje od prvotnog plana: NE ide jednom po partiji, i ne samo na
+      `pagehide`.** Plan je bio jedan event po partiji, ali prvi odlazak s kartice je
+      obično na početku - pa bi ispalo da svi odustaju odmah, što je gore nego nemati
+      podatak. Uz to na mobitelu `pagehide` zna izostati kad se app ubije iz pozadine,
+      a to je baš slučaj koji se mjeri. - Zato: šalje se na `visibilitychange` i na `pagehide`, a throttle je **po
+      napretku** - prvi odlazak uvijek, svaki idući tek uz barem 5 novih ćelija.
+      Prebacivanje kartice bez poteza ne šalje ništa, pa šuma nema. U analizi se uzima
+      najveći `filled` po `gameId`. - Ne šalje se za riješenu partiju ni za auto-start koji još čeka prvi potez. - **Traži redeploy Apps Scripta** za vlastite stupce; do tada polja svejedno
+      stižu u `payload` JSON stupcu i ništa se ne gubi.
 
 ## Varijante
 

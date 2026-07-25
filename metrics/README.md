@@ -127,6 +127,7 @@ brojke. Dev evente ne brišemo, korisni su za provjeru da tracking uopće radi.
 | `game_started`   | `{ gameId, difficulty, variants }`                                               | namjerni start odmah; auto-start na prvi potez |
 | `game_solved`    | `{ gameId, difficulty, variants, playMs, moves, hints }`                         | zadnja ćelija točna (win overlay)              |
 | `game_cancelled` | `{ difficulty, variants, waitedMs }`                                             | Cancel na generiranju                          |
+| `game_left`      | `{ gameId, difficulty, variants, playMs, moves, hints, filled, givens }`         | odlazak s kartice usred nerješene partije      |
 
 - `app_opened` je jedini trag povratnika: tko nastavi spremljenu partiju ne generira
   novu ploču, pa bez ovoga ne proizvede nijedan event. Bez njega su sesije i povrati
@@ -140,12 +141,28 @@ brojke. Dev evente ne brišemo, korisni su za provjeru da tracking uopće radi.
   `otvaranja − započeto` u lijevku = koliko ljudi upali igru pa ne odigra ništa.
 - `game_cancelled` mjeri odustajanje od spore HARD generacije varijanti (poznati
   tehnički dug): `waitedMs` je koliko je čekao prije nego je prekinuo.
+- `game_left` je jedini trag **GDJE** unutar partije ljudi odustaju - `game_started` bez
+  `game_solved` inače kaže samo da nije riješena, ne je li stao odmah ili pred kraj.
+  `filled` je koliko je ćelija bilo popunjeno, a `givens` koliko ih je bilo zadano (bez
+  toga `filled` ne znači ništa - Hard s varijantama ide od 6 do 28 zadanih).
+  - **Šalje se na svaki odlazak kartice, ne samo na zatvaranje.** Na mobitelu
+    `pagehide` zna izostati kad se app ubije iz pozadine, a to je baš slučaj koji
+    mjerimo. Zato throttle ide po NAPRETKU: prvi odlazak uvijek, svaki idući tek kad je
+    popunjeno barem 5 novih ćelija. Prebacivanje kartice bez poteza ne šalje ništa.
+  - **U analizi uzmi najveći `filled` po `gameId`.** Partija može dati više redova (tko
+    se vraća i nastavlja), a zanima nas dokle je dogurao - ne gdje je usput svratio.
+  - Ne šalje se za riješenu partiju (`game_solved` ju pokriva) ni za auto-start koji
+    još čeka prvi potez (nije ni poslao `game_started`, pa bi red bio sirotan).
 - `playMs` je **igrano** vrijeme - sat teče samo dok je kartica vidljiva, pa partija
   ostavljena otvorena preko noći ne daje besmislenih 10 sati. `moves` broji unose
   brojeva (ne bilješke ni boje), `hints` koliko je puta tražena pomoć.
 - U Sheetu se nova polja pišu **na kraj** reda (`play_ms`, `moves`, `hints`,
-  `waited_ms`, `resumed`); prazna ćelija znači "polje ne pripada tom eventu", pa
-  `app_opened` ne izgleda kao partija s 0 poteza.
+  `waited_ms`, `resumed`, `filled`, `givens`); prazna ćelija znači "polje ne pripada tom
+  eventu", pa `app_opened` ne izgleda kao partija s 0 poteza.
+- **Nakon dodavanja polja treba redeployati Apps Script** (`Code.js` u repou je izvor, a
+  na Googleu živi zasebna kopija). Dok se to ne napravi, event svejedno stiže i ništa se
+  ne gubi - cijeli payload se ionako piše u stupac `payload` kao JSON, samo neće imati
+  vlastite stupce.
 - `gameId` (uuid po partiji) veže start↔solve, pa je completion rate mjerljiv po
   partiji, ne samo agregatno. Živi u `state` → preživi reload kroz localStorage.
 - `difficulty` je `normal` / `hard`; `variants` je polje (`[]` = classic,
