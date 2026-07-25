@@ -1900,6 +1900,39 @@ clue-a, 0 znamenki - Vatra je donio sliku): isti rezultat, 4/81. Dakle ni komerc
 generator ne jamči logički put, nego samo **jedinstvenost**. Blank mod drži taj isti,
 niži standard - svjesno i samo ovdje.
 
+#### Doseg je zapravo 7/81, ne 4/81 (mjereno na odigranoj ploči, v1.45.1)
+
+Tablica gore ostaje točna za isporučeni solver, ali **nije bila gornja granica**. Na
+ploči koju je Vatra stvarno igrao nađen je razred zaključka koji nijedan redak iz nje ne
+pokriva, i on da **tri ćelije više**. Rekonstrukcija ploče je prvo potvrđena time što
+obje obitelji dijagonala zbrajaju točno 405, pa je jedinstvenost rješenja potvrđena
+DFS-om (jedno rješenje, 4631 grananja).
+
+Ključ je da **kutna kutija ima TRI potpuno sadržane dijagonale** - duljine 1, 2 i 3 - i
+one pokrivaju 6 od njenih 9 ćelija. To vrijedi na svakoj blank ploči, ne samo na ovoj:
+zbroj kutije (45) minus ta tri poznata zbroja daje zbroj preostale tri ćelije. Kad kroz
+dvije od njih prođe još jedna dijagonala, njena granica zatvori slučaj. Konkretno:
+
+- dijagonala 34 ide r1c4 → r2c3 → r3c2 → r4c1, a r2c3 i r3c2 su u istoj kutiji pa daju
+  najviše 17;
+- iz kutije: r2c3 + r3c2 + r3c3 = 45 - 2 - 9 - 15 = 19;
+- da je taj par 17, ostalo bi r3c3 = 2, a 2 je već u toj kutiji - pada;
+- dakle par je 16 (nužno 7 i 9), **r3c3 = 3**, i r1c4 + r4c1 = 18, dakle **oba 9**.
+
+Mehanički pušteno do zastoja (peer eliminacija + raspon po dijagonali + enumeracija
+cijele jedinice uz potpuno sadržane dijagonale kao točan zbroj i presječene kao granicu)
+to daje **7/81**: četiri kuta plus r3c3, r1c4, r4c1. Provjereno je da nijedna točna
+vrijednost nije izbačena, dakle zastoj je stvaran a ne posljedica greške u propagaciji.
+
+**Zaključak se NE mijenja** - 7/81 je i dalje daleko od rješive ploče i preostale 74
+ćelije traže probu. Ali dvije stvari vrijede za dalje:
+
+1. **Solveru nedostaje taj razred.** Zbroj jedinice minus potpuno sadržane oznake je
+   generalno primjenjiv (isti oblik radio bi i za Killer kaveze i za Sandwich), pa ako
+   se ikad dira solver, ovo je jeftin dobitak s poznatim testnim slučajem.
+2. **"Doseg" u tablici gore je doseg PROBANIH tehnika, ne dokaz.** Prva formulacija je
+   tvrdila da logičkog puta nema; točnije je da ga nijedna probana tehnika nije našla.
+
 ### Kutna dijagonala je zadana znamenka napisana izvan ploče
 
 Ključ koji je omogućio mod. Dijagonala duljine 1 (kutni pretinac) fiksira vrijednost te
@@ -1932,9 +1965,23 @@ prijekor i slalo igrača da traži potez kojeg nema. Blank mod se prepoznaje po
 
 ### Otvoreno
 
-- **Nije odigrano.** Vatra je izrijekom rekao da mu se Little Killer ne sviđa jer ne
-  voli računati, pa je malo vjerojatno da će ovaj mod itko proći do kraja. Ako se ikad
-  igra: pitanje je hoće li "riješi pogađanjem" biti zabavno ili frustrirajuće.
+- ~~**Nije odigrano.**~~ **Odigrano (v1.45.1), i pitanje je zatvoreno: frustrirajuće.**
+  Vatra je krenuo igrati, prošao kutne ćelije, pa dvočlane i tročlane sume po kutnim
+  kutijama - i odustao na trećem koraku, s "zato mi se ne sviđa, ne da mi se stalno
+  računati". Nije odustao od pogađanja nego **prije njega**: potrošio se već na
+  pripremnoj aritmetici koja pogađanje samo priprema. To je oštriji nalaz od očekivanog
+  ("hoće li pogađanje biti zabavno") - ovdje pogađanje nije ni stiglo na red.
+  - Usput je potvrđeno da **dvije runde bilježaka nisu bile točne** - previdi tipa
+    "sedmica je već u ovom redu" i "partner te znamenke je nemoguć". Ne kao zamjerka
+    igraču nego kao podatak o modu: ploča bez ijedne znamenke tjera na knjigovodstvo
+    koje se ne da provjeriti okom, a igra za to nema nikakvu pomoć.
+  - **Ako se blank mod ikad bude branio**, mjesto za to nije generator nego pomoć u
+    igri: automatske bilješke ili provjera nemogućih kandidata skinule bi točno onaj
+    dio posla koji je ovdje odbio igrača. Bez toga je mod tehnički ispravan a praktički
+    neigriv, i to je zatečeno stanje.
+  - Render s četiri strane (v1.44.0/v1.44.1) je pritom prošao bez ijedne primjedbe na
+    čitljivost - Vatra je cijelo vrijeme radio s oznakama iz pojasa bez pitanja koja se
+    na što odnosi.
 - Težina nije mjerljiva graderom (nema tiera). Ako zatreba os težine, mjera bi mogao
   biti broj DFS grananja - manje grananja znači plića ploča.
 
@@ -1957,7 +2004,9 @@ nije "sljedeća s popisa" nego nova odluka, kao što je bio Disjoint Groups u v1
 - **Tehnički dug oko Thermo repova**, sada s novim mjerenjem: vidi niže.
 - ~~**Potvrda igranjem za Little Killer**~~ - odigrano, i **našlo je grešku koju
   mjerenje nije moglo**: smjer dijagonale nije bio čitljiv. Popravljeno u v1.44.0
-  (četiri strane, jedan smjer po strani). Sam v1.44.0 render još nije odigran.
+  (četiri strane, jedan smjer po strani). Taj render je odigran u v1.45.1 (blank mod)
+  i prošao je - nijedna primjedba na čitljivost smjera ni na to koja se oznaka na što
+  odnosi. Vidi blank mod sekciju: ono što tamo NIJE prošlo je aritmetika, ne render.
 
 **Za slučaj da se ipak doda još jedna varijanta**, ovo je zatečeno stanje mehanizama:
 
