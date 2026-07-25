@@ -2030,9 +2030,51 @@ nije "sljedeća s popisa" nego nova odluka, kao što je bio Disjoint Groups u v1
     snage, ne popravljen. Kontrolno mjerenje istog dana: `clone+thermo` max 8.2s (1/40),
     `renban+thermo` max 2.9s (0/40), `thermo` sam max 269ms (0/40) - dakle rep i dalje
     nose ISKLJUČIVO kombinacije s Thermom.
-  - **Ako se ikad uzme:** mjeriti na barem 50
-    ploča s ispisom svake (N=20 daje 60× različite maksimume između pokretanja), i
-    gledati troši li se vrijeme u `dig`-u ili u odbačenim pokušajima prije njega.
+  - ~~**Ako se ikad uzme:** mjeriti na barem 50 ploča...~~ **Napravljeno (v1.45.1) -
+    odgovor je `dig`.** Vidi mjerenje niže.
+
+### Rep je u `dig`-u, i to cijeli (mjereno v1.45.1)
+
+Mjereno kako doc traži: 50 Hard ploča po kombinaciji, ispis svake, sa seedanim RNG-om
+pa se svaka spora ploča da reproducirati. Instrumentirana je KOPIJA `sudoku.js`
+(`generateSolution` / izvod oznaka / `dig` / `variantNeeded` / `solveAndGrade` /
+`finish`, plus brojači odbačenih pokušaja po koraku) - repo se nije dirao.
+
+| kombinacija         | medijan | max       | iznad 5s | udio `dig` |
+| ------------------- | ------- | --------- | -------- | ---------- |
+| clone+thermo        | 22ms    | **22.1s** | 3/50     | 99.7%      |
+| renban+thermo       | 16ms    | 6.9s      | 1/50     | 97.7%      |
+| littlekiller+thermo | 10ms    | 0.4s      | 0/50     | 87.1%      |
+| thermo sam          | 16ms    | 0.4s      | 0/50     | 72.9%      |
+
+**Na svakoj sporoj ploči pojedinačno `dig` nosi ~100% vremena** (npr. 22.1s ukupno,
+22.1s u `dig`-u). Odbačeni pokušaji prije `dig`-a ne troše ništa mjerljivo - ni jedan
+pokušaj nije pao na `generateSolution` ni na `marksThin`. Time je dilema iz starog
+zapisa riješena: **nije u odbačenim pokušajima, nego u jednom pozivu `dig`-a.**
+
+Dvije stvari koje je staro stanje doca imalo krivo:
+
+1. **`nonconsecutive+thermo` NIJE rep.** Medijan 232ms, max 1.3s, 0/50 iznad 5s - dakle
+   ravnomjerno sporo, bez repa. Uzrok je na sasvim drugom mjestu: `generateSolution`
+   probije budžet u **89 od 156 pokušaja**, pa 97% vremena ode na ponovno slaganje
+   rješenja i do `dig`-a se rijetko stigne. Stari zapis ga svrstava uz `clone+thermo`
+   kao isti fenomen; to su dva različita problema i samo je prvi rep.
+2. **`littlekiller+thermo` je zatvoren.** Rep od 748s bio je uz STRENGTH 8; uz sadašnjih
+   6 na 50 ploča nema ničega (max 0.4s). Spuštanje snage ga je stvarno maknulo, ne samo
+   sakrilo.
+
+**Nije popravljano** - Vatrina odluka je bila dijagnoza pa stop. Rep i dalje nosi Cancel
+
+- worker, pogađa 3/50 ploča u najgoroj kombinaciji, i spora Hard generacija je od
+  v1.14.0 prihvaćena kao podnošljiva.
+
+**Ako se ikad popravlja**, sljedeći korak je uzak i jeftin jer seedovi postoje: uzeti
+sporu `clone+thermo` ploču, usporediti njen `target` i `floorFor` s brzima, i provjeriti
+gura li `dig` ploču ispod dna koje ta kombinacija podnosi. To je isti mehanizam koji je
+XV-u prije floora dizao generaciju na 23s (v1.29.0) i klonu na 5.5s pri krivom
+redoslijedu izvođenja (v1.33.0) - u oba slučaja `dig` je kopao do zida jedinstvenosti
+jer mu je pripisana snaga koju kombinacija nema.
+
 - **Spora HARD generacija za varijante** (Vatra OK s tim zasad, v1.14.0).
   `Sudoku.generate` za "hard" traži slagalicu čija je najteža KLASIČNA tehnika
   tier-2. Kod varijanti je solver jači (dodatni units), pa slagalice češće ispadnu
