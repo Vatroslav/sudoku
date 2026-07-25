@@ -1927,9 +1927,10 @@ vrijednost nije izbačena, dakle zastoj je stvaran a ne posljedica greške u pro
 **Zaključak se NE mijenja** - 7/81 je i dalje daleko od rješive ploče i preostale 74
 ćelije traže probu. Ali dvije stvari vrijede za dalje:
 
-1. **Solveru nedostaje taj razred.** Zbroj jedinice minus potpuno sadržane oznake je
-   generalno primjenjiv (isti oblik radio bi i za Killer kaveze i za Sandwich), pa ako
-   se ikad dira solver, ovo je jeftin dobitak s poznatim testnim slučajem.
+1. **Solveru nedostaje taj razred.** Zbroj jedinice minus potpuno sadržane oznake -
+   ~~generalno primjenjiv, uključivo Sandwich, jeftin dobitak~~. Obje tvrdnje su
+   izmjerene i obje su bile krive: primjenjuje se na **Killer i Little Killer, ne na
+   Sandwich**, i nije jeftin nego zahvat sa širokim dosegom. Vidi zasebnu sekciju niže.
 2. **"Doseg" u tablici gore je doseg PROBANIH tehnika, ne dokaz.** Prva formulacija je
    tvrdila da logičkog puta nema; točnije je da ga nijedna probana tehnika nije našla.
 
@@ -1984,6 +1985,71 @@ prijekor i slalo igrača da traži potez kojeg nema. Blank mod se prepoznaje po
     na što odnosi.
 - Težina nije mjerljiva graderom (nema tiera). Ako zatreba os težine, mjera bi mogao
   biti broj DFS grananja - manje grananja znači plića ploča.
+
+## Zbroj jedinice u solveru: izmjereno, NIJE shipano (v1.45.1)
+
+Pravilo nađeno kroz blank mod (vidi gore): jedinica ima zbroj 45, pa **45 minus zbrojevi
+oznaka koje leže cijele unutar nje** daje zbroj preostalih ćelija - a oznaka koja
+jedinicu presijeca daje granicu na svoj dio. Implementirano je kao pass u
+`computeCandidates` (uz `cageRange`/`thermoRange`, bez vlastitog tiera) na **kopiji**
+solvera; repo nije diran i ništa nije shipano. Vatrina odluka je bila: izmjeri, ne
+shipaj.
+
+### Opali li uopće (30 Hard ploča po kombinaciji)
+
+| kombinacija           | ploča na kojima opali | eliminacija |
+| --------------------- | --------------------- | ----------- |
+| killer                | **30/30**             | 733         |
+| killer+clone          | **30/30**             | 847         |
+| killer+thermo         | **30/30**             | 713         |
+| littlekiller+sandwich | 25/30                 | 93          |
+| sandwich sam          | **0/30**              | 0           |
+| classic               | **0/30**              | 0           |
+
+**Sandwich sam ne aktivira ništa** - i to obara raniju tvrdnju iz ovog doca. Sandwich
+zbroj vrijedi nad ćelijama za koje se ne zna KOJE su (ovisi gdje padnu 1 i 9), pa nema
+"potpuno sadržane oznake" koja bi se od 45 oduzela. Classic isto 0, dakle Classic ploče
+ne mogu biti pogođene ni u jednom smjeru.
+
+### Blast radius na generiranim pločama (isti seedovi, bazni vs pojačani solver)
+
+| kombinacija   | zadanih brojeva | ćelija u kavezima | ms po ploči                |
+| ------------- | --------------- | ----------------- | -------------------------- |
+| killer        | 22.7 → **21.5** | 45.2 → 45.1       | 85 → 82                    |
+| killer+clone  | 20.7 → **18.1** | 45.4 → 46.1       | 64 → **25** (max 1181→323) |
+| killer+thermo | 21.6 → **20.3** | 44.8 → 44.7       | 32 → 26 (max 195→103)      |
+
+Tri nalaza, i sva tri su suprotna od očekivanog:
+
+1. **Ploče dobiju MANJE zadanih brojeva**, a to je točno os po kojoj se težina na Hardu
+   s varijantama i mjeri (v1.29.0). Jači solver dakle ne trivijalizira ploču nego ju
+   gura dublje - `dig` s njim izdrži niže.
+2. **Prune NE pojede više kaveza.** To je bio glavni strah (isti mehanizam kojim je
+   prune Thermo spuštao na ≤2 tube), ali pokrivenost stoji jer ju `CAGE_KEEP_CELLS`
+   drži nezavisno o snazi solvera.
+3. **Generiranje je brže**, ponegdje bitno - jači solver rjeđe baca pokušaje.
+
+### Ispravnost
+
+96 ploča kroz osam kombinacija (uključivo jigsaw i hyper) × 25 nasumičnih djelomičnih
+popuna konzistentnih s rješenjem = **2400 stanja, nijedna točna vrijednost izbačena**.
+Ovo je bila obavezna provjera, ne formalnost: rezultat mjerenja je ispao bez ijedne
+loše strane, a današnja pouka (v1.44.1) je da je "prelijepo ispalo" signal da se nešto
+ne mjeri.
+
+### Što bi koštalo ako se ikad ship-a
+
+- **Bajt-identična regresija puca za Killer ploče.** To je i poanta (ploče se mijenjaju),
+  ali znači da se stara referenca baca i radi nova.
+- **Hint nema što reći.** Pravilo živi u `computeCandidates` pa nema ime, i igraču bi
+  ispalo kao Naked Single bez objašnjenja odakle. Isti dogovor već vrijedi za
+  `cageRange`/`thermoRange` ("zasebne tehnike nema, klasične dovrše"), ali je ovdje skok
+  veći - čovjek taj korak ne vidi na prvi pogled. Ako se ship-a, ovo je jedina stvarno
+  otvorena stavka.
+- **Dobitak nije tamo gdje je prvo zapisan.** U blank modu ide 4/81 → 7/81 i ploča
+  ostaje nerješiva, dakle za igrača nula. Cijela vrijednost je na **Killeru**, gdje je
+  45-pravilo (innies/outies) klasična tehnika koju igra nema, a `cageRange` je namjerno
+  grub.
 
 ## Popis kandidata je iscrpljen (nakon v1.43.0)
 
