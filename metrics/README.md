@@ -159,10 +159,15 @@ brojke. Dev evente ne brišemo, korisni su za provjeru da tracking uopće radi.
 - U Sheetu se nova polja pišu **na kraj** reda (`play_ms`, `moves`, `hints`,
   `waited_ms`, `resumed`, `filled`, `givens`); prazna ćelija znači "polje ne pripada tom
   eventu", pa `app_opened` ne izgleda kao partija s 0 poteza.
-- **Nakon dodavanja polja treba redeployati Apps Script** (`Code.js` u repou je izvor, a
-  na Googleu živi zasebna kopija). Dok se to ne napravi, event svejedno stiže i ništa se
-  ne gubi - cijeli payload se ionako piše u stupac `payload` kao JSON, samo neće imati
-  vlastite stupce.
+- **Nova polja u `HEADER`-u traže redeploy collectora da dobiju vlastite stupce**
+  (`Code.js` u repou je izvor, a na Googleu živi zasebna kopija). Dok se to ne napravi,
+  event svejedno stiže i **ništa se ne gubi** - cijeli payload se ionako piše u stupac
+  `payload` kao JSON, pa se polje da izvući i naknadno.
+  - **`filled` / `givens` (v1.47.0) su svjesno ostavljeni bez redeploya.** Pravilo uz
+    collector niže kaže "ne dirati bez razloga - redeploy = rizik da tracking stane", a
+    razloga nema: podaci stižu, samo su u `payload` stupcu. Redeploy kad se skupi nešto
+    partija i kad se ionako gleda dashboard - tada se u istom prolazu i provjeri je li
+    collector poslije redeploya još živ (poslati jedan event i vidjeti red u Sheetu).
 - `gameId` (uuid po partiji) veže start↔solve, pa je completion rate mjerljiv po
   partiji, ne samo agregatno. Živi u `state` → preživi reload kroz localStorage.
 - `difficulty` je `normal` / `hard`; `variants` je polje (`[]` = classic,

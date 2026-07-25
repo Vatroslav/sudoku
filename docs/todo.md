@@ -59,15 +59,24 @@ varijanta i refaktor jezgre.
       teče samo dok je kartica vidljiva).
 - [x] **`game_left`** (v1.47.0) - koliko je ćelija bilo popunjeno kad je čovjek otišao,
       jedini trag GDJE unutar partije ljudi odustaju. Payload nosi `filled` i `givens`
-      (bez broja zadanih `filled` ne znači ništa - Hard s varijantama ide od 6 do 28). - **Odstupanje od prvotnog plana: NE ide jednom po partiji, i ne samo na
-      `pagehide`.** Plan je bio jedan event po partiji, ali prvi odlazak s kartice je
-      obično na početku - pa bi ispalo da svi odustaju odmah, što je gore nego nemati
-      podatak. Uz to na mobitelu `pagehide` zna izostati kad se app ubije iz pozadine,
-      a to je baš slučaj koji se mjeri. - Zato: šalje se na `visibilitychange` i na `pagehide`, a throttle je **po
-      napretku** - prvi odlazak uvijek, svaki idući tek uz barem 5 novih ćelija.
-      Prebacivanje kartice bez poteza ne šalje ništa, pa šuma nema. U analizi se uzima
-      najveći `filled` po `gameId`. - Ne šalje se za riješenu partiju ni za auto-start koji još čeka prvi potez. - **Traži redeploy Apps Scripta** za vlastite stupce; do tada polja svejedno
-      stižu u `payload` JSON stupcu i ništa se ne gubi.
+      (bez broja zadanih `filled` ne znači ništa - Hard s varijantama ide od 6 do 28).
+      Ne šalje se za riješenu partiju (`game_solved` ju pokriva) ni za auto-start koji
+      još čeka prvi potez. Detalji: [metrics/README.md](../metrics/README.md).
+
+**Odstupanje od plana kod `game_left`**: plan je bio jedan event po partiji, na
+`pagehide`. Isporučeno je drukčije, i to namjerno. Prvi odlazak s kartice je obično na
+POČETKU partije, pa bi jedan event po partiji dao sliku u kojoj svi odustaju odmah - to
+je gore nego nemati podatak. Uz to na mobitelu `pagehide` zna izostati kad se app ubije
+iz pozadine, a to je baš slučaj koji se mjeri. Zato se sluša i `visibilitychange`, a
+throttle ide **po napretku**: prvi odlazak uvijek, svaki idući tek uz barem 5 novih
+ćelija. Prebacivanje kartice bez poteza ne šalje ništa, pa šuma nema. U analizi se uzima
+najveći `filled` po `gameId`.
+
+**Redeploy Apps Scripta je svjesno odgođen.** Za vlastite stupce `filled`/`givens` treba
+`clasp push` + `clasp update-deployment` collectora, ali metrics/README uz taj deployment
+kaže "ne dirati bez razloga - redeploy = rizik da tracking stane". Razloga nema: polja
+stižu u `payload` JSON stupcu i daju se izvući naknadno. Napraviti kad se skupi nešto
+partija i kad se ionako gleda dashboard.
 
 ## Varijante
 
