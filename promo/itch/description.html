@@ -6,7 +6,7 @@
      DRŽATI AŽURNIM PO VERZIJI: kad se promijene featurei / kontrole /
      varijante, ažurirati ovaj file u ISTOM commitu kao izmjena, pa re-paste
      na itch (upload je ručan - vidi README.md). Ispisati i u chat.
-     Zadnje usklađeno s verzijom: v1.34.3
+     Zadnje usklađeno s verzijom: v1.47.0
      ============================================================ -->
 
 <p><em>Classic Sudoku &mdash; plus variant rules you can mix and match.</em></p>
@@ -15,7 +15,8 @@
   A clean, offline number puzzle. Play plain Sudoku, or switch on up to two variant rules and
   combine them for a fresh kind of grid. Every puzzle has a single solution and can be cracked by
   logic alone &mdash; no guessing &mdash; with difficulty graded by a real solver, not a random clue
-  count.
+  count. There is exactly one deliberate exception, and it is clearly marked: see
+  <strong>Blank mode</strong> below.
 </p>
 
 <p><strong>Variants</strong> (pick up to two, roll them with Random, or play Classic)</p>
@@ -28,6 +29,13 @@
   </li>
   <li><strong>Antiknight</strong> &mdash; cells a knight's move apart can't share a digit</li>
   <li><strong>Antiking</strong> &mdash; cells touching diagonally can't share a digit</li>
+  <li>
+    <strong>Nonconsecutive</strong> &mdash; cells sharing an edge can't hold consecutive digits
+  </li>
+  <li>
+    <strong>Disjoint Groups</strong> &mdash; the same position within each box holds nine different
+    digits
+  </li>
   <li><strong>Jigsaw</strong> &mdash; nine irregular regions replace the 3&times;3 boxes</li>
   <li>
     <strong>Clone</strong> &mdash; two same-shaped regions hold the same digits, cell for cell
@@ -48,7 +56,34 @@
     <strong>Thermo</strong> &mdash; digits rise along each thermometer, from the bulb to the tip
   </li>
   <li><strong>Palindrome</strong> &mdash; each marked line reads the same in both directions</li>
+  <li><strong>German Whispers</strong> &mdash; neighbours along the line differ by at least 5</li>
+  <li>
+    <strong>Renban</strong> &mdash; each marked line holds a run of consecutive digits, in any order
+  </li>
+  <li>
+    <strong>Zipper</strong> &mdash; on a zipper line, pairs an equal step from the centre add up to
+    the centre
+  </li>
+  <li>
+    <strong>Arrow</strong> &mdash; the circled cell holds the sum of the digits along its tail
+  </li>
+  <li>
+    <strong>Sandwich</strong> &mdash; the number outside a row or column is the sum of everything
+    between the 1 and the 9
+  </li>
+  <li>
+    <strong>Little Killer</strong> &mdash; an arrow outside the grid gives the sum along that whole
+    diagonal, where digits may repeat
+  </li>
 </ul>
+
+<p><strong>Blank mode</strong></p>
+<p>
+  Pick Little Killer on its own at Hard and the grid arrives with <em>no given digits at all</em>
+  &mdash; every scrap of information sits in the margins. This is the one board in the game that
+  can't be finished by pure logic: the four corner clues each pin a single cell, and past that it
+  takes trial and backtracking. It's here for anyone who wants the most arithmetic a grid can carry.
+</p>
 
 <p><strong>How to play</strong></p>
 <ul>
