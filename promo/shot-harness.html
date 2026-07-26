@@ -8,140 +8,58 @@
     />
     <meta name="theme-color" content="#1b1b22" />
     <link rel="stylesheet" href="../style.css" />
-    <title>Sudoku</title>
+    <title>Sudoku - screenshot harness</title>
   </head>
   <body>
-    <div id="app">
-      <header class="topbar">
-        <div class="status">
-          <span class="status-item" id="difficulty-label">Normal</span>
-          <span class="status-chip hidden" id="technique-hint"></span>
-        </div>
-        <span class="app-version" id="app-version"></span>
-        <button class="icon-btn" id="new-btn" aria-label="New game">New</button>
-      </header>
-      <div id="hint-banner" class="hint-banner hidden">
-        <span class="hint-text" id="hint-text"></span>
-        <button class="hint-close" id="hint-close" aria-label="Close">×</button>
-      </div>
-      <main>
-        <div class="board-wrap">
-          <div id="board" class="board" role="grid" aria-label="Sudoku board"></div>
-          <div id="win-overlay" class="win-overlay hidden">
-            <div class="win-card">
-              <div class="win-title">Solved!</div>
-              <div class="win-sub" id="win-stats"></div>
-              <button class="primary-btn" id="win-new-btn">New game</button>
-            </div>
-          </div>
-        </div>
-        <div class="controls">
-          <div class="action-row">
-            <button class="action-btn" id="undo-btn" aria-label="Undo">
-              <span class="action-icon">↶</span><span class="action-label">Undo</span>
-            </button>
-            <button class="action-btn" id="erase-btn" aria-label="Erase">
-              <span class="action-icon">⌫</span><span class="action-label">Erase</span>
-            </button>
-            <button class="action-btn" id="notes-btn" aria-label="Notes">
-              <span class="action-icon">✎</span><span class="action-label">Notes</span>
-              <span class="notes-state" id="notes-state">Off</span>
-            </button>
-            <button class="action-btn" id="color-btn" aria-label="Color">
-              <span class="action-icon">🎨</span><span class="action-label">Color</span>
-            </button>
-            <button class="action-btn" id="hint-btn" aria-label="Hint">
-              <span class="action-icon">💡</span><span class="action-label">Hint</span>
-            </button>
-          </div>
-          <div class="numpad" id="numpad"></div>
-          <div class="palette hidden" id="palette"></div>
-        </div>
-      </main>
-    </div>
+    <!-- =====================================================================
+         Screenshot harness za promo/itch/*.png. Vidi promo/itch/README.md.
 
-    <div id="menu-overlay" class="menu-overlay hidden">
-      <div class="menu-card">
-        <div class="menu-title">New game</div>
-        <div class="menu-label">Variants</div>
-        <div class="menu-sublabel">Choose up to 2. None selected = Classic.</div>
-        <div class="menu-variant" id="menu-variant">
-          <button class="variant-row" data-variant="antiking">
-            <span class="variant-info"
-              ><span class="variant-name">Antiking</span
-              ><span class="variant-desc"
-                >Cells touching diagonally can't share a digit.</span
-              ></span
-            ><span class="variant-toggle" aria-hidden="true"></span>
-          </button>
-          <button class="variant-row" data-variant="antiknight">
-            <span class="variant-info"
-              ><span class="variant-name">Antiknight</span
-              ><span class="variant-desc"
-                >Cells a knight's move apart can't share a digit.</span
-              ></span
-            ><span class="variant-toggle" aria-hidden="true"></span>
-          </button>
-          <button class="variant-row" data-variant="x">
-            <span class="variant-info"
-              ><span class="variant-name">Diagonal</span
-              ><span class="variant-desc">Both main diagonals must also contain 1-9.</span></span
-            ><span class="variant-toggle" aria-hidden="true"></span>
-          </button>
-          <button class="variant-row" data-variant="hyper">
-            <span class="variant-info"
-              ><span class="variant-name">Hyper</span
-              ><span class="variant-desc">Four extra 3×3 boxes must also contain 1-9.</span></span
-            ><span class="variant-toggle" aria-hidden="true"></span>
-          </button>
-          <button class="variant-row" data-variant="jigsaw">
-            <span class="variant-info"
-              ><span class="variant-name">Jigsaw</span
-              ><span class="variant-desc"
-                >The 3×3 boxes are replaced by nine irregular regions.</span
-              ></span
-            ><span class="variant-toggle" aria-hidden="true"></span>
-          </button>
-        </div>
-        <div class="menu-label">Difficulty</div>
-        <div class="menu-diff" id="menu-diff">
-          <button class="diff-btn" data-diff="normal">Normal</button>
-          <button class="diff-btn" data-diff="hard">Hard</button>
-        </div>
-        <div class="menu-hint hidden" id="variant-hint">
-          On Hard, each extra variant sharply increases generation time.
-        </div>
-        <button class="ghost-btn" id="menu-cancel">Cancel</button>
-      </div>
-    </div>
+         Markup se NE duplicira - povlaci se iz pravog index.html i ubacuje
+         u ovu stranicu. Prijasnja verzija je imala vlastitu kopiju <body>-ja
+         i zato je istrunula: nabrajala je 6 varijanti dok ih je igra imala
+         20, pa je screenshot menija pokazivao igru od prije godinu dana.
+         Sve sto ovdje treba stajati je SEED stanja, ne UI.
 
-    <div id="loading-overlay" class="menu-overlay hidden">
-      <div class="loading-card">
-        <div class="spinner"></div>
-        <div class="loading-text">Generating…</div>
-        <button class="ghost-btn" id="gen-cancel">Cancel</button>
-      </div>
-    </div>
-
-    <script src="../solver.js"></script>
-    <script src="../sudoku.js"></script>
-    <!-- SCREENSHOT seeder: synchronously generate a real puzzle for the requested
-         variants and seed localStorage with a plausible mid-solve state (correct
-         blue user entries from the solution, pencil notes, colors, a selection),
-         so app.js init() loads and renders it directly - no worker, no timing. -->
+         Parametri:
+           ?v=killer,thermo   varijante partije u tijeku (prazno = classic)
+           ?menu=killer,x     umjesto partije otvori New game meni i ukljuci
+                              te varijante (koristi pravi klik, pa se vidi i
+                              upozorenje koje app sam prikaze na dvije)
+         ===================================================================== -->
     <script>
-      (function () {
-        const variants = (new URLSearchParams(location.search).get("v") || "")
-          .split(",")
-          .filter(Boolean);
+      (async () => {
+        const qs = new URLSearchParams(location.search);
+
+        // 1. Pravi DOM iz index.html. innerHTML NE izvrsava <script>, pa se
+        //    engine ucitava rucno ispod (i s tocnim relativnim putanjama).
+        const html = await (await fetch("../index.html")).text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        doc.body.querySelectorAll("script").forEach((s) => s.remove());
+        document.body.insertAdjacentHTML("afterbegin", doc.body.innerHTML);
+
+        const load = (src) =>
+          new Promise((res, rej) => {
+            const s = document.createElement("script");
+            s.src = src;
+            s.onload = res;
+            s.onerror = rej;
+            document.body.appendChild(s);
+          });
+
+        // metrics.js se NAMJERNO ne ucitava - render za store ne salje evente.
+        await load("../solver.js");
+        await load("../sudoku.js");
+
+        // 2. Prava slagalica + uvjerljivo stanje usred rjesavanja. Sinkrono
+        //    (bez workera), pa app.js zatekne gotovo stanje i samo ga iscrta.
+        const variants = (qs.get("v") || "").split(",").filter(Boolean);
         let g;
         try {
           g = Sudoku.generate("normal", variants);
         } catch (e) {
           g = Sudoku.generate("normal", []);
         }
-        const puzzle = g.puzzle,
-          solution = g.solution;
+        const { puzzle, solution } = g;
         const values = puzzle.slice();
         const notes = Array.from({ length: 81 }, () => []);
         const colors = Array.from({ length: 81 }, () => []);
@@ -152,9 +70,9 @@
           for (let k = 0; k < arr.length && out.length < n; k += step) out.push(arr[k]);
           return out;
         };
-        // Correct user entries (render blue, never red).
+        // Tocni upisi (renderiraju se plavo, nikad crveno).
         pick(empty, 11, 3).forEach((i) => (values[i] = solution[i]));
-        // Classic candidates for realistic pencil marks.
+        // Klasicni kandidati za uvjerljive biljeske.
         const cands = (i) => {
           const r = Math.floor(i / 9),
             c = i % 9,
@@ -173,14 +91,18 @@
         };
         const stillEmpty = empty.filter((i) => values[i] === 0);
         pick(stillEmpty, 5, 2).forEach((i) => (notes[i] = cands(i).slice(0, 3)));
-        // A couple of colored cells (one plain given/user, one two-color stack).
         if (stillEmpty.length > 3) colors[stillEmpty[3]] = [4];
         if (stillEmpty.length > 7) colors[stillEmpty[7]] = [2, 6];
-        // Selection on a central filled cell -> row/col/box + same-digit highlight.
+        // Odabir na sredisnjoj popunjenoj celiji -> highlight retka/stupca/kutije.
         const filled = [];
         for (let i = 0; i < 81; i++) if (values[i]) filled.push(i);
         const at = (i) => (filled.includes(i) ? i : null);
         const sel = at(40) ?? at(31) ?? at(49) ?? filled[Math.floor(filled.length / 2)];
+
+        // `clues` mora ici cijeli i pod tim imenom. Stara verzija harnessa je
+        // spremala samo `regions` na vrhu stanja (oblik od prije clues objekta),
+        // pa bi svaka oznaka novija od jigsawa - kavezi, tube, linije, pojas -
+        // jednostavno nedostajala na slici.
         const state = {
           puzzle,
           solution,
@@ -188,8 +110,8 @@
           notes,
           colors,
           difficulty: "normal",
-          variants,
-          regions: g.regions || null,
+          variants: g.variants || variants,
+          clues: g.clues || null,
           techniques: g.techniques || [],
           gameId: "",
           playMs: 0,
@@ -201,30 +123,41 @@
           activeNote: null,
           colorMode: false,
           solved: false,
+          startPending: false,
         };
         try {
           localStorage.setItem("sudoku-game-v2", JSON.stringify(state));
-        } catch (e) {}
-      })();
-    </script>
-    <script src="../app.js"></script>
-    <!-- SCREENSHOT menu mode (?menu=x,hyper): open the REAL New game menu and
-         click the requested variant rows, so the app's own syncVariantButtons
-         applies the red "warn" generation note when two are selected. -->
-    <script>
-      (function () {
-        const menu = new URLSearchParams(location.search).get("menu");
-        if (!menu) return;
-        const vs = menu.split(",").filter(Boolean);
-        window.addEventListener("load", function () {
-          setTimeout(function () {
-            document.getElementById("new-btn").click();
-            vs.forEach(function (v) {
+        } catch (e) {
+          /* screenshot bez seeda je i dalje bolji od pada */
+        }
+
+        // 3. Igra. init() se u app.js zove odmah, a DOM je vec tu.
+        await load("../app.js");
+
+        // Verzija se u igri cita iz ./package.json - odavde bi to bio 404, pa
+        // se upise rucno da slika nosi tocnu oznaku builda.
+        try {
+          const p = await (await fetch("../package.json")).json();
+          const el = document.getElementById("app-version");
+          if (el && p.version) el.textContent = "v" + p.version;
+        } catch (e) {
+          /* bez verzije slika je i dalje upotrebljiva */
+        }
+
+        // 4. Meni mod: otvori PRAVI New game meni i klikni tražene varijante,
+        //    pa se vidi i upozorenje koje app sam doda kad su dvije aktivne.
+        const menu = qs.get("menu");
+        if (menu) {
+          document.getElementById("new-btn").click();
+          menu
+            .split(",")
+            .filter(Boolean)
+            .forEach((v) => {
               const b = document.querySelector('.variant-row[data-variant="' + v + '"]');
               if (b) b.click();
             });
-          }, 300);
-        });
+        }
+        document.documentElement.dataset.shotReady = "1";
       })();
     </script>
   </body>
