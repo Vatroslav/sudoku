@@ -14,6 +14,13 @@ CMD=$(PYTHONIOENCODING=utf-8 python -c "import sys,json; print(json.load(sys.std
 # Samo git commit komande
 echo "$CMD" | grep -qE 'git commit' || exit 0
 
+# The hook runs from the session's current folder, not the repo root. Another repo
+# (an added working directory) is not this guard's business; in a subfolder or worktree
+# of this repo, go to its root because the version-file paths below are root-relative.
+common_dir() { git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null; }
+[ "$(common_dir .)" -ef "$(common_dir "$(dirname "$0")")" ] || exit 0
+cd "$(git rev-parse --show-toplevel)" || exit 0
+
 # Staged fileovi (+ fileovi dodani inline preko git add u istoj komandi)
 STAGED=$(git diff --cached --name-only)
 ADD_PART=$(echo "$CMD" | sed -n 's/.*git add \([^&;|]*\).*/\1/p')
