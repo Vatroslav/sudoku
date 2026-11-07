@@ -4,30 +4,21 @@
 # Source ovog repoa je u rootu (app.js, solver.js, sudoku.js, sw.js, style.css,
 # index.html, manifest.webmanifest) - tooling (.mjs/.json/.prettierrc/docs) ne broji.
 
-# PYTHONIOENCODING je OBAVEZAN: na Windowsu python default stdout kodira u konzolni
-# codepage, pa `print` s hrvatskim slovom baci UnicodeEncodeError. Uz `2>/dev/null`
-# to prolazi tiho, varijabla ostane prazna, i guard onda blokira commit s porukom
-# "namjera nije deklarirana" iako je prefiks uredno tu. Vidjeno na commit poruci koja
-# je sadrzavala "iduci" s dijakritikom.
-CMD=$(PYTHONIOENCODING=utf-8 python -c "import sys,json; print(json.load(sys.stdin)['tool_input'].get('command',''))" 2>/dev/null)
-
-# Samo git commit komande
-echo "$CMD" | grep -qE 'git commit' || exit 0
-
-# The hook runs from the session's current folder, not the repo root. Another repo
-# (an added working directory) is not this guard's business; in a subfolder or worktree
-# of this repo, go to its root because the version-file paths below are root-relative.
-common_dir() { git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null; }
-[ "$(common_dir .)" -ef "$(common_dir "$(dirname "$0")")" ] || exit 0
-cd "$(git rev-parse --show-toplevel)" || exit 0
-
-# Staged fileovi (+ fileovi dodani inline preko git add u istoj komandi)
-STAGED=$(git diff --cached --name-only)
-ADD_PART=$(echo "$CMD" | sed -n 's/.*git add \([^&;|]*\).*/\1/p')
-if [ -n "$ADD_PART" ]; then
-    STAGED="$STAGED
-$(echo "$ADD_PART" | tr ' ' '\n')"
+# What this command commits, read by read-commit.py next to this script: the repo it goes
+# to (git -C, cd), the files, the message. No output means no commit in this repo.
+PARSED=$(python "$(dirname "$0")/read-commit.py" 2>/dev/null)
+[ -n "$PARSED" ] || exit 0
+FACTS=$(printf '%s\n' "$PARSED" | sed '/^msg$/,$d')
+MSG=$(printf '%s\n' "$PARSED" | sed '1,/^msg$/d')
+SKIP=$(printf '%s\n' "$FACTS" | sed -n 's/^skip //p')
+if [ -n "$SKIP" ]; then
+    printf '{"systemMessage":"check-version-bump: %s"}' "$SKIP"
+    exit 0
 fi
+
+# Version-file paths below are root-relative, and a worktree has its own root.
+cd "$(printf '%s\n' "$FACTS" | sed -n 's/^root //p')" || exit 0
+STAGED=$(printf '%s\n' "$FACTS" | sed -n 's/^file //p')
 
 # Guard se aktivira samo ako su app source fileovi dirani (root-level runtime)
 echo "$STAGED" | grep -qE '^[^/]+\.(js|css|html|webmanifest)$' || exit 0
@@ -36,42 +27,6 @@ deny() {
     printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}' "$1"
     exit 0
 }
-
-# Commit poruka iz -m / --message (robusno preko shlex)
-# A PowerShell here-string (@'...'@ or @"..."@) goes first: shlex cannot read it.
-MSG=$(printf '%s' "$CMD" | PYTHONIOENCODING=utf-8 python -c "
-import re, sys, shlex
-cmd = sys.stdin.read()
-here = re.search(r'(?:-m|--message)[ =]*@([\x27\x22])\r?\n(.*?)\r?\n\1@', cmd, re.S)
-if here:
-    print(here.group(2).strip())
-    sys.exit()
-try:
-    toks = shlex.split(cmd)
-except Exception:
-    toks = []
-msg = ''
-for i, t in enumerate(toks):
-    if t in ('-m', '--message') and i + 1 < len(toks):
-        msg = toks[i + 1]; break
-    if t.startswith('-m') and len(t) > 2:
-        msg = t[2:]; break
-    if t.startswith('--message='):
-        msg = t[len('--message='):]; break
-    if t in ('-F', '--file') and i + 1 < len(toks) and toks[i + 1] != '-':
-        try:
-            msg = open(toks[i + 1], encoding='utf-8', errors='replace').read()
-        except Exception:
-            msg = ''
-        break
-    if t.startswith('--file=') and t[len('--file='):] != '-':
-        try:
-            msg = open(t[len('--file='):], encoding='utf-8', errors='replace').read()
-        except Exception:
-            msg = ''
-        break
-print(msg)
-" 2>/dev/null)
 
 # Tip je u PRVOM retku (conventional header). MSG je cesto viseredan (tijelo +
 # Co-Authored-By), pa tip vadimo samo iz headera - inace sed hvata i rijeci iz
@@ -88,11 +43,18 @@ printf '%s' "$MSG" | grep -q 'BREAKING CHANGE' && BREAKING=1
 # ako je package.json u inline "git add" istoj komandi - jer se PreToolUse hook
 # pokrece PRIJE staginga (kombinacija: git add package.json && git commit ...),
 # a bez gejta bi "viseca" nestageana izmjena verzije dala lazni pozitiv.
+# A version line changed by this commit, or earlier on this branch: a branch lands as one release.
+bumped_in() {
+    if printf '%s\n' "$STAGED" | grep -qxF "$1" && git diff HEAD -U0 -- "$1" 2>/dev/null | grep -qE "$2"; then
+        return 0
+    fi
+    [ "$(git symbolic-ref --short -q HEAD)" != "main" ] || return 1
+    BRANCH_BASE=$(git merge-base HEAD origin/main 2>/dev/null) || return 1
+    git diff "$BRANCH_BASE" HEAD -U0 -- "$1" 2>/dev/null | grep -qE "$2"
+}
+
 BUMPED=0
-git diff --cached -U0 -- package.json 2>/dev/null | grep -qE '^\+[[:space:]]*"version"' && BUMPED=1
-if [ "$BUMPED" != "1" ] && echo "$ADD_PART" | grep -q 'package\.json'; then
-    git diff -U0 -- package.json 2>/dev/null | grep -qE '^\+[[:space:]]*"version"' && BUMPED=1
-fi
+bumped_in package.json '^\+[[:space:]]*"version"' && BUMPED=1
 
 # Breaking uvijek trazi bump (major)
 if [ "$BREAKING" = "1" ] && [ "$BUMPED" != "1" ]; then
